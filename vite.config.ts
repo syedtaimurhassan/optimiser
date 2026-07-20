@@ -6,7 +6,7 @@ import tailwindcss from '@tailwindcss/vite'
 export default defineConfig({
   // IMPORTANT: `base` must match your GitHub repository name for Pages to
   // resolve assets correctly, i.e. https://<user>.github.io/<repo>/
-  // Change '/project-optimiser/' below if your repo is named differently.
-  base: '/project-optimiser/',
+  // Repo is https://github.com/syedtaimurhassan/optimiser -> base '/optimiser/'.
+  base: '/optimiser/',
   plugins: [react(), tailwindcss()],
 })
