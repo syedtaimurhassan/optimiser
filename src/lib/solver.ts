@@ -4,6 +4,7 @@ import {
   RoutingModel,
   DefaultRoutingSearchParameters,
   FirstSolutionStrategy,
+  setWorkerBridgeEnabled,
 } from 'or-tools-wasm/routing'
 
 /**
@@ -37,6 +38,13 @@ export async function solveSelectiveTSP(
   const startNode = 0
   const endNode = numNodes - 1
   const capacity = Math.max(0, Math.floor(k)) // OR-Tools needs an integer capacity
+
+  // GitHub Pages (a static host) can't send the COOP/COEP headers that
+  // SharedArrayBuffer / threaded WASM require. Disabling the worker bridge makes
+  // OR-Tools run the single-threaded (asyncify) build on the main thread, which
+  // works anywhere. Called here (not at module top-level) so bundler
+  // tree-shaking can't drop it, and before any WASM loads.
+  setWorkerBridgeEnabled(false)
 
   // Load the WASM module before constructing any routing objects.
   await initRouting()

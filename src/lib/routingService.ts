@@ -3,6 +3,7 @@ import type { LatLng, OptimizedRoute } from '../types'
 
 const OSRM_TRIP_BASE = 'https://router.project-osrm.org/trip/v1/driving'
 const OSRM_TABLE_BASE = 'https://router.project-osrm.org/table/v1/driving'
+const OSRM_ROUTE_BASE = 'https://router.project-osrm.org/route/v1/driving'
 
 /**
  * Cost used for pairs OSRM reports as unroutable (`null`). OR-Tools needs a
@@ -37,6 +38,25 @@ interface OsrmTableResponse {
   message?: string
   /** N×N travel times in seconds; a cell is null when no route exists. */
   durations?: (number | null)[][]
+}
+
+interface OsrmRoute {
+  geometry: LineString
+  distance: number
+  duration: number
+}
+
+interface OsrmRouteResponse {
+  code: string
+  message?: string
+  routes?: OsrmRoute[]
+}
+
+/** Real road geometry + totals for a fixed, already-ordered sequence of points. */
+export interface RouteGeometry {
+  geometry: LineString
+  distanceMeters: number
+  durationSeconds: number
 }
 
 /**
@@ -157,4 +177,48 @@ export async function fetchDurationMatrix(
       seconds == null ? UNREACHABLE_COST : Math.round(seconds),
     ),
   )
+}
+
+/**
+ * Fetch the driving route (road geometry + distance + duration) that follows a
+ * fixed, already-ordered list of points in the given order. Used to draw the
+ * chosen route on real roads after OR-Tools has decided the visiting order — so
+ * the sequence is preserved, not re-optimized.
+ */
+export async function fetchRouteGeometry(
+  points: LatLng[],
+): Promise<RouteGeometry> {
+  if (points.length < 2) {
+    throw new Error('A route needs at least two points.')
+  }
+
+  const coords = points.map((p) => `${p.lng},${p.lat}`).join(';')
+  const url = `${OSRM_ROUTE_BASE}/${coords}?overview=full&geometries=geojson`
+
+  let response: Response
+  try {
+    response = await fetch(url)
+  } catch (e) {
+    throw new Error(`Could not reach the OSRM service: ${(e as Error).message}`)
+  }
+
+  if (!response.ok) {
+    throw new Error(
+      `OSRM route request failed: ${response.status} ${response.statusText}`,
+    )
+  }
+
+  const data = (await response.json()) as OsrmRouteResponse
+  if (data.code !== 'Ok' || !data.routes?.length) {
+    throw new Error(
+      `OSRM could not build a route (${data.message ?? data.code}).`,
+    )
+  }
+
+  const route = data.routes[0]
+  return {
+    geometry: route.geometry,
+    distanceMeters: route.distance,
+    durationSeconds: route.duration,
+  }
 }

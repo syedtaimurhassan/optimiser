@@ -5,6 +5,10 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>optimiser</title>
+    <!-- Makes the page crossOriginIsolated on a static host (GitHub Pages) so
+         OR-Tools' threaded WebAssembly can use SharedArrayBuffer. Must load
+         before the app. Absolute path matches the Pages base '/optimiser/'. -->
+    <script src="/optimiser/coi-serviceworker.js"></script>
   </head>
   <body>
     <div id="root"></div>

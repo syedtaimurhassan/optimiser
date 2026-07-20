@@ -7,7 +7,7 @@ import { TargetKInput } from './components/TargetKInput'
 import { RouteSummary } from './components/RouteSummary'
 import { Itinerary } from './components/Itinerary'
 import { MapComponent } from './components/MapComponent'
-import { optimizeRoute } from './lib/optimize'
+import { planSelectiveRoute } from './lib/planRoute'
 
 function App() {
   // --- Core route state (lifted here so every panel and the future map share it) ---
@@ -21,6 +21,7 @@ function App() {
   // --- Computed route state ---
   const [optimizedRoute, setOptimizedRoute] = useState<OptimizedRoute | null>(null)
   const [routeError, setRouteError] = useState<string | null>(null)
+  const [isCalculating, setIsCalculating] = useState(false)
 
   const addWaypoints = (points: LatLng[]) =>
     setWaypoints((prev) => [...prev, ...points])
@@ -28,18 +29,28 @@ function App() {
     setWaypoints((prev) => prev.filter((_, i) => i !== index))
   const clearWaypoints = () => setWaypoints([])
 
-  const canCalculate = Boolean(startLocation && endLocation)
+  const canCalculate = Boolean(startLocation && endLocation) && !isCalculating
 
-  // Optimization runs entirely in the browser (see lib/optimize.ts) — instant,
-  // no network, no server. `estimated` distances; real roads via Google Maps.
-  function handleCalculateRoute() {
+  // Full pipeline: OSRM Table matrix -> OR-Tools WASM Selective-TSP -> OSRM road
+  // geometry. K defaults to "visit all waypoints" when left blank.
+  async function handleCalculateRoute() {
     if (!startLocation || !endLocation) return
+    setIsCalculating(true)
     setRouteError(null)
     try {
-      setOptimizedRoute(optimizeRoute(startLocation, waypoints, endLocation))
+      const k = targetK ?? waypoints.length
+      const route = await planSelectiveRoute(
+        startLocation,
+        waypoints,
+        endLocation,
+        k,
+      )
+      setOptimizedRoute(route)
     } catch (e) {
       setOptimizedRoute(null)
       setRouteError((e as Error).message)
+    } finally {
+      setIsCalculating(false)
     }
   }
 
@@ -107,7 +118,7 @@ function App() {
             disabled={!canCalculate}
             className="w-full rounded-md bg-blue-600 px-3 py-2 text-sm font-semibold text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
           >
-            Calculate Route
+            {isCalculating ? 'Calculating…' : 'Calculate Route'}
           </button>
           {!startLocation || !endLocation ? (
             <p className="text-xs text-slate-400">
@@ -117,6 +128,11 @@ function App() {
           {routeError && <p className="text-xs text-red-500">{routeError}</p>}
           {optimizedRoute && (
             <>
+              <p className="text-xs text-slate-500">
+                Visiting {optimizedRoute.orderedWaypoints.length - 2} of{' '}
+                {waypoints.length} candidate stop
+                {waypoints.length === 1 ? '' : 's'}.
+              </p>
               <RouteSummary route={optimizedRoute} />
               <Itinerary route={optimizedRoute} />
             </>
