@@ -1,0 +1,13 @@
+/* Tailwind v4 — single-line entry. No tailwind.config.js or postcss.config.js
+   needed; the @tailwindcss/vite plugin handles scanning and generation. */
+@import 'tailwindcss';
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+}
