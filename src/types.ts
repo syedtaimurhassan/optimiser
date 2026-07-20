@@ -25,4 +25,6 @@ export interface OptimizedRoute {
   distanceMeters: number
   /** Total driving duration in seconds. */
   durationSeconds: number
+  /** True when distance/duration are straight-line estimates (no road router). */
+  estimated?: boolean
 }

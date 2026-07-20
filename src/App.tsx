@@ -6,7 +6,7 @@ import { WaypointList } from './components/WaypointList'
 import { RouteSummary } from './components/RouteSummary'
 import { Itinerary } from './components/Itinerary'
 import { MapComponent } from './components/MapComponent'
-import { calculateOptimalRoute } from './lib/routingService'
+import { optimizeRoute } from './lib/optimize'
 
 function App() {
   // --- Core route state (lifted here so every panel and the future map share it) ---
@@ -16,7 +16,6 @@ function App() {
 
   // --- Computed route state ---
   const [optimizedRoute, setOptimizedRoute] = useState<OptimizedRoute | null>(null)
-  const [isCalculating, setIsCalculating] = useState(false)
   const [routeError, setRouteError] = useState<string | null>(null)
 
   const addWaypoints = (points: LatLng[]) =>
@@ -25,24 +24,18 @@ function App() {
     setWaypoints((prev) => prev.filter((_, i) => i !== index))
   const clearWaypoints = () => setWaypoints([])
 
-  const canCalculate = Boolean(startLocation && endLocation) && !isCalculating
+  const canCalculate = Boolean(startLocation && endLocation)
 
-  async function handleCalculateRoute() {
+  // Optimization runs entirely in the browser (see lib/optimize.ts) — instant,
+  // no network, no server. `estimated` distances; real roads via Google Maps.
+  function handleCalculateRoute() {
     if (!startLocation || !endLocation) return
-    setIsCalculating(true)
     setRouteError(null)
     try {
-      const route = await calculateOptimalRoute(
-        startLocation,
-        waypoints,
-        endLocation,
-      )
-      setOptimizedRoute(route)
+      setOptimizedRoute(optimizeRoute(startLocation, waypoints, endLocation))
     } catch (e) {
       setOptimizedRoute(null)
       setRouteError((e as Error).message)
-    } finally {
-      setIsCalculating(false)
     }
   }
 
@@ -102,7 +95,7 @@ function App() {
             disabled={!canCalculate}
             className="w-full rounded-md bg-blue-600 px-3 py-2 text-sm font-semibold text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
           >
-            {isCalculating ? 'Calculating…' : 'Calculate Route'}
+            Calculate Route
           </button>
           {!startLocation || !endLocation ? (
             <p className="text-xs text-slate-400">

@@ -26,12 +26,14 @@ export function RouteSummary({ route }: Props) {
         <div>
           <span className="block text-xs text-slate-500">Distance</span>
           <span className="font-semibold text-slate-800">
+            {route.estimated ? '~' : ''}
             {formatDistance(route.distanceMeters)}
           </span>
         </div>
         <div>
           <span className="block text-xs text-slate-500">Duration</span>
           <span className="font-semibold text-slate-800">
+            {route.estimated ? '~' : ''}
             {formatDuration(route.durationSeconds)}
           </span>
         </div>
@@ -42,6 +44,12 @@ export function RouteSummary({ route }: Props) {
           </span>
         </div>
       </div>
+      {route.estimated && (
+        <p className="text-xs text-slate-500">
+          Straight-line estimate. Real driving distance &amp; turn-by-turn come
+          from the Google Maps links below.
+        </p>
+      )}
     </div>
   )
 }
