@@ -1876,16 +1876,16 @@ Error generating stack: ` + e4.message + `
     } catch {
       nn2 = false;
     }
-    var an2 = null, on = null, sn = null;
-    function cn() {
-      if (sn) return sn;
-      var e3, t3 = on, n3 = t3.length, r3, i3 = `value` in an2 ? an2.value : an2.textContent, a3 = i3.length;
+    var an2 = null, on2 = null, sn2 = null;
+    function cn2() {
+      if (sn2) return sn2;
+      var e3, t3 = on2, n3 = t3.length, r3, i3 = `value` in an2 ? an2.value : an2.textContent, a3 = i3.length;
       for (e3 = 0; e3 < n3 && t3[e3] === i3[e3]; e3++) ;
       var o3 = n3 - e3;
       for (r3 = 1; r3 <= o3 && t3[n3 - r3] === i3[a3 - r3]; r3++) ;
-      return sn = i3.slice(e3, 1 < r3 ? 1 - r3 : void 0);
+      return sn2 = i3.slice(e3, 1 < r3 ? 1 - r3 : void 0);
     }
-    function ln(e3) {
+    function ln2(e3) {
       var t3 = e3.keyCode;
       return `charCode` in e3 ? (e3 = e3.charCode, e3 === 0 && t3 === 13 && (e3 = 13)) : e3 = t3, e3 === 10 && (e3 = 13), 32 <= e3 || e3 === 13 ? e3 : 0;
     }
@@ -2033,7 +2033,7 @@ Error generating stack: ` + e4.message + `
           var t3 = En[e3.key] || e3.key;
           if (t3 !== `Unidentified`) return t3;
         }
-        return e3.type === `keypress` ? (e3 = ln(e3), e3 === 13 ? `Enter` : String.fromCharCode(e3)) : e3.type === `keydown` || e3.type === `keyup` ? Dn[e3.keyCode] || `Unidentified` : ``;
+        return e3.type === `keypress` ? (e3 = ln2(e3), e3 === 13 ? `Enter` : String.fromCharCode(e3)) : e3.type === `keydown` || e3.type === `keyup` ? Dn[e3.keyCode] || `Unidentified` : ``;
       },
       code: 0,
       location: 0,
@@ -2045,13 +2045,13 @@ Error generating stack: ` + e4.message + `
       locale: 0,
       getModifierState: An,
       charCode: function(e3) {
-        return e3.type === `keypress` ? ln(e3) : 0;
+        return e3.type === `keypress` ? ln2(e3) : 0;
       },
       keyCode: function(e3) {
         return e3.type === `keydown` || e3.type === `keyup` ? e3.keyCode : 0;
       },
       which: function(e3) {
-        return e3.type === `keypress` ? ln(e3) : e3.type === `keydown` || e3.type === `keyup` ? e3.keyCode : 0;
+        return e3.type === `keypress` ? ln2(e3) : e3.type === `keydown` || e3.type === `keyup` ? e3.keyCode : 0;
       }
     })), Mn = dn(h2({}, yn, {
       pointerId: 0,
@@ -2128,7 +2128,7 @@ Error generating stack: ` + e4.message + `
       }
     }
     function Jn(e3, t3) {
-      if (Kn) return e3 === `compositionend` || !Rn && Wn(e3, t3) ? (e3 = cn(), sn = on = an2 = null, Kn = false, e3) : null;
+      if (Kn) return e3 === `compositionend` || !Rn && Wn(e3, t3) ? (e3 = cn2(), sn2 = on2 = an2 = null, Kn = false, e3) : null;
       switch (e3) {
         case `paste`:
           return null;
@@ -6873,7 +6873,7 @@ Error generating stack: ` + e4.message + `
             var l4 = pn, u2 = e3;
             switch (e3) {
               case `keypress`:
-                if (ln(n3) === 0) break a;
+                if (ln2(n3) === 0) break a;
               case `keydown`:
               case `keyup`:
                 l4 = jn;
@@ -7037,7 +7037,7 @@ Error generating stack: ` + e4.message + `
             x3 = void 0;
           }
           else Kn ? Wn(e3, n3) && (x3 = `onCompositionEnd`) : e3 === `keydown` && n3.keyCode === 229 && (x3 = `onCompositionStart`);
-          x3 && (Vn && n3.locale !== `ko` && (Kn || x3 !== `onCompositionStart` ? x3 === `onCompositionEnd` && Kn && (b3 = cn()) : (an2 = i4, on = `value` in an2 ? an2.value : an2.textContent, Kn = true)), y3 = Ed(r4, x3), 0 < y3.length && (x3 = new Tn(x3, e3, null, n3, i4), s4.push({
+          x3 && (Vn && n3.locale !== `ko` && (Kn || x3 !== `onCompositionStart` ? x3 === `onCompositionEnd` && Kn && (b3 = cn2()) : (an2 = i4, on2 = `value` in an2 ? an2.value : an2.textContent, Kn = true)), y3 = Ed(r4, x3), 0 < y3.length && (x3 = new Tn(x3, e3, null, n3, i4), s4.push({
             event: x3,
             listeners: y3
           }), b3 ? x3.data = b3 : (b3 = Gn(n3), b3 !== null && (x3.data = b3)))), (b3 = Bn ? qn(e3, n3) : Jn(e3, n3)) && (x3 = Ed(r4, `onBeforeInput`), 0 < x3.length && (y3 = new Tn(`onBeforeInput`, `beforeinput`, null, n3, i4), s4.push({
@@ -10870,7 +10870,7 @@ Error generating stack: ` + e4.message + `
         !R2.touchNative && R2.pointer && t4.indexOf(`touch`) === 0 ? a3 = ot2(e4, t4, a3) : R2.touch && t4 === `dblclick` ? a3 = gt2(e4, a3) : `addEventListener` in e4 ? t4 === `touchstart` || t4 === `touchmove` || t4 === `wheel` || t4 === `mousewheel` ? e4.addEventListener(Jt2[t4] || t4, a3, R2.passiveEvents ? {
           passive: false
         } : false) : t4 === `mouseenter` || t4 === `mouseleave` ? (a3 = function(t5) {
-          t5 ||= window.event, sn(e4, t5) && s3(t5);
+          t5 ||= window.event, sn2(e4, t5) && s3(t5);
         }, e4.addEventListener(Jt2[t4], a3, false)) : e4.addEventListener(t4, s3, false) : e4.attachEvent(`on` + t4, a3), e4[Kt2] = e4[Kt2] || {}, e4[Kt2][i3] = a3;
       }
       function Xt2(e4, t4, n3, r3, i3) {
@@ -10905,10 +10905,10 @@ Error generating stack: ` + e4.message + `
         return new O2((e4.clientX - r3.left) / n3.x - t4.clientLeft, (e4.clientY - r3.top) / n3.y - t4.clientTop);
       }
       var an2 = R2.linux && R2.chrome ? window.devicePixelRatio : R2.mac ? window.devicePixelRatio * 3 : window.devicePixelRatio > 0 ? 2 * window.devicePixelRatio : 1;
-      function on(e4) {
+      function on2(e4) {
         return R2.edge ? e4.wheelDeltaY / 2 : e4.deltaY && e4.deltaMode === 0 ? -e4.deltaY / an2 : e4.deltaY && e4.deltaMode === 1 ? -e4.deltaY * 20 : e4.deltaY && e4.deltaMode === 2 ? -e4.deltaY * 60 : e4.deltaX || e4.deltaZ ? 0 : e4.wheelDelta ? (e4.wheelDeltaY || e4.wheelDelta) / 2 : e4.detail && Math.abs(e4.detail) < 32765 ? -e4.detail * 20 : e4.detail ? e4.detail / -32765 * 60 : 0;
       }
-      function sn(e4, t4) {
+      function sn2(e4, t4) {
         var n3 = t4.relatedTarget;
         if (!n3) return true;
         try {
@@ -10918,7 +10918,7 @@ Error generating stack: ` + e4.message + `
         }
         return n3 !== e4;
       }
-      var cn = {
+      var cn2 = {
         __proto__: null,
         on: G2,
         off: K2,
@@ -10929,11 +10929,11 @@ Error generating stack: ` + e4.message + `
         stop: tn2,
         getPropagationPath: nn2,
         getMousePosition: rn2,
-        getWheelDelta: on,
-        isExternalTarget: sn,
+        getWheelDelta: on2,
+        isExternalTarget: sn2,
         addListener: G2,
         removeListener: K2
-      }, ln = re2.extend({
+      }, ln2 = re2.extend({
         run: function(e4, t4, n3, r3) {
           this.stop(), this._el = e4, this._inProgress = true, this._duration = n3 || 0.25, this._easeOutPower = 1 / Math.max(r3 || 0.5, 0.2), this._startPos = W2(e4), this._offset = t4.subtract(this._startPos), this._startTime = +/* @__PURE__ */ new Date(), this.fire(`start`), this._animate();
         },
@@ -11050,7 +11050,7 @@ Error generating stack: ` + e4.message + `
         panBy: function(e4, t4) {
           if (e4 = A2(e4).round(), t4 ||= {}, !e4.x && !e4.y) return this.fire(`moveend`);
           if (t4.animate !== true && !this.getSize().contains(e4)) return this._resetView(this.unproject(this.project(this.getCenter()).add(e4)), this.getZoom()), this;
-          if (this._panAnim || (this._panAnim = new ln(), this._panAnim.on({
+          if (this._panAnim || (this._panAnim = new ln2(), this._panAnim.on({
             step: this._onPanTransitionStep,
             end: this._onPanTransitionEnd
           }, this)), t4.noMoveStart || this.fire(`movestart`), t4.animate !== false) {
@@ -11389,7 +11389,7 @@ Error generating stack: ` + e4.message + `
               s3 = true;
               break;
             }
-            if (r3 && r3.listens(t4, true) && (i3 && !sn(a3, e4) || (n3.push(r3), i3)) || a3 === this._container) break;
+            if (r3 && r3.listens(t4, true) && (i3 && !sn2(a3, e4) || (n3.push(r3), i3)) || a3 === this._container) break;
             a3 = a3.parentNode;
           }
           return !n3.length && !s3 && !i3 && this.listens(t4, true) && (n3 = [
@@ -14719,7 +14719,7 @@ Error generating stack: ` + e4.message + `
           K2(this._map._container, `wheel`, this._onWheelScroll, this);
         },
         _onWheelScroll: function(e4) {
-          var t4 = on(e4), n3 = this._map.options.wheelDebounceTime;
+          var t4 = on2(e4), n3 = this._map.options.wheelDebounceTime;
           this._delta += t4, this._lastMousePos = this._map.mouseEventToContainerPoint(e4), this._startTime ||= +/* @__PURE__ */ new Date();
           var r3 = Math.max(n3 - (+/* @__PURE__ */ new Date() - this._startTime), 0);
           clearTimeout(this._timer), this._timer = setTimeout(i2(this._performZoom, this), r3), tn2(e4);
@@ -14822,7 +14822,7 @@ Error generating stack: ` + e4.message + `
           this._zooming = false, T2(this._animRequest), K2(document, `touchmove`, this._onTouchMove, this), K2(document, `touchend touchcancel`, this._onTouchEnd, this), this._map.options.zoomAnimation ? this._map._animateZoom(this._center, this._map._limitZoom(this._zoom), true, this._map.options.zoomSnap) : this._map._resetView(this._center, this._map._limitZoom(this._zoom));
         }
       });
-      q.addInitHook(`addHandler`, `touchZoom`, ui), q.BoxZoom = ri, q.DoubleClickZoom = ii, q.Drag = ai, q.Keyboard = oi, q.ScrollWheelZoom = si, q.TapHold = li, q.TouchZoom = ui, e3.Bounds = j2, e3.Browser = R2, e3.CRS = ie2, e3.Canvas = Jr, e3.Circle = ur, e3.CircleMarker = cr, e3.Class = E2, e3.Control = dn, e3.DivIcon = zr, e3.DivOverlay = Pr, e3.DomEvent = cn, e3.DomUtil = Gt2, e3.Draggable = Cn, e3.Evented = re2, e3.FeatureGroup = $n, e3.GeoJSON = gr, e3.GridLayer = Vr, e3.Handler = bn, e3.Icon = tr, e3.ImageOverlay = Or, e3.LatLng = F2, e3.LatLngBounds = N2, e3.Layer = Xn, e3.LayerGroup = Zn, e3.LineUtil = Un, e3.Map = q, e3.Marker = ar, e3.Mixin = xn, e3.Path = sr, e3.Point = O2, e3.PolyUtil = Dn, e3.Polygon = mr, e3.Polyline = fr, e3.Popup = Fr, e3.PosAnimation = ln, e3.Projection = Kn, e3.Rectangle = ti, e3.Renderer = qr, e3.SVG = $r, e3.SVGOverlay = Mr, e3.TileLayer = Ur, e3.Tooltip = Lr, e3.Transformation = ce2, e3.Util = te2, e3.VideoOverlay = Ar, e3.bind = i2, e3.bounds = M2, e3.canvas = Yr, e3.circle = dr, e3.circleMarker = lr, e3.control = fn, e3.divIcon = Br, e3.extend = n2, e3.featureGroup = er, e3.geoJSON = Er, e3.geoJson = Dr, e3.gridLayer = Hr, e3.icon = nr, e3.imageOverlay = kr, e3.latLng = I2, e3.latLngBounds = P2, e3.layerGroup = Qn, e3.map = un, e3.marker = or, e3.point = A2, e3.polygon = hr, e3.polyline = pr, e3.popup = Ir, e3.rectangle = ni, e3.setOptions = p2, e3.stamp = o2, e3.svg = ei, e3.svgOverlay = Nr, e3.tileLayer = Wr, e3.tooltip = Rr, e3.transformation = le2, e3.version = t3, e3.videoOverlay = jr;
+      q.addInitHook(`addHandler`, `touchZoom`, ui), q.BoxZoom = ri, q.DoubleClickZoom = ii, q.Drag = ai, q.Keyboard = oi, q.ScrollWheelZoom = si, q.TapHold = li, q.TouchZoom = ui, e3.Bounds = j2, e3.Browser = R2, e3.CRS = ie2, e3.Canvas = Jr, e3.Circle = ur, e3.CircleMarker = cr, e3.Class = E2, e3.Control = dn, e3.DivIcon = zr, e3.DivOverlay = Pr, e3.DomEvent = cn2, e3.DomUtil = Gt2, e3.Draggable = Cn, e3.Evented = re2, e3.FeatureGroup = $n, e3.GeoJSON = gr, e3.GridLayer = Vr, e3.Handler = bn, e3.Icon = tr, e3.ImageOverlay = Or, e3.LatLng = F2, e3.LatLngBounds = N2, e3.Layer = Xn, e3.LayerGroup = Zn, e3.LineUtil = Un, e3.Map = q, e3.Marker = ar, e3.Mixin = xn, e3.Path = sr, e3.Point = O2, e3.PolyUtil = Dn, e3.Polygon = mr, e3.Polyline = fr, e3.Popup = Fr, e3.PosAnimation = ln2, e3.Projection = Kn, e3.Rectangle = ti, e3.Renderer = qr, e3.SVG = $r, e3.SVGOverlay = Mr, e3.TileLayer = Ur, e3.Tooltip = Lr, e3.Transformation = ce2, e3.Util = te2, e3.VideoOverlay = Ar, e3.bind = i2, e3.bounds = M2, e3.canvas = Yr, e3.circle = dr, e3.circleMarker = lr, e3.control = fn, e3.divIcon = Br, e3.extend = n2, e3.featureGroup = er, e3.geoJSON = Er, e3.geoJson = Dr, e3.gridLayer = Hr, e3.icon = nr, e3.imageOverlay = kr, e3.latLng = I2, e3.latLngBounds = P2, e3.layerGroup = Qn, e3.map = un, e3.marker = or, e3.point = A2, e3.polygon = hr, e3.polyline = pr, e3.popup = Ir, e3.rectangle = ni, e3.setOptions = p2, e3.stamp = o2, e3.svg = ei, e3.svgOverlay = Nr, e3.tileLayer = Wr, e3.tooltip = Rr, e3.transformation = le2, e3.version = t3, e3.videoOverlay = jr;
       var di = window.L;
       e3.noConflict = function() {
         return window.L = di, this;
@@ -16238,23 +16238,66 @@ Error generating stack: ` + e4.message + `
       };
     }
   }
-  function an() {
-    let [e2, t2] = (0, _.useState)(null), [n2, r2] = (0, _.useState)(null), [i2, a2] = (0, _.useState)([]), [o2, s2] = (0, _.useState)(null), [c2, l2] = (0, _.useState)(null), [u2, d2] = (0, _.useState)(null), [f2, p2] = (0, _.useState)(false), [m2, h2] = (0, _.useState)(null), g2 = (e3) => a2((t3) => [
+  var an = `route-optimiser:v1`;
+  function on() {
+    try {
+      let e2 = localStorage.getItem(an);
+      if (!e2) return {};
+      let t2 = JSON.parse(e2);
+      return t2 && typeof t2 == `object` ? t2 : {};
+    } catch {
+      return {};
+    }
+  }
+  function sn(e2) {
+    try {
+      localStorage.setItem(an, JSON.stringify(e2));
+    } catch {
+    }
+  }
+  function cn() {
+    try {
+      localStorage.removeItem(an);
+    } catch {
+    }
+  }
+  function ln() {
+    let e2 = (0, _.useMemo)(() => on(), []), [t2, n2] = (0, _.useState)(e2.startLocation ?? null), [r2, i2] = (0, _.useState)(e2.endLocation ?? null), [a2, o2] = (0, _.useState)(e2.waypoints ?? []), [s2, c2] = (0, _.useState)(e2.targetK ?? null), [l2, u2] = (0, _.useState)(e2.optimizedRoute ?? null), [d2, f2] = (0, _.useState)(null), [p2, m2] = (0, _.useState)(false), [h2, g2] = (0, _.useState)(null);
+    (0, _.useEffect)(() => {
+      !t2 && !r2 && a2.length === 0 && !l2 ? cn() : sn({
+        startLocation: t2,
+        endLocation: r2,
+        waypoints: a2,
+        targetK: s2,
+        optimizedRoute: l2
+      });
+    }, [
+      t2,
+      r2,
+      a2,
+      s2,
+      l2
+    ]);
+    let v2 = (e3) => o2((t3) => [
       ...t3,
       ...e3
-    ]), v2 = (e3) => a2((t3) => t3.filter((t4, n3) => n3 !== e3)), y2 = () => a2([]), b2 = !!(e2 && n2) && !f2;
-    async function x2() {
-      if (!(!e2 || !n2)) {
-        p2(true), d2(null), h2(null);
+    ]), y2 = (e3) => o2((t3) => t3.filter((t4, n3) => n3 !== e3)), b2 = () => o2([]);
+    function x2() {
+      n2(null), i2(null), o2([]), c2(null), u2(null), f2(null);
+    }
+    let S2 = !!(t2 || r2 || a2.length > 0 || l2), ee2 = !!(t2 && r2) && !p2;
+    async function T2() {
+      if (!(!t2 || !r2)) {
+        m2(true), f2(null), g2(null);
         try {
-          let t3 = o2 ?? i2.length, r3 = await rn(e2, i2, n2, t3, (e3, t4) => {
-            t4 > 1 && h2(`Fetching cost matrix\u2026 ${e3}/${t4}`);
+          let e3 = s2 ?? a2.length, n3 = await rn(t2, a2, r2, e3, (e4, t3) => {
+            t3 > 1 && g2(`Fetching cost matrix\u2026 ${e4}/${t3}`);
           });
-          l2(r3);
+          u2(n3);
         } catch (e3) {
-          l2(null), d2(e3.message);
+          u2(null), f2(e3.message);
         } finally {
-          p2(false), h2(null);
+          m2(false), g2(null);
         }
       }
     }
@@ -16266,13 +16309,27 @@ Error generating stack: ` + e4.message + `
           children: [
             (0, C.jsxs)(`header`, {
               children: [
-                (0, C.jsx)(`h1`, {
-                  className: `text-xl font-bold text-slate-800`,
-                  children: `Route Optimiser`
+                (0, C.jsxs)(`div`, {
+                  className: `flex items-start justify-between`,
+                  children: [
+                    (0, C.jsx)(`h1`, {
+                      className: `text-xl font-bold text-slate-800`,
+                      children: `Route Optimiser`
+                    }),
+                    S2 && (0, C.jsx)(`button`, {
+                      onClick: x2,
+                      className: `mt-1 text-xs text-slate-400 hover:text-red-500`,
+                      children: `Start over`
+                    })
+                  ]
                 }),
                 (0, C.jsx)(`p`, {
                   className: `text-sm text-slate-500`,
                   children: `Set a start & end, then add intermediate stops.`
+                }),
+                (0, C.jsx)(`p`, {
+                  className: `mt-1 text-xs text-slate-400`,
+                  children: `Auto-saved on this device \u2014 safe to close & reopen.`
                 })
               ]
             }),
@@ -16281,14 +16338,14 @@ Error generating stack: ` + e4.message + `
               children: [
                 (0, C.jsx)(w, {
                   label: `Start`,
-                  value: e2,
-                  onChange: t2,
+                  value: t2,
+                  onChange: n2,
                   accentClass: `bg-emerald-600`
                 }),
                 (0, C.jsx)(w, {
                   label: `End`,
-                  value: n2,
-                  onChange: r2,
+                  value: r2,
+                  onChange: i2,
                   accentClass: `bg-rose-600`
                 })
               ]
@@ -16301,7 +16358,7 @@ Error generating stack: ` + e4.message + `
                   children: `Upload waypoints`
                 }),
                 (0, C.jsx)(O, {
-                  onWaypointsParsed: g2
+                  onWaypointsParsed: v2
                 })
               ]
             }),
@@ -16315,68 +16372,68 @@ Error generating stack: ` + e4.message + `
                       className: `text-sm font-semibold text-slate-700`,
                       children: [
                         `Waypoints (`,
-                        i2.length,
+                        a2.length,
                         `)`
                       ]
                     }),
-                    i2.length > 0 && (0, C.jsx)(`button`, {
-                      onClick: y2,
+                    a2.length > 0 && (0, C.jsx)(`button`, {
+                      onClick: b2,
                       className: `text-xs text-slate-400 hover:text-red-500`,
                       children: `clear all`
                     })
                   ]
                 }),
                 (0, C.jsx)(k, {
-                  waypoints: i2,
-                  onRemove: v2
+                  waypoints: a2,
+                  onRemove: y2
                 })
               ]
             }),
             (0, C.jsx)(`section`, {
               className: `space-y-2`,
               children: (0, C.jsx)(A, {
-                value: o2,
-                max: i2.length,
-                onChange: s2
+                value: s2,
+                max: a2.length,
+                onChange: c2
               })
             }),
             (0, C.jsxs)(`section`, {
               className: `space-y-2`,
               children: [
                 (0, C.jsx)(`button`, {
-                  onClick: x2,
-                  disabled: !b2,
+                  onClick: T2,
+                  disabled: !ee2,
                   className: `w-full rounded-md bg-blue-600 px-3 py-2 text-sm font-semibold text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300`,
-                  children: f2 ? m2 ?? `Calculating\u2026` : `Calculate Route`
+                  children: p2 ? h2 ?? `Calculating\u2026` : `Calculate Route`
                 }),
-                !e2 || !n2 ? (0, C.jsx)(`p`, {
+                !t2 || !r2 ? (0, C.jsx)(`p`, {
                   className: `text-xs text-slate-400`,
                   children: `Set both a start and an end location to calculate.`
                 }) : null,
-                u2 && (0, C.jsx)(`p`, {
+                d2 && (0, C.jsx)(`p`, {
                   className: `text-xs text-red-500`,
-                  children: u2
+                  children: d2
                 }),
-                c2 && (0, C.jsxs)(C.Fragment, {
+                l2 && (0, C.jsxs)(C.Fragment, {
                   children: [
                     (0, C.jsxs)(`p`, {
                       className: `text-xs text-slate-500`,
                       children: [
                         `Visiting `,
-                        c2.orderedWaypoints.length - 2,
+                        l2.orderedWaypoints.length - 2,
                         ` of`,
                         ` `,
-                        i2.length,
+                        a2.length,
                         ` candidate stop`,
-                        i2.length === 1 ? `` : `s`,
+                        a2.length === 1 ? `` : `s`,
                         `.`
                       ]
                     }),
                     (0, C.jsx)(N, {
-                      route: c2
+                      route: l2
                     }),
                     (0, C.jsx)(oe, {
-                      route: c2
+                      route: l2
                     })
                   ]
                 })
@@ -16387,16 +16444,16 @@ Error generating stack: ` + e4.message + `
         (0, C.jsx)(`main`, {
           className: `relative flex-1`,
           children: (0, C.jsx)(Ue, {
-            startLocation: e2,
-            endLocation: n2,
-            waypoints: i2,
-            optimizedRoute: c2
+            startLocation: t2,
+            endLocation: r2,
+            waypoints: a2,
+            optimizedRoute: l2
           })
         })
       ]
     });
   }
   (0, v.createRoot)(document.getElementById(`root`)).render((0, C.jsx)(_.StrictMode, {
-    children: (0, C.jsx)(an, {})
+    children: (0, C.jsx)(ln, {})
   }));
 })();
