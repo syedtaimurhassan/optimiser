@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>or-tools-wasm examples</title>
+  <link rel="stylesheet" href="./example.css">
+  <style>
+    body { line-height: 1.6; }
+    h1 { margin-bottom: 0; }
+    .site-title {
+      display: flex;
+      gap: 0.75rem;
+      align-items: center;
+      flex-wrap: wrap;
+      margin-bottom: 0.5rem;
+    }
+    .site-badges {
+      display: inline-flex;
+      gap: 0.4rem;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+    .site-badges img {
+      display: block;
+    }
+    h2 { margin-bottom: 0.25rem; }
+    .solver-description {
+      color: #57606a;
+      margin-bottom: 0.5rem;
+    }
+    .solver-coverage {
+      margin: 1rem 0 1.25rem;
+    }
+    .solver-coverage td:nth-child(2),
+    .solver-coverage th:nth-child(2) {
+      text-align: center;
+      width: 7rem;
+    }
+    .supported {
+      color: #1a7f37;
+      font-weight: 700;
+    }
+    ul { padding-left: 1.25rem; }
+    li { margin-bottom: 0.4rem; }
+  </style>
+</head>
+<body>
+  <div class="site-title">
+    <h1>or-tools-wasm examples</h1>
+    <span class="site-badges">
+      <a href="https://github.com/Axelwickm/or-tools-wasm" rel="noopener">
+        <img alt="GitHub: or-tools-wasm" src="https://img.shields.io/badge/GitHub-or--tools--wasm-181717?logo=github">
+      </a>
+      <a href="https://www.npmjs.com/package/or-tools-wasm" rel="noopener">
+        <img alt="npm package version" src="https://img.shields.io/npm/v/or-tools-wasm?logo=npm&amp;label=npm">
+      </a>
+    </span>
+  </div>
+  <p>
+    Select an example to launch a browser demo powered by the OR-Tools WebAssembly package.
+    Source code is available on
+    <a href="https://github.com/Axelwickm/or-tools-wasm" rel="noopener">GitHub</a>, and the package is on
+    <a href="https://www.npmjs.com/package/or-tools-wasm" rel="noopener">npm</a>.
+  </p>
+  <h2>MathOpt (frontend)</h2>
+  <p class="solver-description">
+    Use <a href="https://developers.google.com/optimization/math_opt" rel="noopener">MathOpt</a> to route one model through selectable solver backends.
+  </p>
+  <ul>
+    <li><a href="./mathopt_basic.html">Basic Model - switch between GLOP, GLPK, GSCIP, and CP-SAT</a></li>
+    <li><a href="./mathopt_factory_floor.html">Bakery Floor Planner - rolling MathOpt CP-SAT simulation with IncrementalSolver</a></li>
+    <li><a href="./sudoku_generator.html">Sudoku Generator - MathOpt binary model with CP-SAT backend uniqueness checks</a></li>
+  </ul>
+  <h2>MPSolver (frontend)</h2>
+  <p class="solver-description">
+    Use <a href="https://developers.google.com/optimization/lp/mpsolver" rel="noopener">MPSolver</a>
+    to route one linear model through selectable LP and integer backends.
+  </p>
+  <ul>
+    <li><a href="./mp_simple_lp.html">Basic Model - switch between GLOP, CLP, GLPK, SCIP, CBC, BOP, Knapsack, and SAT</a></li>
+    <li><a href="./mpsolver_network_design.html">Network Design MIP - open shipping lanes and route demand</a></li>
+  </ul>
+  <h2>CP-SAT</h2>
+  <p class="solver-description">
+    Use <a href="https://developers.google.com/optimization/cp/cp_solver" rel="noopener">CP-SAT</a> for discrete optimization problems with integer, Boolean, scheduling, and logical constraints.
+  </p>
+  <ul>
+    <li><a href="./magic_square.html">Magic Square - fill a grid where every row, column, and diagonal has the same sum</a></li>
+    <li><a href="./model_playground.html">Model Playground - paste JSON CpModelProto text and solve it</a></li>
+    <li><a href="./schema_viewer.html">Schema Viewer - print embedded proto schemas</a></li>
+    <li><a href="./sports_scheduling.html">Sports Scheduling - double round-robin minimization</a></li>
+    <li><a href="./steel_mill_slab.html">Steel Mill Slab - compare three solver variants</a></li>
+  </ul>
+  <h2>Routing</h2>
+  <p class="solver-description">
+    Use <a href="https://developers.google.com/optimization/routing" rel="noopener">routing</a> for vehicle routing, traveling salesperson, pickups and deliveries, capacities, and route constraints.
+  </p>
+  <ul>
+    <li><a href="./routing_simple.html">Simple Routing - direct port of the basic OR-Tools example</a></li>
+    <li><a href="./routing_vrp.html">Vehicle Routing Problem - direct port of the VRP example</a></li>
+    <li><a href="./routing_dispatch.html">Dispatch Map - multi-depot pallet delivery with animated routes</a></li>
+  </ul>
+  <h2>Network Flow</h2>
+  <p class="solver-description">
+    Use OR-Tools graph algorithms for max-flow, min-cost-flow, and linear sum assignment problems.
+  </p>
+  <ul>
+    <li><a href="./network_flow_max_flow.html">Max Flow - direct port of simple_max_flow_program.py</a></li>
+    <li><a href="./network_flow_min_cost_flow.html">Min-Cost Flow - direct port of simple_min_cost_flow_program.py</a></li>
+    <li><a href="./network_flow_assignment.html">Linear Sum Assignment - direct port of assignment_linear_sum_assignment.py</a></li>
+  </ul>
+  <h2>GLOP</h2>
+  <p class="solver-description">
+    Use GLOP for continuous linear programs through the MPSolver API.
+  </p>
+  <ul>
+    <li><a href="./glop_simple_lp.html">Simple LP - direct port of simple_lp_program.py</a></li>
+    <li><a href="./glop_stigler_diet.html">Stigler Diet - cost-minimizing diet LP with nutrient lower bounds</a></li>
+  </ul>
+  <h2>CLP</h2>
+  <p class="solver-description">
+    Use CLP for continuous linear programs through the MPSolver API.
+  </p>
+  <ul>
+    <li><a href="./clp_simple_lp.html">Simple LP - simple_lp_program.py model with CLP</a></li>
+    <li><a href="./clp_transportation.html">Transportation LP - minimum-cost shipment planning</a></li>
+  </ul>
+  <h2>GLPK</h2>
+  <p class="solver-description">
+    Use GLPK for continuous and mixed-integer linear programs through MPSolver, or as a MathOpt backend.
+  </p>
+  <ul>
+    <li><a href="./glpk_simple_lp.html">Simple LP - simple_lp_program.py model with GLPK</a></li>
+    <li><a href="./glpk_simple_mip.html">Simple MIP - simple_mip_program.py model with GLPK</a></li>
+  </ul>
+  <h2>SCIP</h2>
+  <p class="solver-description">
+    Use SCIP for mixed-integer linear programs through MPSolver.
+  </p>
+  <ul>
+    <li><a href="./scip_simple_mip.html">Simple MIP - simple_mip_program.py model with SCIP</a></li>
+    <li><a href="./scip_assignment.html">Assignment With Task Sizes - binary MIP from the OR-Tools samples</a></li>
+  </ul>
+  <h2>CBC</h2>
+  <p class="solver-description">
+    Use CBC for mixed-integer linear programs through MPSolver.
+  </p>
+  <ul>
+    <li><a href="./cbc_simple_mip.html">Simple MIP - simple_mip_program.py model with CBC</a></li>
+  </ul>
+  <h2>BOP</h2>
+  <p class="solver-description">
+    Use BOP for Boolean and integer programming models through MPSolver.
+  </p>
+  <ul>
+    <li><a href="./bop_project_selection.html">Binary Project Selection - choose projects under budget and team constraints</a></li>
+  </ul>
+  <h2>Knapsack</h2>
+  <p class="solver-description">
+    Use the dedicated Knapsack API for 0-1 and multi-dimensional knapsack problems.
+  </p>
+  <ul>
+    <li><a href="./knapsack_simple.html">Simple Knapsack - choose valuable items under a capacity limit</a></li>
+  </ul>
+  <h2>Set Cover</h2>
+  <p class="solver-description">
+    Use the dedicated Set Cover API for weighted set covering models and OR-Tools covering heuristics.
+  </p>
+  <ul>
+    <li><a href="./set_cover_simple.html">Simple Set Cover - direct port of set_cover.py</a></li>
+  </ul>
+  <h2>RCPSP</h2>
+  <p class="solver-description">
+    Use the CP-SAT-backed RCPSP API for resource-constrained project scheduling.
+  </p>
+  <ul>
+    <li><a href="./rcpsp_project.html">Project Schedule - visual Gantt and resource timeline</a></li>
+  </ul>
+  <h2>GSCIP</h2>
+  <p class="solver-description">
+    Use GSCIP for SCIP-backed mixed-integer optimization through MathOpt.
+  </p>
+  <ul>
+    <li><a href="./gscip_simple_mip.html">Simple MIP - MathOpt model with GSCIP</a></li>
+  </ul>
+  <h2>SAT</h2>
+  <p class="solver-description">
+    Use the SAT integer backend for MPSolver mixed-integer linear models.
+  </p>
+  <ul>
+    <li><a href="./sat_simple_mip.html">Simple MIP - direct port of simple_mip_program.py</a></li>
+  </ul>
+</body>
+</html>

@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>CP-SAT - Model Playground</title>
+  <link rel="stylesheet" href="./example.css">
+  <style>
+    textarea, pre {
+      min-height: 22rem;
+    }
+    .params {
+      min-height: 8rem;
+    }
+  </style>
+</head>
+<body>
+  <main class="stack">
+    <nav>
+      <a href="./index.html">← All examples</a>
+      <a href="https://github.com/Axelwickm/or-tools-wasm" rel="noopener">GitHub</a>
+    </nav>
+    <h1>CP-SAT - Model Playground</h1>
+    <p><em>Problem: load a user-provided CP-SAT model, validate it, and solve it with editable search parameters.</em></p>
+    <div class="code-toggle">
+      <details>
+        <summary>Show code</summary>
+        <pre class="code-block"><code data-highlight="ts">import { CpSat, setWorkerBridgeEnabled, type SatParameters } from 'or-tools-wasm/cp-sat';
+
+const modelJson = JSON.parse(textarea.value);
+const workers = 4;
+const params: SatParameters = {
+  ...JSON.parse(paramsTextarea.value),
+  numWorkers: workers,
+};
+
+setWorkerBridgeEnabled(true);
+const model = await CpSat.createModel(modelJson);
+const validation = await CpSat.validate(model);
+if (!validation.ok) throw new Error(validation.message);
+
+const result = await CpSat.solve(model, params);
+console.log(result.response);</code></pre>
+      </details>
+    </div>
+    <p>Paste a JSON-shaped <code>CpModelProto</code>, optionally edit SAT parameters, then validate or solve it in the browser.</p>
+    <div class="example-explanation">
+      <h2>Model</h2>
+      <ul>
+        <li>The model input is raw JSON shaped like a CP-SAT <code>CpModelProto</code>.</li>
+        <li>The parameter input is JSON shaped like <code>SatParameters</code>.</li>
+        <li>Validate checks whether the protobuf model is structurally acceptable before solving.</li>
+        <li>Solve sends the encoded proto directly to the CP-SAT WebAssembly runtime.</li>
+      </ul>
+    </div>
+
+    <div class="controls">
+      <button id="load-sample">Load sample</button>
+      <button id="validate">Validate</button>
+      <button id="solve">Solve</button>
+      <button id="cancel" disabled>Cancel</button>
+      <label>Workers <input id="workers" class="short-number" type="number" value="1" min="1"></label>
+      <label><input id="use-worker-bridge" type="checkbox" checked /> Use worker bridge</label>
+    </div>
+    <div id="status" class="status-line" role="status" aria-live="polite"></div>
+
+    <div class="two-column">
+      <section>
+        <h2>Model JSON</h2>
+        <textarea id="model-input" spellcheck="false"></textarea>
+        <h2>SAT Parameters JSON</h2>
+        <textarea id="params-input" class="params" spellcheck="false"></textarea>
+      </section>
+      <section>
+        <h2>Result</h2>
+        <pre id="result-output"></pre>
+      </section>
+    </div>
+  </main>
+
+    <script type="module" src="./code_highlight.ts"></script>
+    <script type="module" src="./model_playground.ts"></script>
+</body>
+</html>

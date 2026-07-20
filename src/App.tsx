@@ -4,6 +4,7 @@ import { CoordinateForm } from './components/CoordinateForm'
 import { FileUploader } from './components/FileUploader'
 import { WaypointList } from './components/WaypointList'
 import { RouteSummary } from './components/RouteSummary'
+import { Itinerary } from './components/Itinerary'
 import { MapComponent } from './components/MapComponent'
 import { calculateOptimalRoute } from './lib/routingService'
 
@@ -109,7 +110,12 @@ function App() {
             </p>
           ) : null}
           {routeError && <p className="text-xs text-red-500">{routeError}</p>}
-          {optimizedRoute && <RouteSummary route={optimizedRoute} />}
+          {optimizedRoute && (
+            <>
+              <RouteSummary route={optimizedRoute} />
+              <Itinerary route={optimizedRoute} />
+            </>
+          )}
         </section>
       </aside>
 

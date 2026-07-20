@@ -1,0 +1,116 @@
+import { mkdir, readdir, rm, writeFile, readFile } from 'node:fs/promises';
+import { createRequire } from 'node:module';
+import path from 'node:path';
+
+const rootDir = path.resolve(import.meta.dirname, '..');
+const require = createRequire(new URL('../package/package.json', import.meta.url));
+const { build, transform } = require('esbuild');
+const sourceDir = path.join(rootDir, 'javascript/lib');
+const packageBuildDir = path.join(rootDir, 'package/build/javascript');
+const outDir = path.join(packageBuildDir, 'browser');
+const publicEntryNames = [
+  'index',
+  'cp-sat',
+  'routing',
+  'mathopt',
+  'mp-solver',
+  'pdlp',
+  'knapsack',
+  'network-flow',
+  'set-cover',
+  'rcpsp',
+];
+
+async function* listTypeScriptFiles(directory) {
+  for (const entry of await readdir(directory, { withFileTypes: true })) {
+    const entryPath = path.join(directory, entry.name);
+    if (entry.isDirectory()) {
+      yield* listTypeScriptFiles(entryPath);
+    } else if (
+      entry.isFile()
+      && entry.name.endsWith('.ts')
+      && !entry.name.endsWith('.d.ts')
+      && entry.name !== 'runtime_loader_node.ts'
+    ) {
+      yield entryPath;
+    }
+  }
+}
+
+async function transpileSource(sourcePath) {
+  const relativePath = path.relative(sourceDir, sourcePath);
+  const outputPath = path.join(outDir, relativePath.replace(/\.ts$/, '.js'));
+  const source = await readFile(sourcePath, 'utf8');
+  const result = await transform(source, {
+    loader: 'ts',
+    format: 'esm',
+    target: 'es2020',
+    define: {
+      __ORTOOLS_WASM_BROWSER_BUILD__: 'true',
+    },
+    minifySyntax: true,
+    sourcemap: false,
+  });
+
+  await mkdir(path.dirname(outputPath), { recursive: true });
+  const code = relativePath === 'runtime_loader.ts'
+    ? result.code.replaceAll('#internal-wasm/', '../wasm/')
+      .replaceAll('?no-inline', '')
+    : result.code;
+
+  await writeFile(outputPath, code);
+}
+
+const externalRuntimeLoaderPlugin = {
+  name: 'external-runtime-loader',
+  setup(buildContext) {
+    buildContext.onResolve({ filter: /^protobufjs$/ }, () => ({
+      path: require.resolve('protobufjs'),
+    }));
+    buildContext.onResolve({ filter: /^\.\/(?:cp_sat_module_loader|runtime_loader|worker_bridge)\.js$/ }, (args) => ({
+      path: args.path,
+      external: true,
+    }));
+  },
+};
+
+async function bundleBrowserEntry() {
+  for (const entryName of publicEntryNames) {
+    await build({
+      entryPoints: [path.join(sourceDir, `${entryName}.ts`)],
+      outfile: path.join(outDir, `${entryName}.js`),
+      bundle: true,
+      format: 'esm',
+      platform: 'browser',
+      target: 'es2020',
+      define: {
+        __ORTOOLS_WASM_BROWSER_BUILD__: 'true',
+      },
+      minifySyntax: true,
+      sourcemap: false,
+      plugins: [externalRuntimeLoaderPlugin],
+    });
+  }
+}
+
+await rm(outDir, { recursive: true, force: true });
+await mkdir(outDir, { recursive: true });
+
+for await (const sourcePath of listTypeScriptFiles(sourceDir)) {
+  await transpileSource(sourcePath);
+}
+
+await bundleBrowserEntry();
+
+const declarationPath = path.join(packageBuildDir, 'lib/index.d.ts');
+try {
+  const declaration = await readFile(declarationPath, 'utf8');
+  await writeFile(
+    declarationPath,
+    declaration.replaceAll('../../build/javascript/wasm/', '../wasm/'),
+  );
+} catch (error) {
+  if (error.code !== 'ENOENT') {
+    throw error;
+  }
+}

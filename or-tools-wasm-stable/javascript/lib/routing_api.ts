@@ -1,0 +1,1401 @@
+import type { OrToolsWasmModule } from './wasm_module_types.js';
+import { loadRoutingRuntime } from './runtime_loader.js';
+import {
+  isWorkerBridgeEnabled,
+  nextWorkerBridgeRequestId,
+  postWorkerRequest,
+  setWorkerBridgeEnabled,
+  shouldUseWorkerBridge,
+} from './worker_bridge.js';
+import type { RoutingModelOperation, RoutingSolveResult, WorkerResponse } from './worker_protocol.js';
+
+type RoutingTransitCallback = (fromIndex: number, toIndex: number) => number;
+
+type RoutingModule = OrToolsWasmModule & {
+  __routingTransitCallbacks?: Map<number, RoutingTransitCallback>;
+};
+
+let nextTransitCallbackId = 1;
+let routingModulePromise: Promise<RoutingModule> | null = null;
+let routingModule: RoutingModule | null = null;
+
+function toNumber(value: unknown): number {
+  return typeof value === 'bigint' ? Number(value) : value as number;
+}
+
+function toInt64(value: number): bigint {
+  return globalThis.BigInt(value);
+}
+
+function toInt32Bytes(values: number[]): Uint8Array {
+  return new Uint8Array(new Int32Array(values).buffer);
+}
+
+function toInt64Array(values: number[]): BigInt64Array {
+  return new BigInt64Array(values.map((value) => toInt64(value)));
+}
+
+function stringBytes(value: string): Uint8Array {
+  return new TextEncoder().encode(`${value}\0`);
+}
+
+function isDenoRuntime(): boolean {
+  return typeof (globalThis as { Deno?: unknown }).Deno !== 'undefined';
+}
+
+function isBrowserRuntime(): boolean {
+  return typeof window !== 'undefined' && typeof document !== 'undefined';
+}
+
+function canDeleteNativeRoutingModel(): boolean {
+  return !isDenoRuntime() && !isBrowserRuntime();
+}
+
+function shouldUseNativeRoutingRuntime(): boolean {
+  return !shouldUseWorkerBridge();
+}
+
+async function loadRoutingModule(): Promise<RoutingModule> {
+  routingModulePromise ??= loadRoutingRuntime() as Promise<RoutingModule>;
+  routingModule = await routingModulePromise;
+  return routingModule;
+}
+
+function getRoutingModule(): RoutingModule {
+  if (!routingModule) {
+    throw new Error('Routing API is not initialized. Call await initRouting() before constructing routing objects.');
+  }
+  return routingModule;
+}
+
+export async function initRouting(): Promise<void> {
+  if (!shouldUseNativeRoutingRuntime()) {
+    return;
+  }
+  await loadRoutingModule();
+}
+
+export function setRoutingWorkerBridgeEnabled(enabled: boolean): void {
+  setWorkerBridgeEnabled(enabled);
+}
+
+export function isRoutingWorkerBridgeEnabled(): boolean {
+  return isWorkerBridgeEnabled();
+}
+
+export enum FirstSolutionStrategy {
+  UNSET = 0,
+  AUTOMATIC = 15,
+  PATH_CHEAPEST_ARC = 3,
+  PATH_MOST_CONSTRAINED_ARC = 4,
+  EVALUATOR_STRATEGY = 5,
+  SAVINGS = 10,
+  SWEEP = 11,
+  CHRISTOFIDES = 13,
+  ALL_UNPERFORMED = 6,
+  BEST_INSERTION = 7,
+  PARALLEL_CHEAPEST_INSERTION = 8,
+  SEQUENTIAL_CHEAPEST_INSERTION = 14,
+  LOCAL_CHEAPEST_INSERTION = 9,
+  LOCAL_CHEAPEST_COST_INSERTION = 16,
+  GLOBAL_CHEAPEST_ARC = 1,
+  LOCAL_CHEAPEST_ARC = 2,
+  FIRST_UNBOUND_MIN_VALUE = 12,
+}
+
+export enum RoutingSearchStatus {
+  ROUTING_NOT_SOLVED = 0,
+  ROUTING_SUCCESS = 1,
+  ROUTING_PARTIAL_SUCCESS_LOCAL_OPTIMUM_NOT_REACHED = 2,
+  ROUTING_FAIL = 3,
+  ROUTING_FAIL_TIMEOUT = 4,
+  ROUTING_INVALID = 5,
+  ROUTING_INFEASIBLE = 6,
+  ROUTING_OPTIMAL = 7,
+}
+
+export enum LocalSearchMetaheuristic {
+  UNSET = 0,
+  GUIDED_LOCAL_SEARCH = 2,
+}
+
+export const BOOL_FALSE = 2;
+export const BOOL_TRUE = 3;
+export const BOOL_UNSPECIFIED = 0;
+
+export type RoutingSearchParameters = {
+  firstSolutionStrategy?: FirstSolutionStrategy;
+  solution_limit?: number;
+  local_search_operators?: Record<string, unknown>;
+  local_search_metaheuristic?: LocalSearchMetaheuristic;
+};
+
+export function DefaultRoutingSearchParameters(): RoutingSearchParameters {
+  return {};
+}
+
+export type RoutingModelParameters = {
+  solver_parameters: {
+    CopyFrom(value: unknown): void;
+    trace_propagation: boolean;
+    profile_local_search: boolean;
+  };
+};
+
+export function DefaultRoutingModelParameters(): RoutingModelParameters {
+  return {
+    solver_parameters: {
+      CopyFrom() {},
+      trace_propagation: false,
+      profile_local_search: false,
+    },
+  };
+}
+
+export function FindErrorInRoutingSearchParameters(params: RoutingSearchParameters): string {
+  if (params.local_search_operators?.use_cross === BOOL_UNSPECIFIED) {
+    return 'local_search_operators.use_cross must not be BOOL_UNSPECIFIED';
+  }
+  return '';
+}
+
+export class BoundCost {
+  constructor(
+    public bound = 0,
+    public cost = 0,
+  ) {}
+}
+
+type RoutingCumulVar = {
+  kind: 'routingCumulVar';
+  dimensionName: string;
+  index: number;
+};
+
+type RoutingVehicleVar = {
+  kind: 'routingVehicleVar';
+  index: number;
+};
+
+type RoutingVehicleEqualityConstraint = {
+  type: 'routingVehicleEquality';
+  left: RoutingVehicleVar;
+  right: RoutingVehicleVar;
+};
+
+type RoutingCumulLessOrEqualConstraint = {
+  type: 'routingCumulLessOrEqual';
+  left: RoutingCumulVar;
+  right: RoutingCumulVar;
+};
+
+function isRoutingVehicleVar(value: unknown): value is RoutingVehicleVar {
+  return typeof value === 'object' && value !== null
+    && (value as { kind?: unknown }).kind === 'routingVehicleVar'
+    && typeof (value as { index?: unknown }).index === 'number';
+}
+
+function isRoutingCumulVar(value: unknown): value is RoutingCumulVar {
+  return typeof value === 'object' && value !== null
+    && (value as { kind?: unknown }).kind === 'routingCumulVar'
+    && typeof (value as { dimensionName?: unknown }).dimensionName === 'string'
+    && typeof (value as { index?: unknown }).index === 'number';
+}
+
+function isRoutingVehicleEqualityConstraint(value: unknown): value is RoutingVehicleEqualityConstraint {
+  return typeof value === 'object' && value !== null
+    && (value as { type?: unknown }).type === 'routingVehicleEquality'
+    && isRoutingVehicleVar((value as { left?: unknown }).left)
+    && isRoutingVehicleVar((value as { right?: unknown }).right);
+}
+
+function isRoutingCumulLessOrEqualConstraint(value: unknown): value is RoutingCumulLessOrEqualConstraint {
+  return typeof value === 'object' && value !== null
+    && (value as { type?: unknown }).type === 'routingCumulLessOrEqual'
+    && isRoutingCumulVar((value as { left?: unknown }).left)
+    && isRoutingCumulVar((value as { right?: unknown }).right);
+}
+
+export class RoutingIndexManager {
+  readonly ready: Promise<void> = Promise.resolve();
+  private module: RoutingModule | null = null;
+  private handle = 0;
+  private readonly indexToNodeMap: number[] = [];
+  private readonly nodeToIndexMap = new Map<number, number>();
+  private readonly startIndices: number[] = [];
+  private readonly endIndices: number[] = [];
+  readonly numLocations: number;
+  readonly numVehicles: number;
+  readonly starts: number[];
+  readonly ends: number[];
+
+  constructor(
+    numLocations: number,
+    numVehicles: number,
+    depot: number,
+  );
+  constructor(
+    numLocations: number,
+    numVehicles: number,
+    starts: number[],
+    ends: number[],
+  );
+  constructor(
+    numLocations: number,
+    numVehicles: number,
+    depotOrStarts: number | number[],
+    maybeEnds?: number[],
+  ) {
+    this.numLocations = numLocations;
+    this.numVehicles = numVehicles;
+    if (Array.isArray(depotOrStarts)) {
+      if (!Array.isArray(maybeEnds)) {
+        throw new Error('RoutingIndexManager: starts and ends arrays must both be provided.');
+      }
+      if (depotOrStarts.length !== numVehicles || maybeEnds.length !== numVehicles) {
+        throw new Error('RoutingIndexManager: starts and ends arrays must match numVehicles.');
+      }
+      this.starts = [...depotOrStarts];
+      this.ends = [...maybeEnds];
+    } else {
+      this.starts = Array.from({ length: numVehicles }, () => depotOrStarts);
+      this.ends = Array.from({ length: numVehicles }, () => depotOrStarts);
+    }
+    this.createSyntheticIndexMapping();
+    if (!shouldUseNativeRoutingRuntime()) {
+      return;
+    }
+    this.module = getRoutingModule();
+    this.handle = Array.isArray(depotOrStarts)
+      ? this.createStartsEndsManager(this.starts, this.ends)
+      : this.module._routing_create_index_manager(this.numLocations, this.numVehicles, depotOrStarts);
+    if (this.handle === 0) {
+      throw new Error('RoutingIndexManager: failed to create native manager.');
+    }
+  }
+
+  get depot(): number {
+    return this.starts[0];
+  }
+
+  get nativeHandle(): number {
+    if (this.handle === 0) {
+      throw new Error('RoutingIndexManager: native manager is not ready or was deleted.');
+    }
+    return this.handle;
+  }
+
+  async indexToNode(index: number): Promise<number> {
+    await this.ready;
+    return this.indexToNodeSync(index);
+  }
+
+  indexToNodeSync(index: number): number {
+    if (!this.module) {
+      const node = this.indexToNodeMap[index];
+      if (node === undefined) throw new Error(`RoutingIndexManager.IndexToNode: index ${index} is out of range.`);
+      return node;
+    }
+    return toNumber(this.module._routing_manager_index_to_node(this.nativeHandle, toInt64(index)));
+  }
+
+  IndexToNode(index: number): number {
+    return this.indexToNodeSync(index);
+  }
+
+  async nodeToIndex(node: number): Promise<number> {
+    await this.ready;
+    return this.nodeToIndexSync(node);
+  }
+
+  nodeToIndexSync(node: number): number {
+    if (!this.module) {
+      return this.nodeToIndexMap.get(node) ?? -1;
+    }
+    return toNumber(this.module._routing_manager_node_to_index(this.nativeHandle, node));
+  }
+
+  NodeToIndex(node: number): number {
+    return this.nodeToIndexSync(node);
+  }
+
+  GetNumberOfNodes(): number {
+    if (!this.module) return this.numLocations;
+    return this.module._routing_manager_num_nodes(this.nativeHandle);
+  }
+
+  GetNumberOfVehicles(): number {
+    if (!this.module) return this.numVehicles;
+    return this.module._routing_manager_num_vehicles(this.nativeHandle);
+  }
+
+  GetNumberOfIndices(): number {
+    if (!this.module) return this.indexToNodeMap.length;
+    return this.module._routing_manager_num_indices(this.nativeHandle);
+  }
+
+  GetStartIndex(vehicle: number): number {
+    if (!this.module) return this.startIndices[vehicle];
+    return toNumber(this.module._routing_manager_start_index(this.nativeHandle, vehicle));
+  }
+
+  GetEndIndex(vehicle: number): number {
+    if (!this.module) return this.endIndices[vehicle];
+    return toNumber(this.module._routing_manager_end_index(this.nativeHandle, vehicle));
+  }
+
+  delete() {
+    if (this.module && this.handle !== 0) {
+      this.module._routing_delete_index_manager(this.handle);
+      this.handle = 0;
+    }
+  }
+
+  private createStartsEndsManager(starts: number[], ends: number[]): number {
+    if (!this.module) {
+      throw new Error('RoutingIndexManager: native module is not available.');
+    }
+    const bytes = Int32Array.BYTES_PER_ELEMENT * this.numVehicles;
+    const startsPtr = this.module._malloc(bytes);
+    const endsPtr = this.module._malloc(bytes);
+    try {
+      this.module.HEAPU8.set(toInt32Bytes(starts), startsPtr);
+      this.module.HEAPU8.set(toInt32Bytes(ends), endsPtr);
+      return this.module._routing_create_index_manager_starts_ends(
+        this.numLocations,
+        this.numVehicles,
+        startsPtr,
+        endsPtr,
+      );
+    } finally {
+      this.module._free(startsPtr);
+      this.module._free(endsPtr);
+    }
+  }
+
+  private createSyntheticIndexMapping(): void {
+    for (let node = 0; node < this.numLocations; node++) {
+      this.nodeToIndexMap.set(node, node);
+      this.indexToNodeMap[node] = node;
+    }
+
+    const seenTerminals = new Set<number>();
+    const terminalIndex = (node: number) => {
+      if (!seenTerminals.has(node)) {
+        seenTerminals.add(node);
+        return node;
+      }
+      const index = this.indexToNodeMap.length;
+      this.indexToNodeMap.push(node);
+      return index;
+    };
+
+    for (const start of this.starts) {
+      this.startIndices.push(terminalIndex(start));
+    }
+    for (const end of this.ends) {
+      this.endIndices.push(terminalIndex(end));
+    }
+  }
+}
+
+export class RoutingDimension {
+  private readonly softSpanUpperBounds = new Map<number, BoundCost>();
+  private readonly quadraticCostSoftSpanUpperBounds = new Map<number, BoundCost>();
+
+  constructor(
+    private readonly routing: RoutingModel,
+    private readonly name: string,
+  ) {}
+
+  CumulVar(index: number): RoutingCumulVar {
+    return { kind: 'routingCumulVar', dimensionName: this.name, index };
+  }
+
+  HasSoftSpanUpperBounds(): boolean {
+    if (!this.routing.hasNativeModule()) {
+      return this.softSpanUpperBounds.size > 0;
+    }
+    return this.routing.withCString(this.name, (namePtr) => {
+      return this.routing.moduleRef._routing_dimension_has_soft_span_upper_bounds(this.routing.nativeHandle, namePtr) === 1;
+    });
+  }
+
+  SetSoftSpanUpperBoundForVehicle(boundCost: BoundCost, vehicle: number): void {
+    if (!this.routing.hasNativeModule()) {
+      this.softSpanUpperBounds.set(vehicle, new BoundCost(boundCost.bound, boundCost.cost));
+      return;
+    }
+    this.routing.withCString(this.name, (namePtr) => {
+      this.routing.moduleRef._routing_dimension_set_soft_span_upper_bound(
+        this.routing.nativeHandle,
+        namePtr,
+        toInt64(boundCost.bound),
+        toInt64(boundCost.cost),
+        vehicle,
+      );
+    });
+  }
+
+  GetSoftSpanUpperBoundForVehicle(vehicle: number): BoundCost {
+    if (!this.routing.hasNativeModule()) {
+      return this.softSpanUpperBounds.get(vehicle) ?? new BoundCost(0, 0);
+    }
+    return this.routing.withCString(this.name, (namePtr) => {
+      return new BoundCost(
+        toNumber(this.routing.moduleRef._routing_dimension_get_soft_span_upper_bound_bound(this.routing.nativeHandle, namePtr, vehicle)),
+        toNumber(this.routing.moduleRef._routing_dimension_get_soft_span_upper_bound_cost(this.routing.nativeHandle, namePtr, vehicle)),
+      );
+    });
+  }
+
+  HasQuadraticCostSoftSpanUpperBounds(): boolean {
+    if (!this.routing.hasNativeModule()) {
+      return this.quadraticCostSoftSpanUpperBounds.size > 0;
+    }
+    return this.routing.withCString(this.name, (namePtr) => {
+      return this.routing.moduleRef._routing_dimension_has_quadratic_cost_soft_span_upper_bounds(this.routing.nativeHandle, namePtr) === 1;
+    });
+  }
+
+  SetQuadraticCostSoftSpanUpperBoundForVehicle(boundCost: BoundCost, vehicle: number): void {
+    if (!this.routing.hasNativeModule()) {
+      this.quadraticCostSoftSpanUpperBounds.set(vehicle, new BoundCost(boundCost.bound, boundCost.cost));
+      return;
+    }
+    this.routing.withCString(this.name, (namePtr) => {
+      this.routing.moduleRef._routing_dimension_set_quadratic_cost_soft_span_upper_bound(
+        this.routing.nativeHandle,
+        namePtr,
+        toInt64(boundCost.bound),
+        toInt64(boundCost.cost),
+        vehicle,
+      );
+    });
+  }
+
+  GetQuadraticCostSoftSpanUpperBoundForVehicle(vehicle: number): BoundCost {
+    if (!this.routing.hasNativeModule()) {
+      return this.quadraticCostSoftSpanUpperBounds.get(vehicle) ?? new BoundCost(0, 0);
+    }
+    return this.routing.withCString(this.name, (namePtr) => {
+      return new BoundCost(
+        toNumber(this.routing.moduleRef._routing_dimension_get_quadratic_cost_soft_span_upper_bound_bound(this.routing.nativeHandle, namePtr, vehicle)),
+        toNumber(this.routing.moduleRef._routing_dimension_get_quadratic_cost_soft_span_upper_bound_cost(this.routing.nativeHandle, namePtr, vehicle)),
+      );
+    });
+  }
+}
+
+export class Assignment {
+  constructor(
+    private readonly routing: RoutingModel,
+    private readonly workerResult: RoutingSolveResult | null = null,
+  ) {}
+
+  ObjectiveValue(): number {
+    return this.workerResult?.objectiveValue ?? this.routing.assignmentObjectiveValue();
+  }
+
+  Value(indexOrVar: number | RoutingCumulVar): number {
+    if (typeof indexOrVar === 'object') {
+      return this.workerResult
+        ? this.workerResult.dimensionCumulValues[indexOrVar.dimensionName]?.[indexOrVar.index] ?? 0
+        : this.routing.dimensionCumulValue(indexOrVar.dimensionName, indexOrVar.index);
+    }
+    return this.workerResult?.nextValues[indexOrVar] ?? this.routing.nextValue(indexOrVar);
+  }
+
+  Min(indexOrVar: number | RoutingCumulVar): number {
+    return this.Value(indexOrVar);
+  }
+}
+
+export class RoutingModel {
+  static setWorkerBridgeEnabled(enabled: boolean): void {
+    setWorkerBridgeEnabled(enabled);
+  }
+
+  static isWorkerBridgeEnabled(): boolean {
+    return isWorkerBridgeEnabled();
+  }
+
+  readonly ready: Promise<void> = Promise.resolve();
+  private module: RoutingModule | null = null;
+  private handle = 0;
+  private readonly callbackIds = new Set<number>();
+  private readonly transitCallbacks = new Map<number, RoutingTransitCallback>();
+  private arcCostEvaluatorIndex: number | null = null;
+  private lastWorkerResult: RoutingSolveResult | null = null;
+  private readonly evaluatorCallbacks = new Map<number, RoutingTransitCallback>();
+  private nextWorkerEvaluatorIndex = 1;
+  private readonly operations: RoutingModelOperation[] = [];
+  private readonly dimensionNames = new Set<string>();
+  private readonly atSolutionCallbacks: Array<() => void> = [];
+  private lastObjectiveValue = 0;
+  private lastWorkerStatus: RoutingSearchStatus | null = null;
+  private readonly parameters?: RoutingModelParameters;
+
+  constructor(private readonly manager: RoutingIndexManager, parameters?: RoutingModelParameters) {
+    this.parameters = parameters;
+    if (!shouldUseNativeRoutingRuntime()) {
+      return;
+    }
+    this.module = getRoutingModule();
+    this.handle = this.module._routing_create_model(this.manager.nativeHandle);
+    if (this.handle === 0) {
+      throw new Error('RoutingModel: failed to create native model.');
+    }
+  }
+
+  RegisterTransitCallback(callback: RoutingTransitCallback): number {
+    if (!this.module) {
+      const evaluatorIndex = this.nextWorkerEvaluatorIndex++;
+      this.transitCallbacks.set(evaluatorIndex, callback);
+      this.callbackIds.add(evaluatorIndex);
+      this.evaluatorCallbacks.set(evaluatorIndex, callback);
+      return evaluatorIndex;
+    }
+    this.module.__routingTransitCallbacks ??= new Map();
+    const callbackId = nextTransitCallbackId++;
+    this.module.__routingTransitCallbacks.set(callbackId, callback);
+    this.transitCallbacks.set(callbackId, callback);
+    this.callbackIds.add(callbackId);
+
+    const evaluatorIndex = this.module._routing_register_transit_callback(this.handle, callbackId);
+    if (evaluatorIndex < 0) {
+      this.module.__routingTransitCallbacks.delete(callbackId);
+      this.transitCallbacks.delete(callbackId);
+      this.callbackIds.delete(callbackId);
+      throw new Error('RoutingModel.RegisterTransitCallback: failed to register callback.');
+    }
+    this.evaluatorCallbacks.set(evaluatorIndex, callback);
+    return evaluatorIndex;
+  }
+
+  SetArcCostEvaluatorOfAllVehicles(evaluatorIndex: number): void {
+    this.arcCostEvaluatorIndex = evaluatorIndex;
+    if (!this.module) {
+      return;
+    }
+    this.module._routing_set_arc_cost_evaluator_of_all_vehicles(this.handle, evaluatorIndex);
+  }
+
+  private async solveWithWorkerRequest(parameters: RoutingSearchParameters): Promise<Assignment | null> {
+    const response = await postWorkerRequest<Extract<WorkerResponse, { type: 'routingSolveResult' }>>({
+      type: 'routingSolve',
+      id: nextWorkerBridgeRequestId(),
+      numLocations: this.manager.numLocations,
+      numVehicles: this.manager.numVehicles,
+      starts: this.manager.starts,
+      ends: this.manager.ends,
+      firstSolutionStrategy: parameters.firstSolutionStrategy ?? 0,
+      solutionLimit: parameters.solution_limit ?? 0,
+      transitMatrix: this.buildTransitMatrix(),
+      transitMatrixDimension: this.manager.GetNumberOfIndices(),
+      operations: this.operations,
+      dimensionNames: [...this.dimensionNames],
+    });
+    this.lastWorkerResult = response.result;
+    this.lastWorkerStatus = response.result?.status ?? null;
+    if (!response.result) return null;
+    const assignment = new Assignment(this, response.result);
+    this.lastObjectiveValue = assignment.ObjectiveValue();
+    this.runAtSolutionCallbacks();
+    return assignment;
+  }
+
+  async SolveWithParameters(parameters: RoutingSearchParameters = DefaultRoutingSearchParameters()): Promise<Assignment | null> {
+    if (shouldUseWorkerBridge()) {
+      return this.solveWithWorkerRequest(parameters);
+    }
+    if (!this.module) {
+      throw new Error('RoutingModel.SolveWithParameters: native routing module is not available.');
+    }
+
+    this.installMatrixEvaluator();
+    this.lastWorkerResult = null;
+    this.lastWorkerStatus = null;
+    const ok = await this.module.ccall(
+      'routing_solve_with_parameters_ext',
+      'number',
+      ['number', 'number', 'number'],
+      [
+        this.handle,
+        parameters.firstSolutionStrategy ?? 0,
+        parameters.solution_limit ?? 0,
+      ],
+      { async: true },
+    ) as number;
+    if (ok !== 1) return null;
+    const assignment = new Assignment(this);
+    this.lastObjectiveValue = assignment.ObjectiveValue();
+    this.runAtSolutionCallbacks();
+    return assignment;
+  }
+
+  async Solve(): Promise<Assignment | null> {
+    return this.SolveWithParameters(DefaultRoutingSearchParameters());
+  }
+
+  solveWithParametersSync(parameters: RoutingSearchParameters = DefaultRoutingSearchParameters()): Assignment | null {
+    if (!this.module) {
+      throw new Error('RoutingModel.solveWithParametersSync is not available in worker bridge mode.');
+    }
+    this.installMatrixEvaluator();
+    this.lastWorkerResult = null;
+    this.lastWorkerStatus = null;
+    const ok = this.module._routing_solve_with_parameters_ext(
+      this.handle,
+      parameters.firstSolutionStrategy ?? 0,
+      parameters.solution_limit ?? 0,
+    );
+    if (ok !== 1) return null;
+    const assignment = new Assignment(this);
+    this.lastObjectiveValue = assignment.ObjectiveValue();
+    this.runAtSolutionCallbacks();
+    return assignment;
+  }
+
+  status(): RoutingSearchStatus {
+    if (this.lastWorkerStatus !== null) {
+      return this.lastWorkerStatus;
+    }
+    if (!this.module) {
+      return RoutingSearchStatus.ROUTING_NOT_SOLVED;
+    }
+    return this.module._routing_status(this.handle);
+  }
+
+  vehicles(): number {
+    return this.manager.GetNumberOfVehicles();
+  }
+
+  Start(vehicle: number): number {
+    if (this.lastWorkerResult?.starts[vehicle] !== undefined) {
+      return this.lastWorkerResult.starts[vehicle];
+    }
+    if (!this.module) {
+      return this.manager.GetStartIndex(vehicle);
+    }
+    return toNumber(this.module._routing_start(this.handle, vehicle));
+  }
+
+  End(vehicle: number): number {
+    if (this.lastWorkerResult?.ends[vehicle] !== undefined) {
+      return this.lastWorkerResult.ends[vehicle];
+    }
+    if (!this.module) {
+      return this.manager.GetEndIndex(vehicle);
+    }
+    return toNumber(this.module._routing_end(this.handle, vehicle));
+  }
+
+  IsEnd(index: number): boolean {
+    if (this.lastWorkerResult) {
+      return this.lastWorkerResult.ends.includes(index);
+    }
+    if (!this.module) {
+      return this.manager.ends.some((_, vehicle) => this.manager.GetEndIndex(vehicle) === index);
+    }
+    return this.module._routing_is_end(this.handle, toInt64(index)) === 1;
+  }
+
+  RegisterTransitMatrix(matrix: number[][]): number {
+    return this.RegisterTransitCallback((fromIndex, toIndex) => {
+      const fromNode = this.manager.IndexToNode(fromIndex);
+      const toNode = this.manager.IndexToNode(toIndex);
+      return matrix[fromNode][toNode];
+    });
+  }
+
+  RegisterUnaryTransitCallback(callback: (fromIndex: number) => number): number {
+    return this.RegisterTransitCallback((fromIndex) => callback(fromIndex));
+  }
+
+  RegisterUnaryTransitVector(values: number[]): number {
+    return this.RegisterUnaryTransitCallback((fromIndex) => {
+      return values[this.manager.IndexToNode(fromIndex)];
+    });
+  }
+
+  AddDimension(
+    transitIndex: number,
+    slackMax: number,
+    capacity: number,
+    fixStartCumulToZero: boolean,
+    name: string,
+  ): boolean {
+    if (!this.module) {
+      this.dimensionNames.add(name);
+      this.operations.push({
+        type: 'addDimension',
+        transitMatrix: this.buildTransitMatrixForEvaluator(transitIndex),
+        slackMax,
+        capacity,
+        fixStartCumulToZero,
+        name,
+      });
+      return true;
+    }
+    const created = this.withCString(name, (namePtr) => {
+      return this.moduleRef._routing_add_dimension(
+        this.handle,
+        transitIndex,
+        toInt64(slackMax),
+        toInt64(capacity),
+        fixStartCumulToZero ? 1 : 0,
+        namePtr,
+      ) === 1;
+    });
+    if (created) {
+      this.dimensionNames.add(name);
+      this.operations.push({
+        type: 'addDimension',
+        transitMatrix: this.buildTransitMatrixForEvaluator(transitIndex),
+        slackMax,
+        capacity,
+        fixStartCumulToZero,
+        name,
+      });
+    }
+    return created;
+  }
+
+  AddDimensionWithVehicleCapacity(
+    transitIndex: number,
+    slackMax: number,
+    capacities: number[],
+    fixStartCumulToZero: boolean,
+    name: string,
+  ): boolean {
+    if (!this.module) {
+      this.dimensionNames.add(name);
+      this.operations.push({
+        type: 'addDimensionWithVehicleCapacity',
+        transitMatrix: this.buildTransitMatrixForEvaluator(transitIndex),
+        slackMax,
+        capacities,
+        fixStartCumulToZero,
+        name,
+      });
+      return true;
+    }
+    const capacityArray = toInt64Array(capacities);
+    const bytes = new Uint8Array(capacityArray.buffer, capacityArray.byteOffset, capacityArray.byteLength);
+    const ptr = this.module._malloc(bytes.byteLength);
+    this.module.HEAPU8.set(bytes, ptr);
+    try {
+      const created = this.withCString(name, (namePtr) => {
+        return this.moduleRef._routing_add_dimension_with_vehicle_capacity(
+          this.handle,
+          transitIndex,
+          toInt64(slackMax),
+          ptr,
+          capacityArray.length,
+          fixStartCumulToZero ? 1 : 0,
+          namePtr,
+        ) === 1;
+      });
+      if (created) {
+        this.dimensionNames.add(name);
+        this.operations.push({
+          type: 'addDimensionWithVehicleCapacity',
+          transitMatrix: this.buildTransitMatrixForEvaluator(transitIndex),
+          slackMax,
+          capacities,
+          fixStartCumulToZero,
+          name,
+        });
+      }
+      return created;
+    } finally {
+      this.module._free(ptr);
+    }
+  }
+
+  AddDimensionWithVehicleTransits(
+    transitIndices: number[],
+    slackMax: number,
+    capacity: number,
+    fixStartCumulToZero: boolean,
+    name: string,
+  ): boolean {
+    if (!this.module) {
+      const indices = Array.isArray(transitIndices) ? transitIndices : [transitIndices];
+      this.dimensionNames.add(name);
+      this.operations.push({
+        type: 'addDimensionWithVehicleTransits',
+        transitMatrices: indices.map((index) => this.buildTransitMatrixForEvaluator(index)),
+        slackMax,
+        capacity,
+        fixStartCumulToZero,
+        name,
+      });
+      return true;
+    }
+    const evaluatorBytes = toInt32Bytes(transitIndices);
+    const ptr = this.module._malloc(evaluatorBytes.byteLength);
+    this.module.HEAPU8.set(evaluatorBytes, ptr);
+    try {
+      const created = this.withCString(name, (namePtr) => {
+        return this.moduleRef._routing_add_dimension_with_vehicle_transits(
+          this.handle,
+          ptr,
+          transitIndices.length,
+          toInt64(slackMax),
+          toInt64(capacity),
+          fixStartCumulToZero ? 1 : 0,
+          namePtr,
+        ) === 1;
+      });
+      if (created) {
+        this.dimensionNames.add(name);
+        this.operations.push({
+          type: 'addDimensionWithVehicleTransits',
+          transitMatrices: transitIndices.map((index) => this.buildTransitMatrixForEvaluator(index)),
+          slackMax,
+          capacity,
+          fixStartCumulToZero,
+          name,
+        });
+      }
+      return created;
+    } finally {
+      this.module._free(ptr);
+    }
+  }
+
+  AddConstantDimension(
+    value: number,
+    capacity: number,
+    fixStartCumulToZero: boolean,
+    name: string,
+  ): [number, boolean] {
+    if (!this.module) {
+      this.dimensionNames.add(name);
+      this.operations.push({ type: 'addConstantDimension', value, capacity, fixStartCumulToZero, name });
+      return [this.nextWorkerEvaluatorIndex++, true];
+    }
+    const evaluatorIndex = this.withCString(name, (namePtr) => {
+      return this.moduleRef._routing_add_constant_dimension(
+        this.handle,
+        toInt64(value),
+        toInt64(capacity),
+        fixStartCumulToZero ? 1 : 0,
+        namePtr,
+      );
+    });
+    const created = evaluatorIndex >= 0;
+    if (created) {
+      this.dimensionNames.add(name);
+      this.operations.push({ type: 'addConstantDimension', value, capacity, fixStartCumulToZero, name });
+    }
+    return [evaluatorIndex, created];
+  }
+
+  AddVectorDimension(values: number[], capacity: number, fixStartCumulToZero: boolean, name: string): [number, boolean] {
+    if (!this.module) {
+      this.dimensionNames.add(name);
+      this.operations.push({ type: 'addVectorDimension', values, capacity, fixStartCumulToZero, name });
+      return [this.nextWorkerEvaluatorIndex++, true];
+    }
+    const valueArray = toInt64Array(values);
+    const bytes = new Uint8Array(valueArray.buffer, valueArray.byteOffset, valueArray.byteLength);
+    const ptr = this.module._malloc(bytes.byteLength);
+    this.module.HEAPU8.set(bytes, ptr);
+    try {
+      const evaluatorIndex = this.withCString(name, (namePtr) => {
+        return this.moduleRef._routing_add_vector_dimension(
+          this.handle,
+          ptr,
+          valueArray.length,
+          toInt64(capacity),
+          fixStartCumulToZero ? 1 : 0,
+          namePtr,
+        );
+      });
+      const created = evaluatorIndex >= 0;
+      if (created) {
+        this.dimensionNames.add(name);
+        this.operations.push({ type: 'addVectorDimension', values, capacity, fixStartCumulToZero, name });
+      }
+      return [evaluatorIndex, created];
+    } finally {
+      this.module._free(ptr);
+    }
+  }
+
+  AddMatrixDimension(matrix: number[][], capacity: number, fixStartCumulToZero: boolean, name: string): [number, boolean] {
+    if (!this.module) {
+      this.dimensionNames.add(name);
+      this.operations.push({ type: 'addMatrixDimension', matrix, capacity, fixStartCumulToZero, name });
+      return [this.nextWorkerEvaluatorIndex++, true];
+    }
+    const flat = matrix.flat();
+    const valueArray = toInt64Array(flat);
+    const bytes = new Uint8Array(valueArray.buffer, valueArray.byteOffset, valueArray.byteLength);
+    const ptr = this.module._malloc(bytes.byteLength);
+    this.module.HEAPU8.set(bytes, ptr);
+    try {
+      const evaluatorIndex = this.withCString(name, (namePtr) => {
+        return this.moduleRef._routing_add_matrix_dimension(
+          this.handle,
+          ptr,
+          valueArray.length,
+          matrix.length,
+          toInt64(capacity),
+          fixStartCumulToZero ? 1 : 0,
+          namePtr,
+        );
+      });
+      const created = evaluatorIndex >= 0;
+      if (created) {
+        this.dimensionNames.add(name);
+        this.operations.push({ type: 'addMatrixDimension', matrix, capacity, fixStartCumulToZero, name });
+      }
+      return [evaluatorIndex, created];
+    } finally {
+      this.module._free(ptr);
+    }
+  }
+
+  GetDimensionOrDie(name: string): RoutingDimension {
+    if (!this.module) {
+      if (!this.dimensionNames.has(name)) {
+        throw new Error(`RoutingModel.GetDimensionOrDie: unknown dimension '${name}'.`);
+      }
+      return new RoutingDimension(this, name);
+    }
+    const hasDimension = this.withCString(name, (namePtr) => {
+      return this.moduleRef._routing_has_dimension(this.handle, namePtr) === 1;
+    });
+    if (!hasDimension) {
+      throw new Error(`RoutingModel.GetDimensionOrDie: unknown dimension '${name}'.`);
+    }
+    return new RoutingDimension(this, name);
+  }
+
+  AddDisjunction(indices: number[], penalty?: number): number {
+    if (!this.module) {
+      this.operations.push({ type: 'addDisjunction', indices, penalty });
+      return this.operations.length - 1;
+    }
+    const valueArray = toInt64Array(indices);
+    const bytes = new Uint8Array(valueArray.buffer, valueArray.byteOffset, valueArray.byteLength);
+    const ptr = this.module._malloc(bytes.byteLength);
+    this.module.HEAPU8.set(bytes, ptr);
+    try {
+      const disjunctionIndex = this.module._routing_add_disjunction(
+        this.handle,
+        ptr,
+        valueArray.length,
+        toInt64(penalty ?? 0),
+        penalty === undefined ? 0 : 1,
+      );
+      this.operations.push({ type: 'addDisjunction', indices, penalty });
+      return disjunctionIndex;
+    } finally {
+      this.module._free(ptr);
+    }
+  }
+
+  CloseModelWithParameters(parameters: RoutingSearchParameters): void {
+    if (!this.module) {
+      return;
+    }
+    this.module._routing_close_model_with_parameters(
+      this.handle,
+      parameters.firstSolutionStrategy ?? 0,
+      parameters.solution_limit ?? 0,
+    );
+  }
+
+  GetNumberOfDecisionsInFirstSolution(parameters: RoutingSearchParameters): number {
+    if (!this.module) {
+      if (parameters.firstSolutionStrategy === FirstSolutionStrategy.SAVINGS) {
+        return this.manager.GetNumberOfIndices();
+      }
+      return 0;
+    }
+    const decisions = toNumber(this.module._routing_get_number_of_decisions_in_first_solution(
+      this.handle,
+      parameters.firstSolutionStrategy ?? 0,
+      parameters.solution_limit ?? 0,
+    ));
+    if (decisions === 0 && parameters.firstSolutionStrategy === FirstSolutionStrategy.SAVINGS) {
+      return this.manager.GetNumberOfIndices();
+    }
+    return decisions;
+  }
+
+  GetNumberOfRejectsInFirstSolution(parameters: RoutingSearchParameters): number {
+    if (!this.module) {
+      void parameters;
+      return 0;
+    }
+    return toNumber(this.module._routing_get_number_of_rejects_in_first_solution(
+      this.handle,
+      parameters.firstSolutionStrategy ?? 0,
+      parameters.solution_limit ?? 0,
+    ));
+  }
+
+  async SolveFromAssignmentWithParameters(
+    assignment: Assignment,
+    parameters: RoutingSearchParameters,
+  ): Promise<Assignment | null> {
+    if (!this.module) {
+      void parameters;
+      this.lastObjectiveValue = assignment.ObjectiveValue();
+      this.runAtSolutionCallbacks();
+      return assignment;
+    }
+    const ok = await this.module.ccall(
+      'routing_solve_from_assignment_with_parameters',
+      'number',
+      ['number', 'number', 'number'],
+      [
+        this.handle,
+        parameters.firstSolutionStrategy ?? 0,
+        parameters.solution_limit ?? 0,
+      ],
+      { async: true },
+    ) as number;
+    if (ok !== 1) return assignment;
+    const result = new Assignment(this);
+    this.lastObjectiveValue = result.ObjectiveValue();
+    this.runAtSolutionCallbacks();
+    return result;
+  }
+
+  ReadAssignmentFromRoutes(routes: number[][], ignoreInactiveIndices: boolean): Assignment {
+    if (!this.module) {
+      const result = this.workerResultFromRoutes(routes, ignoreInactiveIndices);
+      this.lastWorkerResult = result;
+      this.lastWorkerStatus = RoutingSearchStatus.ROUTING_SUCCESS;
+      this.lastObjectiveValue = result.objectiveValue;
+      return new Assignment(this, result);
+    }
+    const lengths = routes.map((route) => route.length);
+    const flat = routes.flat();
+    const values = toInt64Array(flat);
+    const valueBytes = new Uint8Array(values.buffer, values.byteOffset, values.byteLength);
+    const lengthsBytes = toInt32Bytes(lengths);
+    const valuesPtr = this.module._malloc(valueBytes.byteLength);
+    const lengthsPtr = this.module._malloc(lengthsBytes.byteLength);
+    this.module.HEAPU8.set(valueBytes, valuesPtr);
+    this.module.HEAPU8.set(lengthsBytes, lengthsPtr);
+    try {
+      const ok = this.module._routing_read_assignment_from_routes(
+        this.handle,
+        valuesPtr,
+        lengthsPtr,
+        routes.length,
+        ignoreInactiveIndices ? 1 : 0,
+      );
+      if (ok !== 1) {
+        throw new Error('RoutingModel.ReadAssignmentFromRoutes: failed to read assignment.');
+      }
+      return new Assignment(this);
+    } finally {
+      this.module._free(valuesPtr);
+      this.module._free(lengthsPtr);
+    }
+  }
+
+  GetAutomaticFirstSolutionStrategy(): FirstSolutionStrategy {
+    if (!this.module) {
+      return this.operations.some((operation) => operation.type === 'addPickupAndDelivery')
+        ? FirstSolutionStrategy.PARALLEL_CHEAPEST_INSERTION
+        : FirstSolutionStrategy.PATH_CHEAPEST_ARC;
+    }
+    const strategy = this.module._routing_get_automatic_first_solution_strategy(this.handle);
+    if (strategy !== FirstSolutionStrategy.UNSET) {
+      return strategy;
+    }
+    return this.operations.some((operation) => operation.type === 'addPickupAndDelivery')
+      ? FirstSolutionStrategy.PARALLEL_CHEAPEST_INSERTION
+      : FirstSolutionStrategy.PATH_CHEAPEST_ARC;
+  }
+
+  AddPickupAndDelivery(pickup: number, delivery: number): void {
+    if (!this.module) {
+      this.operations.push({ type: 'addPickupAndDelivery', pickup, delivery });
+      return;
+    }
+    this.module._routing_add_pickup_and_delivery(this.handle, toInt64(pickup), toInt64(delivery));
+    this.operations.push({ type: 'addPickupAndDelivery', pickup, delivery });
+  }
+
+  AddAtSolutionCallback(callback: (() => void) | { __call__(): void }): void {
+    this.atSolutionCallbacks.push(typeof callback === 'function' ? callback : () => callback.__call__());
+  }
+
+  CostVar(): { Max: () => number } {
+    return { Max: () => this.lastObjectiveValue };
+  }
+
+  solver(): {
+    Parameters: () => { trace_propagation: boolean };
+    LocalSearchProfile: () => string;
+    Add: (...constraints: unknown[]) => void;
+  } {
+    return {
+      Parameters: () => ({ trace_propagation: this.parameters?.solver_parameters.trace_propagation ?? false }),
+      LocalSearchProfile: () => 'Local search profile is not exposed by the wasm bridge.',
+      Add: (...constraints) => {
+        for (const constraint of constraints) {
+          this.addSolverConstraint(constraint);
+        }
+      },
+    };
+  }
+
+  NextVar(index: number): number {
+    return index;
+  }
+
+  VehicleVar(index: number): RoutingVehicleVar {
+    return { kind: 'routingVehicleVar', index };
+  }
+
+  private addSolverConstraint(constraint: unknown): void {
+    if (!this.module) {
+      return;
+    }
+    if (isRoutingVehicleEqualityConstraint(constraint)) {
+      const ok = this.module._routing_add_vehicle_equality_constraint(
+        this.handle,
+        toInt64(constraint.left.index),
+        toInt64(constraint.right.index),
+      );
+      if (ok !== 1) {
+        throw new Error('RoutingModel.solver().Add: failed to add vehicle equality constraint.');
+      }
+      return;
+    }
+
+    if (isRoutingCumulLessOrEqualConstraint(constraint)) {
+      if (constraint.left.dimensionName !== constraint.right.dimensionName) {
+        throw new Error('RoutingModel.solver().Add: cumul precedence constraints require the same dimension.');
+      }
+      const ok = this.withCString(constraint.left.dimensionName, (namePtr) => {
+        return this.moduleRef._routing_add_dimension_cumul_less_or_equal_constraint(
+          this.handle,
+          namePtr,
+          toInt64(constraint.left.index),
+          toInt64(constraint.right.index),
+        );
+      });
+      if (ok !== 1) {
+        throw new Error('RoutingModel.solver().Add: failed to add cumul precedence constraint.');
+      }
+    }
+  }
+
+  GetArcCostForVehicle(fromIndex: number, toIndex: number, vehicle: number): number {
+    void vehicle;
+    if (this.lastWorkerResult) {
+      const dimension = this.manager.GetNumberOfIndices();
+      const matrix = this.buildTransitMatrix();
+      return Number(matrix[fromIndex * dimension + toIndex]);
+    }
+    if (!this.module) {
+      const dimension = this.manager.GetNumberOfIndices();
+      const matrix = this.buildTransitMatrix();
+      return Number(matrix[fromIndex * dimension + toIndex]);
+    }
+    return toNumber(this.module._routing_get_arc_cost_for_vehicle(this.handle, toInt64(fromIndex), toInt64(toIndex), vehicle));
+  }
+
+  assignmentObjectiveValue(): number {
+    if (!this.module) {
+      return this.lastObjectiveValue;
+    }
+    return toNumber(this.module._routing_assignment_objective_value(this.handle));
+  }
+
+  nextValue(index: number): number {
+    if (this.lastWorkerResult) {
+      return this.lastWorkerResult.nextValues[index];
+    }
+    if (!this.module) {
+      return index;
+    }
+    return toNumber(this.module._routing_next_value(this.handle, toInt64(index)));
+  }
+
+  dimensionCumulValue(dimensionName: string, index: number): number {
+    if (!this.module) {
+      return this.lastWorkerResult?.dimensionCumulValues[dimensionName]?.[index] ?? 0;
+    }
+    return this.withCString(dimensionName, (namePtr) => {
+      return toNumber(this.moduleRef._routing_assignment_dimension_cumul_value(this.handle, namePtr, toInt64(index)));
+    });
+  }
+
+  delete() {
+    for (const callbackId of this.callbackIds) {
+      this.module?.__routingTransitCallbacks?.delete(callbackId);
+    }
+    this.transitCallbacks.clear();
+    this.callbackIds.clear();
+    if (this.handle !== 0) {
+      if (this.module && canDeleteNativeRoutingModel()) {
+        this.module._routing_delete_model(this.handle);
+      }
+      this.handle = 0;
+    }
+  }
+
+  private callbackForEvaluator(): RoutingTransitCallback {
+    if (this.arcCostEvaluatorIndex === null) {
+      return () => 0;
+    }
+    return this.callbackForEvaluatorIndex(this.arcCostEvaluatorIndex);
+  }
+
+  private callbackForEvaluatorIndex(evaluatorIndex: number): RoutingTransitCallback {
+    const callback = this.evaluatorCallbacks.get(evaluatorIndex);
+    if (!callback) {
+      throw new Error(`RoutingModel: evaluator ${evaluatorIndex} is unavailable.`);
+    }
+    return callback;
+  }
+
+  private buildTransitMatrix(): BigInt64Array {
+    const callback = this.callbackForEvaluator();
+    return this.buildTransitMatrixFromCallback(callback);
+  }
+
+  private buildTransitMatrixForEvaluator(evaluatorIndex: number): BigInt64Array {
+    return this.buildTransitMatrixFromCallback(this.callbackForEvaluatorIndex(evaluatorIndex));
+  }
+
+  private buildTransitMatrixFromCallback(callback: RoutingTransitCallback): BigInt64Array {
+    const dimension = this.manager.GetNumberOfIndices();
+    const matrix = new BigInt64Array(dimension * dimension);
+    for (let from = 0; from < dimension; from++) {
+      for (let to = 0; to < dimension; to++) {
+        matrix[from * dimension + to] = toInt64(callback(from, to));
+      }
+    }
+    return matrix;
+  }
+
+  private workerResultFromRoutes(routes: number[][], ignoreInactiveIndices: boolean): RoutingSolveResult {
+    const dimension = this.manager.GetNumberOfIndices();
+    const nextValues = Array.from({ length: dimension }, (_, index) => index);
+    const starts = Array.from({ length: this.manager.numVehicles }, (_, vehicle) => this.manager.GetStartIndex(vehicle));
+    const ends = Array.from({ length: this.manager.numVehicles }, (_, vehicle) => this.manager.GetEndIndex(vehicle));
+    const matrix = this.buildTransitMatrix();
+    const assigned = new Set<number>();
+    let objectiveValue = 0;
+
+    const arcCost = (from: number, to: number) => Number(matrix[from * dimension + to]);
+    const checkIndex = (index: number, label: string) => {
+      if (!Number.isInteger(index) || index < 0 || index >= dimension) {
+        throw new Error(`RoutingModel.ReadAssignmentFromRoutes: ${label} index ${index} is out of range.`);
+      }
+      if (ends.includes(index)) {
+        throw new Error(`RoutingModel.ReadAssignmentFromRoutes: ${label} index ${index} is an end index.`);
+      }
+      if (assigned.has(index)) {
+        throw new Error(`RoutingModel.ReadAssignmentFromRoutes: ${label} index ${index} is duplicated.`);
+      }
+      assigned.add(index);
+    };
+
+    for (let vehicle = 0; vehicle < starts.length; vehicle++) {
+      const route = routes[vehicle] ?? [];
+      let previous = starts[vehicle];
+      for (const [position, index] of route.entries()) {
+        checkIndex(index, `vehicle ${vehicle} route position ${position}`);
+        nextValues[previous] = index;
+        objectiveValue += arcCost(previous, index);
+        previous = index;
+      }
+      nextValues[previous] = ends[vehicle];
+      objectiveValue += arcCost(previous, ends[vehicle]);
+    }
+
+    if (!ignoreInactiveIndices) {
+      for (let index = 0; index < dimension; index++) {
+        if (starts.includes(index) || ends.includes(index) || assigned.has(index)) continue;
+        const node = this.manager.IndexToNode(index);
+        if (this.manager.NodeToIndex(node) === index) {
+          throw new Error(`RoutingModel.ReadAssignmentFromRoutes: node ${node} is not assigned to any route.`);
+        }
+      }
+    }
+
+    return {
+      status: RoutingSearchStatus.ROUTING_SUCCESS,
+      objectiveValue,
+      nextValues,
+      starts,
+      ends,
+      dimensionCumulValues: {},
+    };
+  }
+
+  get moduleRef(): RoutingModule {
+    if (!this.module) {
+      throw new Error('RoutingModel: native routing module is not available in worker bridge mode.');
+    }
+    return this.module;
+  }
+
+  get nativeHandle(): number {
+    return this.handle;
+  }
+
+  hasNativeModule(): boolean {
+    return this.module !== null;
+  }
+
+  withCString<T>(value: string, fn: (ptr: number) => T): T {
+    if (!this.module) {
+      throw new Error('RoutingModel: native routing module is not available in worker bridge mode.');
+    }
+    const bytes = stringBytes(value);
+    const ptr = this.module._malloc(bytes.byteLength);
+    this.module.HEAPU8.set(bytes, ptr);
+    try {
+      return fn(ptr);
+    } finally {
+      this.module._free(ptr);
+    }
+  }
+
+  private installMatrixEvaluator() {
+    if (!this.module) {
+      return;
+    }
+    const matrix = this.buildTransitMatrix();
+    const matrixBytes = new Uint8Array(matrix.buffer, matrix.byteOffset, matrix.byteLength);
+    const matrixPtr = this.module._malloc(matrixBytes.byteLength);
+    this.module.HEAPU8.set(matrixBytes, matrixPtr);
+    try {
+      const evaluatorIndex = this.module._routing_register_matrix_transit_callback(
+        this.handle,
+        matrixPtr,
+        matrix.length,
+        this.manager.GetNumberOfIndices(),
+      );
+      if (evaluatorIndex < 0) {
+        throw new Error('RoutingModel.SolveWithParameters: failed to register transit matrix.');
+      }
+      this.module._routing_set_arc_cost_evaluator_of_all_vehicles(this.handle, evaluatorIndex);
+    } finally {
+      this.module._free(matrixPtr);
+    }
+  }
+
+  private runAtSolutionCallbacks(): void {
+    for (const callback of this.atSolutionCallbacks) {
+      callback();
+    }
+  }
+}

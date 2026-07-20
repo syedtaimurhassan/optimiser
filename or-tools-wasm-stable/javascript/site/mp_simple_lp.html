@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <title>MPSolver - Frontend</title>
+    <link rel="stylesheet" href="./example.css">
+    <style>
+      #solution-output { margin: 0.75rem 0; }
+      #status { min-height: 8rem; }
+    </style>
+  </head>
+  <body>
+    <nav>
+      <a href="./index.html">← All examples</a>
+      <a href="https://github.com/Axelwickm/or-tools-wasm" rel="noopener">GitHub</a>
+    </nav>
+    <h1>MPSolver - frontend sample</h1>
+    <p><em>Problem: solve one small linear model through MPSolver while switching between available LP and integer backends.</em></p>
+    <div class="code-toggle">
+      <details>
+        <summary>Show code</summary>
+        <pre class="code-block"><code data-highlight="ts">import { initMPSolver, MPSolver, setWorkerBridgeEnabled } from 'or-tools-wasm/mp-solver';
+
+setWorkerBridgeEnabled(true);
+await initMPSolver();
+
+const solver = MPSolver.CreateSolver('GLOP');
+if (!solver) throw new Error('GLOP is unavailable');
+solver.SetNumThreads(4);
+
+const x = solver.NumVar(0, 1, 'x');
+const y = solver.NumVar(0, 1, 'y');
+const c0 = solver.Constraint(-solver.infinity(), 1);
+c0.SetCoefficient(x, 1);
+c0.SetCoefficient(y, 1);
+
+const objective = solver.Objective();
+objective.SetCoefficient(x, 2);
+objective.SetCoefficient(y, 1);
+objective.SetMaximization();
+
+await solver.SolveWithProto();
+console.log(x.solution_value(), y.solution_value());</code></pre>
+      </details>
+    </div>
+    <p>
+      MPSolver routes one tiny linear model through selectable backends. GLOP, CLP,
+      and GLPK_LP solve it as a continuous LP; SAT, GLPK, SCIP, CBC, BOP, and Knapsack solve the same model with integral variables.
+    </p>
+    <div class="example-explanation">
+      <h2>Model</h2>
+      <ul>
+        <li>The model has two variables, one capacity constraint, and one linear objective.</li>
+        <li>The solver menu changes which MPSolver backend receives the model.</li>
+        <li>LP backends solve continuous variables; integer backends solve integral variables.</li>
+        <li>The result compares objective value, variable values, iterations, and branch-and-bound nodes.</li>
+      </ul>
+    </div>
+    <div class="controls">
+      <label>
+        Backend
+        <select id="solver">
+          <option value="GLOP">GLOP</option>
+          <option value="CLP">CLP</option>
+          <option value="GLPK_LP">GLPK LP</option>
+          <option value="GLPK">GLPK MIP</option>
+          <option value="SCIP">SCIP MIP</option>
+          <option value="CBC">CBC MIP</option>
+          <option value="BOP">BOP MIP</option>
+          <option value="KNAPSACK">Knapsack MIP</option>
+          <option value="SAT">SAT</option>
+        </select>
+      </label>
+      <label>Solver threads <input id="workers" class="short-number" type="number" value="4" min="1"></label>
+      <label><input id="use-worker-bridge" type="checkbox" checked> Use worker bridge</label>
+      <button id="run" data-idle-label="Solve model">Solve model</button>
+    </div>
+    <div id="solution-output">Run the solver to view the solution.</div>
+    <p>Status / Response:</p>
+    <pre id="status"></pre>
+    <script type="module" src="./code_highlight.ts"></script>
+    <script type="module" src="./mp_simple_lp.ts"></script>
+  </body>
+</html>

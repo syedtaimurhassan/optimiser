@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <title>MathOpt - Solver Backends</title>
+    <link rel="stylesheet" href="./example.css">
+    <style>
+      #solution-output { margin: 0.75rem 0; }
+      #status { min-height: 8rem; }
+    </style>
+  </head>
+  <body>
+    <nav>
+      <a href="./index.html">← All examples</a>
+      <a href="https://github.com/Axelwickm/or-tools-wasm" rel="noopener">GitHub</a>
+      <a href="https://www.npmjs.com/package/or-tools-wasm" rel="noopener">npm</a>
+    </nav>
+    <h1>MathOpt - solver backend sample</h1>
+    <p><em>Problem: solve a tiny linear model and compare how the MathOpt frontend sends it to different solver backends.</em></p>
+    <div class="code-toggle">
+      <details>
+        <summary>Show code</summary>
+        <pre class="code-block"><code data-highlight="ts">import { initMathOpt, MathOpt, setWorkerBridgeEnabled } from 'or-tools-wasm/mathopt';
+
+setWorkerBridgeEnabled(true);
+await initMathOpt();
+
+const model = MathOpt.Model('basic');
+const x = model.addVariable({ lowerBound: 0, upperBound: 1, name: 'x' });
+const y = model.addVariable({ lowerBound: 0, upperBound: 1, name: 'y' });
+
+model.addLinearConstraint({ upperBound: 1, terms: [
+  { variable: x, coefficient: 1 },
+  { variable: y, coefficient: 1 },
+]});
+model.maximize([
+  { variable: x, coefficient: 2 },
+  { variable: y, coefficient: 1 },
+]);
+
+const result = await MathOpt.solve(model, {
+  solverType: MathOpt.SolverType.GLOP,
+  timeLimitSeconds: 5,
+  glop: new MathOpt.GlopParameters({
+    usePreprocessing: true,
+    useScaling: true,
+  }),
+});
+console.log(result.objectiveValue, result.variableValues);</code></pre>
+      </details>
+    </div>
+    <p>
+      Adapted from <code>ortools/math_opt/samples/python/basic_example.py</code>.
+      The browser demo solves the same two-variable linear model with a selectable MathOpt backend.
+      GLPK runs with a single thread.
+    </p>
+    <div class="example-explanation">
+      <h2>Model</h2>
+      <ul>
+        <li>The model has two variables, one capacity constraint, and one linear objective.</li>
+        <li>The backend selector sends the same MathOpt model to different solver backends.</li>
+        <li>Integer-capable backends use binary variables; LP backends use continuous variables between 0 and 1.</li>
+        <li>The solution table shows how the selected backend values the same small model.</li>
+      </ul>
+    </div>
+    <div class="controls">
+      <label>
+        Backend
+        <select id="solver">
+          <option value="GLOP">GLOP</option>
+          <option value="GLPK">GLPK</option>
+          <option value="GSCIP">GSCIP</option>
+          <option value="CP_SAT">CP-SAT</option>
+        </select>
+      </label>
+      <label><input id="use-worker-bridge" type="checkbox" checked> Use worker bridge</label>
+      <label>Threads <input id="worker-count" class="short-number" type="number" min="1" max="8" value="4"></label>
+      <button id="run" data-idle-label="Solve model">Solve model</button>
+    </div>
+    <div id="solution-output">Run the solver to view the solution.</div>
+    <p>Status / Response:</p>
+    <pre id="status"></pre>
+    <script type="module" src="./code_highlight.ts"></script>
+    <script type="module" src="./mathopt_basic.ts"></script>
+  </body>
+</html>

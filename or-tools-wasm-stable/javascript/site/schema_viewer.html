@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8">
+		<title>CP-SAT - Schema Viewer</title>
+		<link rel="stylesheet" href="./example.css">
+		<style>
+			textarea { min-height: 12rem; }
+		</style>
+	</head>
+	<body>
+		<nav>
+			<a href="./index.html">← All examples</a>
+			<a href="https://github.com/Axelwickm/or-tools-wasm" rel="noopener">GitHub</a>
+		</nav>
+		<h1>CP-SAT - Schema Viewer</h1>
+		<p><em>Problem: inspect the protobuf schemas embedded in the WebAssembly package so raw model structures are easier to understand.</em></p>
+		<div class="code-toggle">
+			<details>
+				<summary>Show code</summary>
+				<pre class="code-block"><code data-highlight="ts">import { CpSat } from 'or-tools-wasm/cp-sat';
+
+const schemas = await CpSat.getSchemas();
+console.log(schemas.cp_model);
+console.log(schemas.sat_parameters);</code></pre>
+			</details>
+		</div>
+		<p>This demo calls the WASM exports that expose the embedded <code>cp_model.proto</code>
+			and <code>sat_parameters.proto</code>
+			schemas and prints their contents.</p>
+		<div class="example-explanation">
+			<h2>Model</h2>
+			<ul>
+				<li>The schemas describe the protobuf messages accepted by the low-level CP-SAT APIs.</li>
+				<li><code>CpModelProto</code> defines variables, constraints, objectives, and search hints.</li>
+				<li><code>SatParameters</code> defines solver configuration such as time limits and workers.</li>
+				<li>The viewer helps inspect the raw proto surface used by playground and fixture code.</li>
+			</ul>
+		</div>
+		<button id="load-schemas">Load schemas</button>
+		<div id="status" class="status-line" role="status" aria-live="polite"></div>
+		<h2>CpModelProto</h2>
+		<textarea id="cp-schema" readonly></textarea>
+		<h2>SatParameters</h2>
+		<textarea id="sat-schema" readonly></textarea>
+
+		<script type="module" src="./code_highlight.ts"></script>
+		<script type="module" src="./schema_viewer.ts"></script>
+	</body>
+</html>

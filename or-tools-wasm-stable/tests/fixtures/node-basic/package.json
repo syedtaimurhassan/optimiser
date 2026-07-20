@@ -1,0 +1,11 @@
+{
+  "name": "or-tools-wasm-node-basic-fixture",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "../../../package/node_modules/.bin/tsc --noEmit && node --experimental-strip-types --test basic.test.ts"
+  },
+  "dependencies": {
+    "or-tools-wasm": "file:../../../package/build/javascript/lib/or-tools-wasm-local.tgz"
+  }
+}

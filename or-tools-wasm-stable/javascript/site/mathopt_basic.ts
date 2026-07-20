@@ -1,0 +1,99 @@
+import { initMathOpt, MathOpt } from 'or-tools-wasm/mathopt';
+import { appendStatus, clearStatus, configureMathOptRun, renderRows, runButton, setRunning, workerCountInput } from './mathopt_sample_helpers.js';
+
+const solverSelect = document.getElementById('solver') as HTMLSelectElement | null;
+
+function selectedSolverType(): keyof typeof MathOpt.SolverType {
+  const value = solverSelect?.value;
+  if (value === 'CP_SAT') return value;
+  if (value === 'GLPK') return value;
+  if (value === 'GSCIP') return value;
+  return 'GLOP';
+}
+
+function addBackendCompatibleBinaryVariable(
+  model: ReturnType<typeof MathOpt.Model>,
+  solverType: keyof typeof MathOpt.SolverType,
+  name: string,
+) {
+  if (solverType === 'CP_SAT' || solverType === 'GSCIP') {
+    return model.addBinaryVariable({ name });
+  }
+  return model.addVariable({ lowerBound: 0, upperBound: 1, name });
+}
+
+function updateThreadControl() {
+  if (!workerCountInput) return;
+  workerCountInput.disabled = selectedSolverType() === 'GLPK';
+  if (workerCountInput.disabled) workerCountInput.value = '1';
+}
+
+solverSelect?.addEventListener('change', updateThreadControl);
+updateThreadControl();
+
+async function runMathOptExample() {
+  setRunning(true);
+  clearStatus();
+  try {
+    const solverType = selectedSolverType();
+    const threads = solverType === 'GLPK' ? 1 : configureMathOptRun();
+    appendStatus('Initializing MathOpt runtime...');
+    await initMathOpt();
+
+    const model = MathOpt.Model('basics');
+    const x = addBackendCompatibleBinaryVariable(model, solverType, 'x');
+    const y = addBackendCompatibleBinaryVariable(model, solverType, 'y');
+    model.addLinearConstraint({
+      upperBound: 1,
+      terms: [
+        { variable: x, coefficient: 1 },
+        { variable: y, coefficient: 1 },
+      ],
+    });
+    model.maximize([
+      { variable: x, coefficient: 2 },
+      { variable: y, coefficient: 1 },
+    ]);
+
+    appendStatus(`Solving with ${solverType}, threads=${threads}...`);
+    const result = await MathOpt.solve(model, {
+      solverType: MathOpt.SolverType[solverType],
+      threads,
+      timeLimitSeconds: 5,
+      relativeGapTolerance: solverType === 'GLOP' || solverType === 'GLPK' ? undefined : 1e-6,
+      glop: solverType === 'GLOP'
+        ? new MathOpt.GlopParameters({ usePreprocessing: true, useScaling: true })
+        : undefined,
+      glpk: solverType === 'GLPK'
+        ? new MathOpt.GlpkParameters({ computeUnboundRaysIfPossible: false })
+        : undefined,
+      gscip: solverType === 'GSCIP'
+        ? new MathOpt.GScipParameters({
+          silenceOutput: true,
+          presolve: MathOpt.GScipMetaParamValue.FAST,
+        })
+        : undefined,
+      cpSat: solverType === 'CP_SAT'
+        ? { numWorkers: threads, maxTimeInSeconds: 5 }
+        : undefined,
+    });
+    renderRows([
+      ['Backend', solverType],
+      ['Variable domain', solverType === 'CP_SAT' || solverType === 'GSCIP' ? 'binary' : 'continuous [0, 1]'],
+      ['Objective', result.objectiveValue],
+      ['x', result.variableValues.x],
+      ['y', result.variableValues.y],
+    ]);
+    appendStatus(`Termination: ${result.terminationReason}`);
+    appendStatus(`Objective: ${result.objectiveValue}`);
+    appendStatus(`Values: ${JSON.stringify(result.variableValues)}`);
+  } catch (error) {
+    appendStatus(`Solve failed: ${(error as Error).message}`);
+  } finally {
+    setRunning(false);
+  }
+}
+
+runButton?.addEventListener('click', () => {
+  void runMathOptExample();
+});

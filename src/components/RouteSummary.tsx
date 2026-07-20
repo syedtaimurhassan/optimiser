@@ -1,5 +1,4 @@
 import type { OptimizedRoute } from '../types'
-import { formatLatLng } from '../lib/coordinates'
 
 interface Props {
   route: OptimizedRoute
@@ -43,15 +42,6 @@ export function RouteSummary({ route }: Props) {
           </span>
         </div>
       </div>
-
-      <ol className="max-h-40 space-y-0.5 overflow-y-auto text-xs text-slate-600">
-        {route.orderedWaypoints.map((p, i) => (
-          <li key={`${p.lat},${p.lng},${i}`}>
-            <span className="mr-2 font-medium text-blue-600">{i + 1}.</span>
-            {formatLatLng(p)}
-          </li>
-        ))}
-      </ol>
     </div>
   )
 }

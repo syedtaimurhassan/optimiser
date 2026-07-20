@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8">
+		<title>CP-SAT - Magic Square</title>
+		<link rel="stylesheet" href="./example.css">
+		<style>
+			textarea { width: 100%; height: 18rem; }
+			#status { min-height: 12rem; }
+			#solution-wrapper { margin: 0.75rem 0; }
+			#solution-grid {
+				display: inline-grid;
+				gap: 0.35rem;
+				padding: 0.5rem;
+				background: #fff;
+				border: 1px solid #d0d7de;
+				border-radius: 6px;
+				min-height: 3rem;
+			}
+			#solution-grid .cell {
+				min-width: 2.5rem;
+				text-align: center;
+				padding: 0.25rem 0.4rem;
+				border-radius: 4px;
+				background: #e8eef8;
+				font-variant-numeric: tabular-nums;
+			}
+		</style>
+	</head>
+	<body>
+		<nav>
+			<a href="./index.html">← All examples</a>
+			<a href="https://github.com/Axelwickm/or-tools-wasm" rel="noopener">GitHub</a>
+		</nav>
+		<h1>CP-SAT - Magic Square</h1>
+		<p><em>Problem: fill a square grid with distinct numbers so every row, column, and diagonal has the same sum.</em></p>
+		<div class="code-toggle">
+			<details>
+				<summary>Show code</summary>
+				<pre class="code-block"><code data-highlight="ts">import { CpSat, setWorkerBridgeEnabled, type SatParameters } from 'or-tools-wasm/cp-sat';
+
+type MagicSquareExpr = {
+  vars: number[];
+  coeffs: number[];
+  offset: number;
+};
+
+type MagicSquareModel = {
+  name: string;
+  variables: Array&lt;{ name: string; domain: number[] }&gt;;
+  constraints: Array&lt;
+    | { name: string; all_diff: { exprs: MagicSquareExpr[] } }
+    | { name: string; linear: { vars: number[]; coeffs: number[]; domain: number[] } }
+  &gt;;
+};
+
+function buildMagicSquareModel(size: number): MagicSquareModel {
+  const numCells = size * size;
+  const variables: MagicSquareModel['variables'] = [];
+  const domain: [number, number] = [1, numCells];
+  for (let row = 0; row &lt; size; ++row) {
+    for (let col = 0; col &lt; size; ++col) {
+      variables.push({ name: `cell_${row}_${col}`, domain: [...domain] });
+    }
+  }
+
+  const constraints: MagicSquareModel['constraints'] = [];
+  constraints.push({
+    name: 'all_diff',
+    all_diff: {
+      exprs: Array.from({ length: numCells }, (_, index) =&gt; ({
+        vars: [index],
+        coeffs: [1],
+        offset: 0,
+      })),
+    },
+  });
+
+  const target = (size * (size * size + 1)) / 2;
+  const addSum = (name: string, vars: number[]) =&gt; {
+    constraints.push({
+      name,
+      linear: { vars, coeffs: Array(vars.length).fill(1), domain: [target, target] },
+    });
+  };
+
+  for (let row = 0; row &lt; size; ++row) {
+    addSum(`row_${row}`, Array.from({ length: size }, (_, col) =&gt; row * size + col));
+  }
+  for (let col = 0; col &lt; size; ++col) {
+    addSum(`col_${col}`, Array.from({ length: size }, (_, row) =&gt; row * size + col));
+  }
+  addSum('diag_main', Array.from({ length: size }, (_, index) =&gt; index * size + index));
+  addSum('diag_anti', Array.from({ length: size }, (_, index) =&gt; index * size + (size - 1 - index)));
+
+  return { name: `magic_square_${size}`, variables, constraints };
+}
+
+setWorkerBridgeEnabled(true);
+const size = 5;
+const model = await CpSat.createModel(buildMagicSquareModel(size));
+const validation = await CpSat.validate(model);
+if (!validation.ok) throw new Error(validation.message);
+
+const workers = 4;
+const params: SatParameters = { numWorkers: workers, logSearchProgress: true };
+const result = await CpSat.solve(model, params);
+console.log(result.response?.solution);</code></pre>
+			</details>
+		</div>
+		<p>This page exercises the <code>cp_sat_api</code>
+			WASM module by building and solving a magic square model directly in the browser.</p>
+		<div class="example-explanation">
+			<h2>Model</h2>
+			<ul>
+				<li>Each grid cell is an integer decision variable.</li>
+				<li>All numbers in the square must be distinct.</li>
+				<li>Every row, column, and diagonal must have the same magic sum.</li>
+				<li>CP-SAT searches for a grid assignment satisfying all arithmetic constraints.</li>
+			</ul>
+		</div>
+		<div class="controls">
+			<label>Size <input id="size" class="short-number" type="number" value="5" min="1"></label>
+			<label>Workers <input id="workers" class="short-number" type="number" value="4" min="1"></label>
+			<label><input id="use-worker-bridge" type="checkbox" checked>
+			Use worker bridge</label>
+			<button id="run">Run magic square</button>
+			<button id="stop" disabled>Stop</button>
+		</div>
+		<div id="solution-wrapper">
+			<p>Latest solution:</p>
+			<div id="solution-grid">Run the solver to view a magic square.</div>
+		</div>
+		<p>Status / Response:</p>
+		<pre id="status"></pre>
+		<script type="module" src="./code_highlight.ts"></script>
+		<script type="module" src="./magic_square.ts"></script>
+	</body>
+</html>
