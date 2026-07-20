@@ -1,8 +1,10 @@
 import { useState } from 'react'
-import type { LatLng } from './types'
+import type { LatLng, OptimizedRoute } from './types'
 import { CoordinateForm } from './components/CoordinateForm'
 import { FileUploader } from './components/FileUploader'
 import { WaypointList } from './components/WaypointList'
+import { RouteSummary } from './components/RouteSummary'
+import { calculateOptimalRoute } from './lib/routingService'
 
 function App() {
   // --- Core route state (lifted here so every panel and the future map share it) ---
@@ -10,11 +12,37 @@ function App() {
   const [endLocation, setEndLocation] = useState<LatLng | null>(null)
   const [waypoints, setWaypoints] = useState<LatLng[]>([])
 
+  // --- Computed route state ---
+  const [optimizedRoute, setOptimizedRoute] = useState<OptimizedRoute | null>(null)
+  const [isCalculating, setIsCalculating] = useState(false)
+  const [routeError, setRouteError] = useState<string | null>(null)
+
   const addWaypoints = (points: LatLng[]) =>
     setWaypoints((prev) => [...prev, ...points])
   const removeWaypoint = (index: number) =>
     setWaypoints((prev) => prev.filter((_, i) => i !== index))
   const clearWaypoints = () => setWaypoints([])
+
+  const canCalculate = Boolean(startLocation && endLocation) && !isCalculating
+
+  async function handleCalculateRoute() {
+    if (!startLocation || !endLocation) return
+    setIsCalculating(true)
+    setRouteError(null)
+    try {
+      const route = await calculateOptimalRoute(
+        startLocation,
+        waypoints,
+        endLocation,
+      )
+      setOptimizedRoute(route)
+    } catch (e) {
+      setOptimizedRoute(null)
+      setRouteError((e as Error).message)
+    } finally {
+      setIsCalculating(false)
+    }
+  }
 
   return (
     <div className="flex h-screen overflow-hidden bg-slate-100">
@@ -64,6 +92,23 @@ function App() {
             )}
           </div>
           <WaypointList waypoints={waypoints} onRemove={removeWaypoint} />
+        </section>
+
+        <section className="space-y-2">
+          <button
+            onClick={handleCalculateRoute}
+            disabled={!canCalculate}
+            className="w-full rounded-md bg-blue-600 px-3 py-2 text-sm font-semibold text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
+          >
+            {isCalculating ? 'Calculating…' : 'Calculate Route'}
+          </button>
+          {!startLocation || !endLocation ? (
+            <p className="text-xs text-slate-400">
+              Set both a start and an end location to calculate.
+            </p>
+          ) : null}
+          {routeError && <p className="text-xs text-red-500">{routeError}</p>}
+          {optimizedRoute && <RouteSummary route={optimizedRoute} />}
         </section>
       </aside>
 
