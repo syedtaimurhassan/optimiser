@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import type { LatLng, OptimizedRoute } from './types'
 import { CoordinateForm } from './components/CoordinateForm'
 import { FileUploader } from './components/FileUploader'
@@ -8,21 +8,44 @@ import { RouteSummary } from './components/RouteSummary'
 import { Itinerary } from './components/Itinerary'
 import { MapComponent } from './components/MapComponent'
 import { planSelectiveRoute } from './lib/planRoute'
+import { loadState, saveState, clearState } from './lib/storage'
 
 function App() {
-  // --- Core route state (lifted here so every panel and the future map share it) ---
-  const [startLocation, setStartLocation] = useState<LatLng | null>(null)
-  const [endLocation, setEndLocation] = useState<LatLng | null>(null)
-  const [waypoints, setWaypoints] = useState<LatLng[]>([])
+  // Restore any session saved on this device (once, on mount).
+  const saved = useMemo(() => loadState(), [])
+
+  // --- Core route state (lifted here so every panel and the map share it) ---
+  const [startLocation, setStartLocation] = useState<LatLng | null>(
+    saved.startLocation ?? null,
+  )
+  const [endLocation, setEndLocation] = useState<LatLng | null>(
+    saved.endLocation ?? null,
+  )
+  const [waypoints, setWaypoints] = useState<LatLng[]>(saved.waypoints ?? [])
 
   // --- Selective-TSP target: how many of the waypoints to actually visit ---
-  const [targetK, setTargetK] = useState<number | null>(null)
+  const [targetK, setTargetK] = useState<number | null>(saved.targetK ?? null)
 
-  // --- Computed route state ---
-  const [optimizedRoute, setOptimizedRoute] = useState<OptimizedRoute | null>(null)
+  // --- Computed route state (route is persisted too, so the map restores) ---
+  const [optimizedRoute, setOptimizedRoute] = useState<OptimizedRoute | null>(
+    saved.optimizedRoute ?? null,
+  )
   const [routeError, setRouteError] = useState<string | null>(null)
   const [isCalculating, setIsCalculating] = useState(false)
   const [calcStatus, setCalcStatus] = useState<string | null>(null)
+
+  // Persist the session to this device whenever any saved field changes.
+  // When there's nothing meaningful to keep, clear storage instead of writing
+  // an empty record (so "Start over" fully wipes the saved session).
+  useEffect(() => {
+    const isEmpty =
+      !startLocation && !endLocation && waypoints.length === 0 && !optimizedRoute
+    if (isEmpty) {
+      clearState()
+    } else {
+      saveState({ startLocation, endLocation, waypoints, targetK, optimizedRoute })
+    }
+  }, [startLocation, endLocation, waypoints, targetK, optimizedRoute])
 
   const addWaypoints = (points: LatLng[]) =>
     setWaypoints((prev) => [...prev, ...points])
@@ -30,6 +53,19 @@ function App() {
     setWaypoints((prev) => prev.filter((_, i) => i !== index))
   const clearWaypoints = () => setWaypoints([])
 
+  function handleResetAll() {
+    // The persistence effect clears storage once state becomes empty.
+    setStartLocation(null)
+    setEndLocation(null)
+    setWaypoints([])
+    setTargetK(null)
+    setOptimizedRoute(null)
+    setRouteError(null)
+  }
+
+  const hasSession = Boolean(
+    startLocation || endLocation || waypoints.length > 0 || optimizedRoute,
+  )
   const canCalculate = Boolean(startLocation && endLocation) && !isCalculating
 
   // Full pipeline: OSRM Table matrix -> OR-Tools WASM Selective-TSP -> OSRM road
@@ -65,9 +101,22 @@ function App() {
       {/* ---------------- Sidebar: inputs + lists ---------------- */}
       <aside className="flex w-96 shrink-0 flex-col gap-5 overflow-y-auto border-r border-slate-200 bg-white p-5">
         <header>
-          <h1 className="text-xl font-bold text-slate-800">Route Optimiser</h1>
+          <div className="flex items-start justify-between">
+            <h1 className="text-xl font-bold text-slate-800">Route Optimiser</h1>
+            {hasSession && (
+              <button
+                onClick={handleResetAll}
+                className="mt-1 text-xs text-slate-400 hover:text-red-500"
+              >
+                Start over
+              </button>
+            )}
+          </div>
           <p className="text-sm text-slate-500">
             Set a start &amp; end, then add intermediate stops.
+          </p>
+          <p className="mt-1 text-xs text-slate-400">
+            Auto-saved on this device — safe to close &amp; reopen.
           </p>
         </header>
 
