@@ -4,6 +4,7 @@ import { CoordinateForm } from './components/CoordinateForm'
 import { FileUploader } from './components/FileUploader'
 import { WaypointList } from './components/WaypointList'
 import { RouteSummary } from './components/RouteSummary'
+import { MapComponent } from './components/MapComponent'
 import { calculateOptimalRoute } from './lib/routingService'
 
 function App() {
@@ -112,14 +113,14 @@ function App() {
         </section>
       </aside>
 
-      {/* ---------------- Map placeholder (Leaflet mounts here in M3) ---------------- */}
+      {/* ---------------- Interactive Leaflet map ---------------- */}
       <main className="relative flex-1">
-        <div className="flex h-full w-full items-center justify-center bg-slate-200 text-slate-400">
-          <div className="text-center">
-            <p className="text-lg font-medium">Map goes here</p>
-            <p className="text-sm">Milestone 3 will mount the Leaflet map.</p>
-          </div>
-        </div>
+        <MapComponent
+          startLocation={startLocation}
+          endLocation={endLocation}
+          waypoints={waypoints}
+          optimizedRoute={optimizedRoute}
+        />
       </main>
     </div>
   )
