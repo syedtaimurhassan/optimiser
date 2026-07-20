@@ -61,60 +61,42 @@ if (typeof window === 'undefined') {
   })
 } else {
   // ---- Page context: register self as a service worker ----
+  // `document.currentScript` is only valid during synchronous execution, so
+  // capture the URL now (not inside a later callback).
+  const swUrl = window.document.currentScript.src
   ;(() => {
-    const reloadedBySelf = window.sessionStorage.getItem('coiReloadedBySelf')
-    window.sessionStorage.removeItem('coiReloadedBySelf')
-    const coi = {
-      shouldRegister: () => !reloadedBySelf,
-      shouldDeregister: () => false,
-      coepCredentialless: () => true,
-      coepDegrade: () => true,
-      doReload: () => window.location.reload(),
-      quiet: false,
-      ...window.coi,
-    }
-
     const n = navigator
-    if (n.serviceWorker && n.serviceWorker.controller) {
-      n.serviceWorker.controller.postMessage({
-        type: 'coepCredentialless',
-        value: coi.coepCredentialless(),
-      })
-      if (coi.shouldDeregister()) {
-        n.serviceWorker.controller.postMessage({ type: 'deregister' })
-      }
-    }
 
-    // If already isolated (e.g. real headers present) or told not to, do nothing.
-    if (window.crossOriginIsolated !== false || !coi.shouldRegister()) return
-    if (!window.isSecureContext) {
-      !coi.quiet &&
-        console.log(
-          'COOP/COEP Service Worker not registered: a secure context (HTTPS or localhost) is required.',
-        )
+    // Already isolated (SW controlling, or real headers present): clean up and stop.
+    if (window.crossOriginIsolated) {
+      window.sessionStorage.removeItem('coiReloadedBySelf')
+      return
+    }
+    if (!window.isSecureContext || !n.serviceWorker) {
+      console.log(
+        'COOP/COEP Service Worker not active: a secure context with service' +
+          ' worker support is required.',
+      )
       return
     }
 
-    if (n.serviceWorker) {
-      n.serviceWorker
-        .register(window.document.currentScript.src)
-        .then((registration) => {
-          !coi.quiet &&
-            console.log('COOP/COEP Service Worker registered', registration.scope)
-          registration.addEventListener('updatefound', () => {
-            window.sessionStorage.setItem('coiReloadedBySelf', 'updatefound')
-            coi.doReload()
-          })
-          if (registration.active && !n.serviceWorker.controller) {
-            window.sessionStorage.setItem('coiReloadedBySelf', 'notyetcontrolled')
-            coi.doReload()
-          }
-        })
-        .catch(
-          (err) =>
-            !coi.quiet &&
-            console.error('COOP/COEP Service Worker failed to register:', err),
-        )
-    }
+    n.serviceWorker.register(swUrl).then(
+      () => console.log('COOP/COEP Service Worker registered'),
+      (err) => console.error('COOP/COEP Service Worker failed to register:', err),
+    )
+
+    // Deterministic first-visit handling: once the SW is active (`ready`), the
+    // page still isn't controlled yet, so reload exactly once to load under the
+    // SW and gain cross-origin isolation. The sessionStorage guard prevents a
+    // reload loop if isolation still doesn't stick.
+    n.serviceWorker.ready.then(() => {
+      if (
+        !window.crossOriginIsolated &&
+        !window.sessionStorage.getItem('coiReloadedBySelf')
+      ) {
+        window.sessionStorage.setItem('coiReloadedBySelf', '1')
+        window.location.reload()
+      }
+    })
   })()
 }
