@@ -122,57 +122,98 @@ export async function calculateOptimalRoute(
   }
 }
 
+/** The public OSRM Table service rejects a request for more than this many
+ *  cells (sources × destinations). NOT a coordinate-count limit — verified. */
+const OSRM_TABLE_MAX_CELLS = 10_000
+/** Respect the demo server's "1 request/second" policy between tiled calls. */
+const OSRM_MIN_REQUEST_GAP_MS = 1_100
+/** Guard against absurd URLs / request counts (URL length, not a hard OSRM cap). */
+const MAX_TABLE_POINTS = 300
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
+
+/** Progress callback for a tiled matrix fetch: (completedRequests, totalRequests). */
+export type MatrixProgress = (done: number, total: number) => void
+
 /**
  * Fetch an integer travel-time (duration) matrix for the full stop set from the
- * OSRM Table service. The points are ordered `[start, ...waypoints, end]`, so
- * the returned matrix indices line up with that array (index 0 = start, last =
- * end). This is the cost grid the OR-Tools Selective-TSP solver consumes.
+ * OSRM Table service. Points are ordered `[start, ...waypoints, end]`, so the
+ * matrix indices line up with that array (index 0 = start, last = end). This is
+ * the cost grid the OR-Tools Selective-TSP solver consumes.
  *
- * Every duration is `Math.round()`ed to an integer — OR-Tools requires integer
- * costs — and unroutable pairs (null) become `UNREACHABLE_COST`.
+ * The public server caps a request at 10,000 cells (sources × destinations),
+ * NOT at a coordinate count — so for large stop sets we send ALL coordinates
+ * every time and fetch the matrix in horizontal row-bands (`sources` = a chunk,
+ * `destinations` = all). Requests ≈ ceil(N² / 10,000), each spaced ≥1s apart to
+ * stay within the demo server's 1 req/sec policy. e.g. ~107 stops → 2 requests.
  *
- * Note: the public OSRM demo server caps a table request at ~100 coordinates,
- * so `waypoints.length + 2` must stay under that limit.
+ * Every duration is `Math.round()`ed to an integer (OR-Tools requires integer
+ * costs); unroutable pairs (null) become `UNREACHABLE_COST`.
  */
 export async function fetchDurationMatrix(
   start: LatLng,
   waypoints: LatLng[],
   end: LatLng,
+  onProgress?: MatrixProgress,
 ): Promise<number[][]> {
   const allPoints = [start, ...waypoints, end]
+  const n = allPoints.length
 
-  if (allPoints.length < 2) {
+  if (n < 2) {
     throw new Error('At least a start and an end location are required.')
   }
+  if (n > MAX_TABLE_POINTS) {
+    throw new Error(
+      `Too many points (${n}). This client supports up to ${MAX_TABLE_POINTS} ` +
+        `(start + ${MAX_TABLE_POINTS - 2} stops + end).`,
+    )
+  }
 
-  // OSRM expects "Longitude,Latitude" pairs joined by ";".
   const coords = allPoints.map((p) => `${p.lng},${p.lat}`).join(';')
-  const url = `${OSRM_TABLE_BASE}/${coords}?annotations=duration`
 
-  let response: Response
-  try {
-    response = await fetch(url)
-  } catch (e) {
-    throw new Error(`Could not reach the OSRM service: ${(e as Error).message}`)
+  // Max source rows per request so that rows × n stays within the cell budget.
+  const rowsPerRequest = Math.max(1, Math.floor(OSRM_TABLE_MAX_CELLS / n))
+  const totalRequests = Math.ceil(n / rowsPerRequest)
+
+  const matrix: (number | null)[][] = []
+  for (let req = 0; req < totalRequests; req++) {
+    const from = req * rowsPerRequest
+    const to = Math.min(n, from + rowsPerRequest)
+
+    // sources = this row-band; destinations default to all coordinates.
+    const sources = Array.from({ length: to - from }, (_, i) => from + i).join(';')
+    const url =
+      `${OSRM_TABLE_BASE}/${coords}?annotations=duration` +
+      (totalRequests > 1 ? `&sources=${sources}` : '')
+
+    let response: Response
+    try {
+      response = await fetch(url)
+    } catch (e) {
+      throw new Error(`Could not reach the OSRM service: ${(e as Error).message}`)
+    }
+    if (!response.ok) {
+      throw new Error(
+        `OSRM table request failed: ${response.status} ${response.statusText}`,
+      )
+    }
+    const data = (await response.json()) as OsrmTableResponse
+    if (data.code !== 'Ok' || !data.durations) {
+      throw new Error(
+        `OSRM could not build a duration matrix (${data.message ?? data.code}).`,
+      )
+    }
+
+    // Rows come back in the order of the sources we asked for -> append directly.
+    for (const row of data.durations) matrix.push(row)
+
+    onProgress?.(req + 1, totalRequests)
+    if (req < totalRequests - 1) await sleep(OSRM_MIN_REQUEST_GAP_MS)
   }
 
-  if (!response.ok) {
-    throw new Error(
-      `OSRM table request failed: ${response.status} ${response.statusText}`,
-    )
-  }
-
-  const data = (await response.json()) as OsrmTableResponse
-
-  if (data.code !== 'Ok' || !data.durations) {
-    throw new Error(
-      `OSRM could not build a duration matrix (${data.message ?? data.code}).`,
-    )
-  }
-
-  // OR-Tools strictly requires INTEGER costs: round every cell, and replace
+  // OR-Tools strictly requires INTEGER costs: round every cell, replacing
   // unroutable (null) cells with a large finite penalty.
-  return data.durations.map((row) =>
+  return matrix.map((row) =>
     row.map((seconds) =>
       seconds == null ? UNREACHABLE_COST : Math.round(seconds),
     ),

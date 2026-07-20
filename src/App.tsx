@@ -22,6 +22,7 @@ function App() {
   const [optimizedRoute, setOptimizedRoute] = useState<OptimizedRoute | null>(null)
   const [routeError, setRouteError] = useState<string | null>(null)
   const [isCalculating, setIsCalculating] = useState(false)
+  const [calcStatus, setCalcStatus] = useState<string | null>(null)
 
   const addWaypoints = (points: LatLng[]) =>
     setWaypoints((prev) => [...prev, ...points])
@@ -37,6 +38,7 @@ function App() {
     if (!startLocation || !endLocation) return
     setIsCalculating(true)
     setRouteError(null)
+    setCalcStatus(null)
     try {
       const k = targetK ?? waypoints.length
       const route = await planSelectiveRoute(
@@ -44,6 +46,9 @@ function App() {
         waypoints,
         endLocation,
         k,
+        (done, total) => {
+          if (total > 1) setCalcStatus(`Fetching cost matrix… ${done}/${total}`)
+        },
       )
       setOptimizedRoute(route)
     } catch (e) {
@@ -51,6 +56,7 @@ function App() {
       setRouteError((e as Error).message)
     } finally {
       setIsCalculating(false)
+      setCalcStatus(null)
     }
   }
 
@@ -118,7 +124,7 @@ function App() {
             disabled={!canCalculate}
             className="w-full rounded-md bg-blue-600 px-3 py-2 text-sm font-semibold text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
           >
-            {isCalculating ? 'Calculating…' : 'Calculate Route'}
+            {isCalculating ? calcStatus ?? 'Calculating…' : 'Calculate Route'}
           </button>
           {!startLocation || !endLocation ? (
             <p className="text-xs text-slate-400">

@@ -1,15 +1,17 @@
 import type { LineString } from 'geojson'
 import type { LatLng, OptimizedRoute } from '../types'
-import { fetchDurationMatrix, fetchRouteGeometry } from './routingService'
+import {
+  fetchDurationMatrix,
+  fetchRouteGeometry,
+  type MatrixProgress,
+} from './routingService'
 import { solveSelectiveTSP } from './solver'
 import { haversine } from './optimize'
 
-/** Public OSRM demo server caps a table/route request at ~100 coordinates. */
-export const MAX_OSRM_POINTS = 100
-
 /**
  * Full Selective-TSP pipeline, all triggered from the browser:
- *   1. OSRM Table  -> integer driving-time cost matrix over [start,...,end]
+ *   1. OSRM Table  -> integer driving-time cost matrix over [start,...,end],
+ *                     fetched in throttled row-bands for large stop sets
  *   2. OR-Tools    -> choose the best K stops and their visiting order (WASM)
  *   3. OSRM Route  -> real road geometry + distance for the chosen sequence
  *
@@ -21,19 +23,12 @@ export async function planSelectiveRoute(
   waypoints: LatLng[],
   end: LatLng,
   k: number,
+  onMatrixProgress?: MatrixProgress,
 ): Promise<OptimizedRoute> {
   const allPoints = [start, ...waypoints, end]
 
-  if (allPoints.length > MAX_OSRM_POINTS) {
-    throw new Error(
-      `The public OSRM server allows at most ${MAX_OSRM_POINTS} points per ` +
-        `request; you have ${allPoints.length} (start + ${waypoints.length} ` +
-        `stops + end). Reduce the number of candidate stops.`,
-    )
-  }
-
-  // 1) Real driving-time cost grid.
-  const matrix = await fetchDurationMatrix(start, waypoints, end)
+  // 1) Real driving-time cost grid (tiled + rate-limited for large sets).
+  const matrix = await fetchDurationMatrix(start, waypoints, end, onMatrixProgress)
 
   // 2) Pick the best K stops and order them, in-browser via OR-Tools WASM.
   const visited = await solveSelectiveTSP(matrix, k)
