@@ -3,6 +3,7 @@ import type { LatLng, OptimizedRoute } from './types'
 import { CoordinateForm } from './components/CoordinateForm'
 import { FileUploader } from './components/FileUploader'
 import { WaypointList } from './components/WaypointList'
+import { TargetKInput } from './components/TargetKInput'
 import { RouteSummary } from './components/RouteSummary'
 import { Itinerary } from './components/Itinerary'
 import { MapComponent } from './components/MapComponent'
@@ -13,6 +14,9 @@ function App() {
   const [startLocation, setStartLocation] = useState<LatLng | null>(null)
   const [endLocation, setEndLocation] = useState<LatLng | null>(null)
   const [waypoints, setWaypoints] = useState<LatLng[]>([])
+
+  // --- Selective-TSP target: how many of the waypoints to actually visit ---
+  const [targetK, setTargetK] = useState<number | null>(null)
 
   // --- Computed route state ---
   const [optimizedRoute, setOptimizedRoute] = useState<OptimizedRoute | null>(null)
@@ -87,6 +91,14 @@ function App() {
             )}
           </div>
           <WaypointList waypoints={waypoints} onRemove={removeWaypoint} />
+        </section>
+
+        <section className="space-y-2">
+          <TargetKInput
+            value={targetK}
+            max={waypoints.length}
+            onChange={setTargetK}
+          />
         </section>
 
         <section className="space-y-2">
