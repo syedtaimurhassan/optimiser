@@ -14,6 +14,44 @@ import {
  */
 export const SKIP_PENALTY = 10_000_000
 
+// The OR-Tools routing WASM (~16 MB) is downloaded on first use. We warm it up
+// once, in the background, so the first "Calculate" isn't stuck waiting on it.
+let warmUpPromise: Promise<void> | null = null
+
+/**
+ * Download + initialize the OR-Tools routing runtime once (idempotent). Safe to
+ * call eagerly (e.g. on app load) to hide the WASM download behind setup time,
+ * and again from the solver — both share the same promise.
+ *
+ * GitHub Pages can't send the COOP/COEP headers that SharedArrayBuffer / threaded
+ * WASM require, so we disable the worker bridge to use the single-threaded
+ * (asyncify) build. `setWorkerBridgeEnabled` is called here (not at module top
+ * level) so bundler tree-shaking can't drop it.
+ */
+export function warmUpSolver(): Promise<void> {
+  if (!warmUpPromise) {
+    warmUpPromise = (async () => {
+      // The routing WASM needs SharedArrayBuffer, which only exists in a
+      // cross-origin-isolated context. Our service worker provides that, but if
+      // it's still false here the browser likely lacks COEP `credentialless`
+      // support (e.g. older Safari). Fail fast with a clear message instead of
+      // hanging forever on "loading-workers".
+      if (typeof window !== 'undefined' && window.crossOriginIsolated === false) {
+        throw new Error(
+          'This browser could not enable the isolation the optimizer needs. ' +
+            'Please use the latest Chrome or Edge (or reload once).',
+        )
+      }
+      setWorkerBridgeEnabled(false)
+      await initRouting()
+    })().catch((e) => {
+      warmUpPromise = null // allow a retry on the next call
+      throw e
+    })
+  }
+  return warmUpPromise
+}
+
 /**
  * Selective TSP: choose the best K intermediate stops (out of all candidates)
  * and order them, given an INTEGER travel-time matrix over the ordered points
@@ -39,15 +77,12 @@ export async function solveSelectiveTSP(
   const endNode = numNodes - 1
   const capacity = Math.max(0, Math.floor(k)) // OR-Tools needs an integer capacity
 
-  // GitHub Pages (a static host) can't send the COOP/COEP headers that
-  // SharedArrayBuffer / threaded WASM require. Disabling the worker bridge makes
-  // OR-Tools run the single-threaded (asyncify) build on the main thread, which
-  // works anywhere. Called here (not at module top-level) so bundler
-  // tree-shaking can't drop it, and before any WASM loads.
-  setWorkerBridgeEnabled(false)
+  // Ensure the WASM runtime is loaded (shares the app's background warm-up).
+  await warmUpSolver()
 
-  // Load the WASM module before constructing any routing objects.
-  await initRouting()
+  // Yield once so any "Optimizing…" status can paint before the synchronous
+  // solve briefly blocks the main thread.
+  await new Promise((resolve) => setTimeout(resolve, 0))
 
   // 1 vehicle, fixed start node [0] and end node [N-1].
   const manager = new RoutingIndexManager(numNodes, 1, [startNode], [endNode])

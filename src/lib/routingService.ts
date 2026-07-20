@@ -132,6 +132,25 @@ const MAX_TABLE_POINTS = 300
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
 
+/** fetch() that rejects with a clear message if the server stalls past `timeoutMs`. */
+async function fetchWithTimeout(url: string, timeoutMs = 30_000): Promise<Response> {
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), timeoutMs)
+  try {
+    return await fetch(url, { signal: controller.signal })
+  } catch (e) {
+    if ((e as Error).name === 'AbortError') {
+      throw new Error(
+        `The OSRM server did not respond within ${timeoutMs / 1000}s. ` +
+          `The free demo server may be busy — please try again.`,
+      )
+    }
+    throw new Error(`Could not reach the OSRM service: ${(e as Error).message}`)
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
 /** Progress callback for a tiled matrix fetch: (completedRequests, totalRequests). */
 export type MatrixProgress = (done: number, total: number) => void
 
@@ -186,12 +205,7 @@ export async function fetchDurationMatrix(
       `${OSRM_TABLE_BASE}/${coords}?annotations=duration` +
       (totalRequests > 1 ? `&sources=${sources}` : '')
 
-    let response: Response
-    try {
-      response = await fetch(url)
-    } catch (e) {
-      throw new Error(`Could not reach the OSRM service: ${(e as Error).message}`)
-    }
+    const response = await fetchWithTimeout(url)
     if (!response.ok) {
       throw new Error(
         `OSRM table request failed: ${response.status} ${response.statusText}`,
@@ -236,13 +250,7 @@ export async function fetchRouteGeometry(
   const coords = points.map((p) => `${p.lng},${p.lat}`).join(';')
   const url = `${OSRM_ROUTE_BASE}/${coords}?overview=full&geometries=geojson`
 
-  let response: Response
-  try {
-    response = await fetch(url)
-  } catch (e) {
-    throw new Error(`Could not reach the OSRM service: ${(e as Error).message}`)
-  }
-
+  const response = await fetchWithTimeout(url)
   if (!response.ok) {
     throw new Error(
       `OSRM route request failed: ${response.status} ${response.statusText}`,

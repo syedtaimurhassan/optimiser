@@ -8,6 +8,7 @@ import { RouteSummary } from './components/RouteSummary'
 import { Itinerary } from './components/Itinerary'
 import { MapComponent } from './components/MapComponent'
 import { planSelectiveRoute } from './lib/planRoute'
+import { warmUpSolver } from './lib/solver'
 import { loadState, saveState, clearState } from './lib/storage'
 
 function App() {
@@ -33,6 +34,29 @@ function App() {
   const [routeError, setRouteError] = useState<string | null>(null)
   const [isCalculating, setIsCalculating] = useState(false)
   const [calcStatus, setCalcStatus] = useState<string | null>(null)
+  const [solverReady, setSolverReady] = useState(false)
+  const [solverWarning, setSolverWarning] = useState<string | null>(null)
+
+  // Preload the ~16 MB OR-Tools WASM in the background so the first "Calculate"
+  // isn't stuck waiting on the download. It needs cross-origin isolation
+  // (provided by the coi service worker, which reloads the page once on first
+  // visit). We wait a few seconds for that, then either warm up or, if the
+  // browser never isolated (e.g. lacks COEP credentialless), warn clearly.
+  useEffect(() => {
+    const id = setTimeout(() => {
+      if (window.crossOriginIsolated) {
+        warmUpSolver()
+          .then(() => setSolverReady(true))
+          .catch((e) => setSolverWarning((e as Error).message))
+      } else {
+        setSolverWarning(
+          'This browser did not enable the isolation the optimizer needs ' +
+            '(SharedArrayBuffer). Please use the latest Chrome or Edge.',
+        )
+      }
+    }, 3000)
+    return () => clearTimeout(id)
+  }, [])
 
   // Persist the session to this device whenever any saved field changes.
   // When there's nothing meaningful to keep, clear storage instead of writing
@@ -82,11 +106,10 @@ function App() {
         waypoints,
         endLocation,
         k,
-        (done, total) => {
-          if (total > 1) setCalcStatus(`Fetching cost matrix… ${done}/${total}`)
-        },
+        setCalcStatus,
       )
       setOptimizedRoute(route)
+      setSolverReady(true)
     } catch (e) {
       setOptimizedRoute(null)
       setRouteError((e as Error).message)
@@ -119,6 +142,12 @@ function App() {
             Auto-saved on this device — safe to close &amp; reopen.
           </p>
         </header>
+
+        {solverWarning && (
+          <div className="rounded-md border border-amber-300 bg-amber-50 p-2 text-xs text-amber-700">
+            ⚠️ {solverWarning}
+          </div>
+        )}
 
         <section className="space-y-4">
           <CoordinateForm
@@ -171,13 +200,21 @@ function App() {
           <button
             onClick={handleCalculateRoute}
             disabled={!canCalculate}
-            className="w-full rounded-md bg-blue-600 px-3 py-2 text-sm font-semibold text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
+            className={`w-full rounded-md px-3 py-2 text-sm font-semibold text-white transition-colors disabled:cursor-not-allowed ${
+              isCalculating
+                ? 'animate-pulse bg-blue-500'
+                : 'bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300'
+            }`}
           >
-            {isCalculating ? calcStatus ?? 'Calculating…' : 'Calculate Route'}
+            {isCalculating ? (calcStatus ?? 'Calculating…') : 'Calculate Route'}
           </button>
           {!startLocation || !endLocation ? (
             <p className="text-xs text-slate-400">
               Set both a start and an end location to calculate.
+            </p>
+          ) : !isCalculating && !solverReady ? (
+            <p className="text-xs text-slate-400">
+              Preparing optimizer (one-time download)…
             </p>
           ) : null}
           {routeError && <p className="text-xs text-red-500">{routeError}</p>}

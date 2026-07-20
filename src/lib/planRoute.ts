@@ -1,12 +1,11 @@
 import type { LineString } from 'geojson'
 import type { LatLng, OptimizedRoute } from '../types'
-import {
-  fetchDurationMatrix,
-  fetchRouteGeometry,
-  type MatrixProgress,
-} from './routingService'
+import { fetchDurationMatrix, fetchRouteGeometry } from './routingService'
 import { solveSelectiveTSP } from './solver'
 import { haversine } from './optimize'
+
+/** Human-readable status of the current pipeline stage, for UI feedback. */
+export type PlanStatus = (message: string) => void
 
 /**
  * Full Selective-TSP pipeline, all triggered from the browser:
@@ -15,22 +14,29 @@ import { haversine } from './optimize'
  *   2. OR-Tools    -> choose the best K stops and their visiting order (WASM)
  *   3. OSRM Route  -> real road geometry + distance for the chosen sequence
  *
- * Step 3 is best-effort: if it fails we still return the optimized selection
- * with straight-line geometry and the matrix-derived driving time.
+ * `onStatus` reports each stage so the UI never appears frozen. Step 3 is
+ * best-effort: if it fails we still return the optimized selection with
+ * straight-line geometry and the matrix-derived driving time.
  */
 export async function planSelectiveRoute(
   start: LatLng,
   waypoints: LatLng[],
   end: LatLng,
   k: number,
-  onMatrixProgress?: MatrixProgress,
+  onStatus?: PlanStatus,
 ): Promise<OptimizedRoute> {
   const allPoints = [start, ...waypoints, end]
 
   // 1) Real driving-time cost grid (tiled + rate-limited for large sets).
-  const matrix = await fetchDurationMatrix(start, waypoints, end, onMatrixProgress)
+  onStatus?.('Fetching cost matrix…')
+  const matrix = await fetchDurationMatrix(start, waypoints, end, (done, total) => {
+    onStatus?.(
+      total > 1 ? `Fetching cost matrix… ${done}/${total}` : 'Fetching cost matrix…',
+    )
+  })
 
   // 2) Pick the best K stops and order them, in-browser via OR-Tools WASM.
+  onStatus?.('Optimizing route…')
   const visited = await solveSelectiveTSP(matrix, k)
   const orderedWaypoints = visited.map((i) => allPoints[i])
 
@@ -41,6 +47,7 @@ export async function planSelectiveRoute(
   }
 
   // 3) Best-effort real road geometry for the chosen sequence.
+  onStatus?.('Building road route…')
   try {
     const road = await fetchRouteGeometry(orderedWaypoints)
     return {
