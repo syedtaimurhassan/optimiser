@@ -1,16 +1,11 @@
 import { useEffect, useMemo } from 'react'
 import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap } from 'react-leaflet'
+import { useShallow } from 'zustand/react/shallow'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
-import type { LatLng, OptimizedRoute } from '../types'
+import type { LatLng } from '../types'
 import { formatLatLng } from '../lib/coordinates'
-
-interface Props {
-  startLocation: LatLng | null
-  endLocation: LatLng | null
-  waypoints: LatLng[]
-  optimizedRoute: OptimizedRoute | null
-}
+import { useRouteStore } from '../store/routeStore'
 
 /**
  * Build a CSS-based circular marker. Using divIcon avoids the classic
@@ -54,12 +49,18 @@ function FitBounds({ points, fitKey }: { points: LatLng[]; fitKey: string }) {
   return null
 }
 
-export function MapComponent({
-  startLocation,
-  endLocation,
-  waypoints,
-  optimizedRoute,
-}: Props) {
+export function MapComponent() {
+  // Re-renders only when one of these four shallow-changes — not on K edits,
+  // status ticks, or errors.
+  const { startLocation, endLocation, waypoints, optimizedRoute } = useRouteStore(
+    useShallow((s) => ({
+      startLocation: s.startLocation,
+      endLocation: s.endLocation,
+      waypoints: s.waypoints,
+      optimizedRoute: s.optimizedRoute,
+    })),
+  )
+
   // Which blue waypoints to draw, and what number to label them with.
   // After optimization we use the reordered sequence (start=1 ... end=last),
   // so an intermediate stop at orderedWaypoints[i] is stop number i+1.

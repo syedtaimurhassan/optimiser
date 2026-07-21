@@ -1,26 +1,24 @@
-interface Props {
-  /** Current K value, or null when empty. */
-  value: number | null
-  /** Maximum selectable K = number of uploaded waypoints. */
-  max: number
-  onChange: (k: number | null) => void
-}
+import { useRouteStore } from '../store/routeStore'
 
 /**
  * Lets the user pick K — how many of the uploaded waypoints to actually visit.
- * The selection is only stored here in Milestone 6; the Selective-TSP solver
- * that consumes it arrives in Milestone 7.
+ * Subscribes only to `targetK` and the waypoint count, so typing here re-renders
+ * nothing else (not the map, not the itinerary).
  */
-export function TargetKInput({ value, max, onChange }: Props) {
+export function TargetKInput() {
+  const value = useRouteStore((s) => s.targetK)
+  const max = useRouteStore((s) => s.waypoints.length)
+  const setTargetK = useRouteStore((s) => s.setTargetK)
+
   const tooMany = value !== null && max > 0 && value > max
 
   function handleChange(raw: string) {
     if (raw === '') {
-      onChange(null)
+      setTargetK(null)
       return
     }
     const n = parseInt(raw, 10)
-    onChange(Number.isFinite(n) ? n : null)
+    setTargetK(Number.isFinite(n) ? n : null)
   }
 
   return (

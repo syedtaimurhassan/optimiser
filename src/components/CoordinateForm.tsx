@@ -1,22 +1,25 @@
 import { useState, type FormEvent } from 'react'
-import type { LatLng } from '../types'
+import { useRouteStore } from '../store/routeStore'
 import { toLatLng, formatLatLng } from '../lib/coordinates'
 
 interface Props {
+  /** Which store field this form drives. */
+  field: 'start' | 'end'
   label: string
-  value: LatLng | null
-  onChange: (value: LatLng | null) => void
   /** Tailwind background class for the submit button accent. */
   accentClass?: string
 }
 
-/** Manual lat/lng entry form for a single named location (Start or End). */
-export function CoordinateForm({
-  label,
-  value,
-  onChange,
-  accentClass = 'bg-blue-600',
-}: Props) {
+/**
+ * Manual lat/lng entry for a single named location. Subscribes only to its own
+ * field, so the Start form never re-renders when the End changes (and vice versa).
+ */
+export function CoordinateForm({ field, label, accentClass = 'bg-blue-600' }: Props) {
+  const value = useRouteStore((s) =>
+    field === 'start' ? s.startLocation : s.endLocation,
+  )
+  const setValue = useRouteStore((s) => (field === 'start' ? s.setStart : s.setEnd))
+
   const [lat, setLat] = useState('')
   const [lng, setLng] = useState('')
   const [error, setError] = useState<string | null>(null)
@@ -29,11 +32,11 @@ export function CoordinateForm({
       return
     }
     setError(null)
-    onChange(point)
+    setValue(point)
   }
 
   function handleClear() {
-    onChange(null)
+    setValue(null)
     setLat('')
     setLng('')
     setError(null)

@@ -1,13 +1,11 @@
 import { useRef, useState, type ChangeEvent, type DragEvent } from 'react'
-import type { LatLng } from '../types'
 import { parseWaypointFile } from '../lib/parseFile'
-
-interface Props {
-  onWaypointsParsed: (waypoints: LatLng[]) => void
-}
+import { useRouteStore } from '../store/routeStore'
 
 /** Drag-and-drop / click-to-browse uploader that parses CSV or JSON waypoints. */
-export function FileUploader({ onWaypointsParsed }: Props) {
+export function FileUploader() {
+  // Only the (stable) action is read, so this never re-renders on state change.
+  const addWaypoints = useRouteStore((s) => s.addWaypoints)
   const inputRef = useRef<HTMLInputElement>(null)
   const [status, setStatus] = useState<string | null>(null)
   const [errors, setErrors] = useState<string[]>([])
@@ -23,7 +21,7 @@ export function FileUploader({ onWaypointsParsed }: Props) {
 
     setBusy(false)
     if (result.waypoints.length > 0) {
-      onWaypointsParsed(result.waypoints)
+      addWaypoints(result.waypoints)
       const n = result.waypoints.length
       setStatus(`Added ${n} waypoint${n === 1 ? '' : 's'} from ${file.name}.`)
     } else {

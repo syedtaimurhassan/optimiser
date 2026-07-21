@@ -1,13 +1,11 @@
-import type { LatLng } from '../types'
+import { useRouteStore } from '../store/routeStore'
 import { formatLatLng } from '../lib/coordinates'
 
-interface Props {
-  waypoints: LatLng[]
-  onRemove: (index: number) => void
-}
-
 /** Scrollable, removable list of the current intermediate waypoints. */
-export function WaypointList({ waypoints, onRemove }: Props) {
+export function WaypointList() {
+  const waypoints = useRouteStore((s) => s.waypoints)
+  const onRemove = useRouteStore((s) => s.removeWaypoint)
+
   if (waypoints.length === 0) {
     return (
       <p className="text-xs text-slate-400">
