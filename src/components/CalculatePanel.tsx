@@ -10,10 +10,15 @@ export function CalculatePanel() {
   const calcStatus = useRouteStore((s) => s.calcStatus)
   const routeError = useRouteStore((s) => s.routeError)
   const solverReady = useRouteStore((s) => s.solverReady)
-  const hasStartEnd = useRouteStore((s) => Boolean(s.startLocation && s.endLocation))
+  // A route needs at least 2 distinct points; start/end are optional now.
+  const pointCount = useRouteStore(
+    (s) =>
+      s.waypoints.length + (s.startLocation ? 1 : 0) + (s.endLocation ? 1 : 0),
+  )
   const calculateRoute = useRouteStore((s) => s.calculateRoute)
 
-  const canCalculate = hasStartEnd && !isCalculating
+  const enoughPoints = pointCount >= 2
+  const canCalculate = enoughPoints && !isCalculating
 
   return (
     <section className="space-y-2">
@@ -29,9 +34,10 @@ export function CalculatePanel() {
         {isCalculating ? (calcStatus ?? 'Calculating…') : 'Calculate Route'}
       </button>
 
-      {!hasStartEnd ? (
+      {!enoughPoints ? (
         <p className="text-xs text-slate-400">
-          Set both a start and an end location to calculate.
+          Add at least 2 points — upload a file, or set a start/end. Start &amp;
+          end are optional.
         </p>
       ) : !isCalculating && !solverReady ? (
         <p className="text-xs text-slate-400">

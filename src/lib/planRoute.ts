@@ -1,49 +1,91 @@
 import type { LineString } from 'geojson'
 import type { LatLng, OptimizedRoute } from '../types'
-import { fetchDurationMatrix, fetchRouteGeometry } from './routingService'
+import {
+  fetchCostMatrix,
+  fetchRouteGeometry,
+  type Objective,
+} from './routingService'
 import { solveSelectiveTSP } from './solver'
 import { haversine } from './optimize'
 
 /** Human-readable status of the current pipeline stage, for UI feedback. */
 export type PlanStatus = (message: string) => void
 
-/**
- * Full Selective-TSP pipeline, all triggered from the browser:
- *   1. OSRM Table  -> integer driving-time cost matrix over [start,...,end],
- *                     fetched in throttled row-bands for large stop sets
- *   2. OR-Tools    -> choose the best K stops and their visiting order (WASM)
- *   3. OSRM Route  -> real road geometry + distance for the chosen sequence
- *
- * `onStatus` reports each stage so the UI never appears frozen. Step 3 is
- * best-effort: if it fails we still return the optimized selection with
- * straight-line geometry and the matrix-derived driving time.
- */
-export async function planSelectiveRoute(
-  start: LatLng,
-  waypoints: LatLng[],
-  end: LatLng,
-  k: number,
-  onStatus?: PlanStatus,
-): Promise<OptimizedRoute> {
-  const allPoints = [start, ...waypoints, end]
+export interface PlanInput {
+  /** Fixed start, or null to let the optimizer choose where to begin. */
+  startLocation: LatLng | null
+  /** Fixed end, or null to let the optimizer choose where to finish. */
+  endLocation: LatLng | null
+  /** All candidate stops. */
+  waypoints: LatLng[]
+  /** Max candidate stops to visit, or null for "all". */
+  targetK: number | null
+  /** Minimize driving time or road distance. */
+  objective: Objective
+  onStatus?: PlanStatus
+}
 
-  // 1) Real driving-time cost grid (tiled + rate-limited for large sets).
+const sameCoord = (a: LatLng, b: LatLng) => a.lat === b.lat && a.lng === b.lng
+
+/**
+ * Full pipeline (all in-browser):
+ *   1. OSRM Table -> integer cost matrix (time or distance) over the point list
+ *   2. OR-Tools   -> pick the best K candidates + order them, with fixed OR free
+ *                    start/end
+ *   3. OSRM Route -> real road geometry + totals for the chosen sequence
+ *
+ * Start/end may be null (open route) and may be chosen from the uploaded list —
+ * a list-selected endpoint is de-duplicated out of the candidate set so it isn't
+ * visited twice.
+ */
+export async function planSelectiveRoute({
+  startLocation,
+  endLocation,
+  waypoints,
+  targetK,
+  objective,
+  onStatus,
+}: PlanInput): Promise<OptimizedRoute> {
+  // Candidates = uploaded stops, minus any that coincide with a chosen endpoint.
+  const candidates = waypoints.filter(
+    (w) =>
+      !(startLocation && sameCoord(w, startLocation)) &&
+      !(endLocation && sameCoord(w, endLocation)),
+  )
+
+  // Build the ordered point list: [start?, ...candidates, end?].
+  const points: LatLng[] = [
+    ...(startLocation ? [startLocation] : []),
+    ...candidates,
+    ...(endLocation ? [endLocation] : []),
+  ]
+  if (points.length < 2) {
+    throw new Error('Add at least two points (upload a file, or set start/end).')
+  }
+
+  const startNode = startLocation ? 0 : null
+  const endNode = endLocation ? points.length - 1 : null
+  const k = targetK ?? candidates.length
+  // Fixed endpoints occupy slots in the ordered route but aren't candidate stops.
+  const fixedCount = (startNode !== null ? 1 : 0) + (endNode !== null ? 1 : 0)
+
+  // 1) Cost grid (tiled + rate-limited for large sets).
   onStatus?.('Fetching cost matrix…')
-  const matrix = await fetchDurationMatrix(start, waypoints, end, (done, total) => {
+  const matrix = await fetchCostMatrix(points, objective, (done, total) => {
     onStatus?.(
       total > 1 ? `Fetching cost matrix… ${done}/${total}` : 'Fetching cost matrix…',
     )
   })
 
-  // 2) Pick the best K stops and order them, in-browser via OR-Tools WASM.
+  // 2) Optimize (best K + order), in-browser via OR-Tools WASM.
   onStatus?.('Optimizing route…')
-  const visited = await solveSelectiveTSP(matrix, k)
-  const orderedWaypoints = visited.map((i) => allPoints[i])
+  const visited = await solveSelectiveTSP(matrix, { startNode, endNode, k })
+  const orderedWaypoints = visited.map((i) => points[i])
 
-  // Real driving seconds along the chosen route (sum of matrix cells).
-  let matrixDuration = 0
+  // Real cost along the chosen route (sum of matrix cells).
+  let matrixCost = 0
   for (let i = 0; i < visited.length - 1; i++) {
-    matrixDuration += matrix[visited[i]][visited[i + 1]]
+    matrixCost += matrix[visited[i]][visited[i + 1]]
   }
 
   // 3) Best-effort real road geometry for the chosen sequence.
@@ -55,11 +97,13 @@ export async function planSelectiveRoute(
       geometry: road.geometry,
       distanceMeters: road.distanceMeters,
       durationSeconds: road.durationSeconds,
+      candidatesVisited: orderedWaypoints.length - fixedCount,
+      candidatesTotal: candidates.length,
       estimated: false,
     }
   } catch {
-    // Fallback: straight-line geometry + haversine distance (duration stays
-    // the real OSRM matrix sum).
+    // Fallback: straight-line geometry + haversine distance. Duration is the
+    // real matrix sum only when we optimized on duration; otherwise estimate.
     let straightMeters = 0
     for (let i = 0; i < orderedWaypoints.length - 1; i++) {
       straightMeters += haversine(orderedWaypoints[i], orderedWaypoints[i + 1])
@@ -71,8 +115,10 @@ export async function planSelectiveRoute(
     return {
       orderedWaypoints,
       geometry,
-      distanceMeters: straightMeters,
-      durationSeconds: matrixDuration,
+      distanceMeters: objective === 'distance' ? matrixCost : straightMeters,
+      durationSeconds: objective === 'duration' ? matrixCost : straightMeters / 8,
+      candidatesVisited: orderedWaypoints.length - fixedCount,
+      candidatesTotal: candidates.length,
       estimated: true,
     }
   }

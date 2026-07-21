@@ -9,15 +9,14 @@ import { Itinerary } from './Itinerary'
  */
 export function ResultsPanel() {
   const route = useRouteStore((s) => s.optimizedRoute)
-  const candidateCount = useRouteStore((s) => s.waypoints.length)
 
   if (!route) return null
 
   return (
     <section className="space-y-2">
       <p className="text-xs text-slate-500">
-        Visiting {route.orderedWaypoints.length - 2} of {candidateCount} candidate
-        stop{candidateCount === 1 ? '' : 's'}.
+        Visiting {route.candidatesVisited} of {route.candidatesTotal} candidate
+        stop{route.candidatesTotal === 1 ? '' : 's'}.
       </p>
       <RouteSummary route={route} />
       <Itinerary route={route} />

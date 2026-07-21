@@ -4,8 +4,10 @@ import { CoordinateForm } from './components/CoordinateForm'
 import { FileUploader } from './components/FileUploader'
 import { WaypointsPanel } from './components/WaypointsPanel'
 import { TargetKInput } from './components/TargetKInput'
+import { ObjectiveToggle } from './components/ObjectiveToggle'
 import { CalculatePanel } from './components/CalculatePanel'
 import { ResultsPanel } from './components/ResultsPanel'
+import { FavoritesPanel } from './components/FavoritesPanel'
 import { MapComponent } from './components/MapComponent'
 import { useRouteStore } from './store/routeStore'
 
@@ -30,11 +32,6 @@ function App() {
       <aside className="flex w-96 shrink-0 flex-col gap-5 overflow-y-auto border-r border-slate-200 bg-white p-5">
         <HeaderPanel />
 
-        <section className="space-y-4">
-          <CoordinateForm field="start" label="Start" accentClass="bg-emerald-600" />
-          <CoordinateForm field="end" label="End" accentClass="bg-rose-600" />
-        </section>
-
         <section className="space-y-2">
           <h2 className="text-sm font-semibold text-slate-700">Upload waypoints</h2>
           <FileUploader />
@@ -42,12 +39,24 @@ function App() {
 
         <WaypointsPanel />
 
+        <section className="space-y-4">
+          <p className="text-xs text-slate-400">
+            Start &amp; end are optional — leave blank for an open route, type
+            coordinates, or pick a stop from the list.
+          </p>
+          <CoordinateForm field="start" label="Start" accentClass="bg-emerald-600" />
+          <CoordinateForm field="end" label="End" accentClass="bg-rose-600" />
+        </section>
+
         <section className="space-y-2">
           <TargetKInput />
         </section>
 
+        <ObjectiveToggle />
+
         <CalculatePanel />
         <ResultsPanel />
+        <FavoritesPanel />
       </aside>
 
       {/* ---------------- Interactive Leaflet map ---------------- */}

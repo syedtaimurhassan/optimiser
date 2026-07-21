@@ -8,11 +8,13 @@ import {
 } from 'or-tools-wasm/routing'
 
 /**
- * Penalty for leaving an intermediate stop unvisited. It must dwarf any real
- * travel-time arc so the solver only ever skips a stop because the K capacity
- * forces it to — never because skipping is "cheaper".
+ * Penalty for leaving a candidate stop unvisited. It must dwarf any real arc so
+ * the solver only skips a stop when the K capacity forces it to.
  */
 export const SKIP_PENALTY = 10_000_000
+
+/** Cost of a forbidden virtual arc — larger than any penalty, so it's never used. */
+const FORBIDDEN = 1_000_000_000
 
 // The OR-Tools routing WASM (~16 MB) is downloaded on first use. We warm it up
 // once, in the background, so the first "Calculate" isn't stuck waiting on it.
@@ -20,22 +22,11 @@ let warmUpPromise: Promise<void> | null = null
 
 /**
  * Download + initialize the OR-Tools routing runtime once (idempotent). Safe to
- * call eagerly (e.g. on app load) to hide the WASM download behind setup time,
- * and again from the solver — both share the same promise.
- *
- * GitHub Pages can't send the COOP/COEP headers that SharedArrayBuffer / threaded
- * WASM require, so we disable the worker bridge to use the single-threaded
- * (asyncify) build. `setWorkerBridgeEnabled` is called here (not at module top
- * level) so bundler tree-shaking can't drop it.
+ * call eagerly (e.g. on app load) to hide the WASM download behind setup time.
  */
 export function warmUpSolver(): Promise<void> {
   if (!warmUpPromise) {
     warmUpPromise = (async () => {
-      // The routing WASM needs SharedArrayBuffer, which only exists in a
-      // cross-origin-isolated context. Our service worker provides that, but if
-      // it's still false here the browser likely lacks COEP `credentialless`
-      // support (e.g. older Safari). Fail fast with a clear message instead of
-      // hanging forever on "loading-workers".
       if (typeof window !== 'undefined' && window.crossOriginIsolated === false) {
         throw new Error(
           'This browser could not enable the isolation the optimizer needs. ' +
@@ -45,102 +36,100 @@ export function warmUpSolver(): Promise<void> {
       setWorkerBridgeEnabled(false)
       await initRouting()
     })().catch((e) => {
-      warmUpPromise = null // allow a retry on the next call
+      warmUpPromise = null
       throw e
     })
   }
   return warmUpPromise
 }
 
+export interface SolveOptions {
+  /** Real node index that must be the route's start, or null to let the solver choose. */
+  startNode: number | null
+  /** Real node index that must be the route's end, or null to let the solver choose. */
+  endNode: number | null
+  /** Max number of candidate stops to visit (excludes fixed start/end). */
+  k: number
+}
+
 /**
- * Selective TSP: choose the best K intermediate stops (out of all candidates)
- * and order them, given an INTEGER travel-time matrix over the ordered points
- * `[start, ...candidates, end]` — so node 0 is the start and the last node is
- * the end.
+ * Optimize a route over an integer cost matrix, selecting the best K candidate
+ * stops and ordering them. Handles fixed OR free start/end via two virtual depot
+ * nodes joined by zero-cost arcs to the allowed endpoints:
  *
- * Returns the visited node indices in visiting order (start first, end last);
- * skipped candidates are omitted. Map indices back to coordinates in the caller
- * with `allPoints[i]`.
+ *   - both fixed  -> classic fixed-endpoint route
+ *   - one fixed   -> open at the other end
+ *   - both free   -> fully open path (upload-and-go)
  *
- * Runs entirely in-browser via the OR-Tools WebAssembly routing solver.
+ * Returns the visited REAL node indices in order (actual start first, end last).
  */
 export async function solveSelectiveTSP(
   matrix: number[][],
-  k: number,
+  { startNode, endNode, k }: SolveOptions,
 ): Promise<number[]> {
-  const numNodes = matrix.length
-  if (numNodes < 2) {
-    throw new Error('Matrix must contain at least a start and an end node.')
+  const n = matrix.length
+  if (n < 2) throw new Error('Need at least two points to build a route.')
+
+  const VS = n // virtual start depot
+  const VE = n + 1 // virtual end depot
+  const numNodes = n + 2
+  const capacity = Math.max(0, Math.floor(k))
+
+  const isFixedEndpoint = (node: number) => node === startNode || node === endNode
+
+  // Arc cost for the augmented graph (real nodes 0..n-1, plus VS and VE).
+  const cost = (a: number, b: number): number => {
+    if (a < n && b < n) return matrix[a][b]
+    if (a === VS) return b < n && (startNode === null || b === startNode) ? 0 : FORBIDDEN
+    if (b === VE) return a < n && (endNode === null || a === endNode) ? 0 : FORBIDDEN
+    return FORBIDDEN
   }
 
-  const startNode = 0
-  const endNode = numNodes - 1
-  const capacity = Math.max(0, Math.floor(k)) // OR-Tools needs an integer capacity
-
-  // Ensure the WASM runtime is loaded (shares the app's background warm-up).
   await warmUpSolver()
+  await new Promise((resolve) => setTimeout(resolve, 0)) // let status paint
 
-  // Yield once so any "Optimizing…" status can paint before the synchronous
-  // solve briefly blocks the main thread.
-  await new Promise((resolve) => setTimeout(resolve, 0))
-
-  // 1 vehicle, fixed start node [0] and end node [N-1].
-  const manager = new RoutingIndexManager(numNodes, 1, [startNode], [endNode])
+  const manager = new RoutingIndexManager(numNodes, 1, [VS], [VE])
   const routing = new RoutingModel(manager)
 
   try {
-    // Arc cost = matrix duration. Callbacks receive solver indices, so convert
-    // each back to its node before indexing the matrix.
-    const transitIdx = routing.RegisterTransitCallback((fromIndex, toIndex) => {
-      const from = manager.IndexToNode(fromIndex)
-      const to = manager.IndexToNode(toIndex)
-      return matrix[from][to]
-    })
+    const transitIdx = routing.RegisterTransitCallback((fromIndex, toIndex) =>
+      cost(manager.IndexToNode(fromIndex), manager.IndexToNode(toIndex)),
+    )
     routing.SetArcCostEvaluatorOfAllVehicles(transitIdx)
 
-    // Constraint 1: every intermediate stop is OPTIONAL. A disjunction with a
-    // huge penalty lets the solver skip it (required to visit only K of N).
-    for (let node = startNode + 1; node < endNode; node++) {
-      routing.AddDisjunction([manager.NodeToIndex(node)], SKIP_PENALTY)
+    // Candidate stops (everything except fixed endpoints) are optional...
+    for (let node = 0; node < n; node++) {
+      if (!isFixedEndpoint(node)) {
+        routing.AddDisjunction([manager.NodeToIndex(node)], SKIP_PENALTY)
+      }
     }
 
-    // Constraint 2: a "stop counter" dimension. Each intermediate node adds 1,
-    // start/end add 0, and the single vehicle's capacity caps the count at K.
+    // ...and capped at K via a stop-counter dimension.
     const demandIdx = routing.RegisterUnaryTransitCallback((fromIndex) => {
       const node = manager.IndexToNode(fromIndex)
-      return node === startNode || node === endNode ? 0 : 1
+      if (node >= n) return 0 // virtual depots
+      return isFixedEndpoint(node) ? 0 : 1
     })
-    routing.AddDimensionWithVehicleCapacity(
-      demandIdx,
-      0, // no slack
-      [capacity], // vehicle capacity = K
-      true, // start cumul fixed to zero
-      'StopCounter',
-    )
+    routing.AddDimensionWithVehicleCapacity(demandIdx, 0, [capacity], true, 'StopCounter')
 
-    // NOTE: this package's search parameters expose NO time limit (only
-    // firstSolutionStrategy / solution_limit). PATH_CHEAPEST_ARC yields a good
-    // route and the search terminates at a local optimum on its own — sub-second
-    // for the sizes the public OSRM matrix allows (<= ~98 stops).
     const params = DefaultRoutingSearchParameters()
     params.firstSolutionStrategy = FirstSolutionStrategy.PATH_CHEAPEST_ARC
 
     const solution = await routing.SolveWithParameters(params)
     if (!solution) {
-      throw new Error('OR-Tools could not find a feasible route for this K.')
+      throw new Error('OR-Tools could not find a feasible route.')
     }
 
-    // Walk start -> ... -> end, collecting visited nodes in order.
+    // Walk the tour, collecting real nodes in order (skip the virtual depots).
     const visited: number[] = []
     let index = routing.Start(0)
-    visited.push(manager.IndexToNode(index))
     while (!routing.IsEnd(index)) {
+      const node = manager.IndexToNode(index)
+      if (node < n) visited.push(node)
       index = solution.Value(routing.NextVar(index))
-      visited.push(manager.IndexToNode(index))
     }
     return visited
   } finally {
-    // Always release the native WASM handles.
     routing.delete()
     manager.delete()
   }

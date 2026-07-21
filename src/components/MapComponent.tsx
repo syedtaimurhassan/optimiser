@@ -27,9 +27,6 @@ function markerIcon(color: string, label: string): L.DivIcon {
   })
 }
 
-const START_ICON = markerIcon('#059669', 'S') // emerald
-const END_ICON = markerIcon('#e11d48', 'E') // rose
-
 /**
  * Imperatively fit the map to the given points whenever they change.
  * `fitKey` is a stable serialization so the effect only re-runs on real change.
@@ -61,24 +58,31 @@ export function MapComponent() {
     })),
   )
 
-  // Which blue waypoints to draw, and what number to label them with.
-  // After optimization we use the reordered sequence (start=1 ... end=last),
-  // so an intermediate stop at orderedWaypoints[i] is stop number i+1.
-  const blueStops = useMemo(() => {
+  // Markers to draw:
+  //  - with a route: EVERY ordered stop (first green, last red, middle blue),
+  //    numbered by visiting order — works whether or not start/end were fixed.
+  //  - without a route: the preview — start (green), end (red), candidates (blue).
+  const markers = useMemo(() => {
     if (optimizedRoute) {
       const seq = optimizedRoute.orderedWaypoints
-      return seq.slice(1, -1).map((point, i) => ({
+      const last = seq.length - 1
+      return seq.map((point, i) => ({
         point,
-        number: i + 2, // +1 for 1-based, +1 because start occupies slot 1
-        optimized: true,
+        label: String(i + 1),
+        color: i === 0 ? '#059669' : i === last ? '#e11d48' : '#2563eb',
+        role: i === 0 ? 'Start' : i === last ? 'End' : `Stop ${i + 1}`,
       }))
     }
-    return waypoints.map((point, i) => ({
-      point,
-      number: i + 1,
-      optimized: false,
-    }))
-  }, [optimizedRoute, waypoints])
+    const list: { point: LatLng; label: string; color: string; role: string }[] = []
+    if (startLocation)
+      list.push({ point: startLocation, label: 'S', color: '#059669', role: 'Start' })
+    waypoints.forEach((point, i) =>
+      list.push({ point, label: String(i + 1), color: '#2563eb', role: `Waypoint ${i + 1}` }),
+    )
+    if (endLocation)
+      list.push({ point: endLocation, label: 'E', color: '#e11d48', role: 'End' })
+    return list
+  }, [optimizedRoute, startLocation, endLocation, waypoints])
 
   // Route geometry ([lng, lat]) -> Leaflet positions ([lat, lng]).
   const routePositions = useMemo<[number, number][]>(() => {
@@ -86,15 +90,7 @@ export function MapComponent() {
     return optimizedRoute.geometry.coordinates.map(([lng, lat]) => [lat, lng])
   }, [optimizedRoute])
 
-  // Every point the map should frame, plus a stable key to trigger re-fitting.
-  const boundsPoints = useMemo(() => {
-    const pts: LatLng[] = []
-    if (startLocation) pts.push(startLocation)
-    blueStops.forEach((s) => pts.push(s.point))
-    if (endLocation) pts.push(endLocation)
-    return pts
-  }, [startLocation, endLocation, blueStops])
-
+  const boundsPoints = useMemo(() => markers.map((m) => m.point), [markers])
   const fitKey = boundsPoints.map((p) => `${p.lat},${p.lng}`).join('|')
 
   return (
@@ -109,46 +105,19 @@ export function MapComponent() {
         attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
       />
 
-      {startLocation && (
+      {markers.map((m, i) => (
         <Marker
-          position={[startLocation.lat, startLocation.lng]}
-          icon={START_ICON}
+          key={`${m.point.lat},${m.point.lng},${i}`}
+          position={[m.point.lat, m.point.lng]}
+          icon={markerIcon(m.color, m.label)}
         >
           <Popup>
-            <strong>Start</strong>
+            <strong>{m.role}</strong>
             <br />
-            {formatLatLng(startLocation)}
-          </Popup>
-        </Marker>
-      )}
-
-      {blueStops.map((stop, i) => (
-        <Marker
-          key={`${stop.point.lat},${stop.point.lng},${i}`}
-          position={[stop.point.lat, stop.point.lng]}
-          icon={markerIcon('#2563eb', String(stop.number))}
-        >
-          <Popup>
-            <strong>
-              {stop.optimized
-                ? `Stop ${stop.number} (optimized)`
-                : `Waypoint ${stop.number}`}
-            </strong>
-            <br />
-            {formatLatLng(stop.point)}
+            {formatLatLng(m.point)}
           </Popup>
         </Marker>
       ))}
-
-      {endLocation && (
-        <Marker position={[endLocation.lat, endLocation.lng]} icon={END_ICON}>
-          <Popup>
-            <strong>End</strong>
-            <br />
-            {formatLatLng(endLocation)}
-          </Popup>
-        </Marker>
-      )}
 
       {routePositions.length > 0 && (
         <Polyline

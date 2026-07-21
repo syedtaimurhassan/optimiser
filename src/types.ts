@@ -12,6 +12,15 @@ export interface ParseResult {
   errors: string[]
 }
 
+/** A saved, named scenario the user can reload later (kept in local storage). */
+export interface Favorite {
+  id: string
+  name: string
+  startLocation: LatLng | null
+  endLocation: LatLng | null
+  waypoints: LatLng[]
+}
+
 /** The optimized route returned by the OSRM Trip service. */
 export interface OptimizedRoute {
   /**
@@ -25,6 +34,10 @@ export interface OptimizedRoute {
   distanceMeters: number
   /** Total driving duration in seconds. */
   durationSeconds: number
+  /** How many candidate stops the route visits (excludes fixed start/end). */
+  candidatesVisited: number
+  /** How many candidate stops were available to choose from. */
+  candidatesTotal: number
   /** True when distance/duration are straight-line estimates (no road router). */
   estimated?: boolean
 }
