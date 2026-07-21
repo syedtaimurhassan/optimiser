@@ -100,10 +100,10 @@
       });
     }
     var E2 = /\/+/g;
-    function D2(e3, t3) {
+    function ie2(e3, t3) {
       return typeof e3 == `object` && e3 && e3.key != null ? re2(`` + e3.key) : t3.toString(36);
     }
-    function O2(e3) {
+    function D2(e3) {
       switch (e3.status) {
         case `fulfilled`:
           return e3.value;
@@ -123,7 +123,7 @@
       }
       throw e3;
     }
-    function k2(e3, r3, i3, a3, o3) {
+    function O2(e3, r3, i3, a3, o3) {
       var s3 = typeof e3;
       (s3 === `undefined` || s3 === `boolean`) && (e3 = null);
       var c3 = false;
@@ -141,30 +141,30 @@
               c3 = true;
               break;
             case d2:
-              return c3 = e3._init, k2(c3(e3._payload), r3, i3, a3, o3);
+              return c3 = e3._init, O2(c3(e3._payload), r3, i3, a3, o3);
           }
       }
-      if (c3) return o3 = o3(e3), c3 = a3 === `` ? `.` + D2(e3, 0) : a3, S2(o3) ? (i3 = ``, c3 != null && (i3 = c3.replace(E2, `$&/`) + `/`), k2(o3, r3, i3, ``, function(e4) {
+      if (c3) return o3 = o3(e3), c3 = a3 === `` ? `.` + ie2(e3, 0) : a3, S2(o3) ? (i3 = ``, c3 != null && (i3 = c3.replace(E2, `$&/`) + `/`), O2(o3, r3, i3, ``, function(e4) {
         return e4;
       })) : o3 != null && (ne2(o3) && (o3 = te2(o3, i3 + (o3.key == null || e3 && e3.key === o3.key ? `` : (`` + o3.key).replace(E2, `$&/`) + `/`) + c3)), r3.push(o3)), 1;
       c3 = 0;
       var l3 = a3 === `` ? `.` : a3 + `:`;
-      if (S2(e3)) for (var u3 = 0; u3 < e3.length; u3++) a3 = e3[u3], s3 = l3 + D2(a3, u3), c3 += k2(a3, r3, i3, s3, o3);
-      else if (u3 = m2(e3), typeof u3 == `function`) for (e3 = u3.call(e3), u3 = 0; !(a3 = e3.next()).done; ) a3 = a3.value, s3 = l3 + D2(a3, u3++), c3 += k2(a3, r3, i3, s3, o3);
+      if (S2(e3)) for (var u3 = 0; u3 < e3.length; u3++) a3 = e3[u3], s3 = l3 + ie2(a3, u3), c3 += O2(a3, r3, i3, s3, o3);
+      else if (u3 = m2(e3), typeof u3 == `function`) for (e3 = u3.call(e3), u3 = 0; !(a3 = e3.next()).done; ) a3 = a3.value, s3 = l3 + ie2(a3, u3++), c3 += O2(a3, r3, i3, s3, o3);
       else if (s3 === `object`) {
-        if (typeof e3.then == `function`) return k2(O2(e3), r3, i3, a3, o3);
+        if (typeof e3.then == `function`) return O2(D2(e3), r3, i3, a3, o3);
         throw r3 = String(e3), Error(`Objects are not valid as a React child (found: ` + (r3 === `[object Object]` ? `object with keys {` + Object.keys(e3).join(`, `) + `}` : r3) + `). If you meant to render a collection of children, use an array instead.`);
       }
       return c3;
     }
-    function A2(e3, t3, n3) {
+    function k2(e3, t3, n3) {
       if (e3 == null) return e3;
       var r3 = [], i3 = 0;
-      return k2(e3, r3, ``, ``, function(e4) {
+      return O2(e3, r3, ``, ``, function(e4) {
         return t3.call(n3, e4, i3++);
       }), r3;
     }
-    function j2(e3) {
+    function A2(e3) {
       if (e3._status === -1) {
         var t3 = e3._result;
         t3 = t3(), t3.then(function(t4) {
@@ -176,7 +176,7 @@
       if (e3._status === 1) return e3._result.default;
       throw e3._result;
     }
-    var M2 = typeof reportError == `function` ? reportError : function(e3) {
+    var j2 = typeof reportError == `function` ? reportError : function(e3) {
       if (typeof window == `object` && typeof window.ErrorEvent == `function`) {
         var t3 = new window.ErrorEvent(`error`, {
           bubbles: true,
@@ -190,21 +190,21 @@
         return;
       }
       console.error(e3);
-    }, N2 = {
-      map: A2,
+    }, M2 = {
+      map: k2,
       forEach: function(e3, t3, n3) {
-        A2(e3, function() {
+        k2(e3, function() {
           t3.apply(this, arguments);
         }, n3);
       },
       count: function(e3) {
         var t3 = 0;
-        return A2(e3, function() {
+        return k2(e3, function() {
           t3++;
         }), t3;
       },
       toArray: function(e3) {
-        return A2(e3, function(e4) {
+        return k2(e3, function(e4) {
           return e4;
         }) || [];
       },
@@ -213,7 +213,7 @@
         return e3;
       }
     };
-    e2.Activity = f2, e2.Children = N2, e2.Component = v2, e2.Fragment = r2, e2.Profiler = a2, e2.PureComponent = b2, e2.StrictMode = i2, e2.Suspense = l2, e2.__CLIENT_INTERNALS_DO_NOT_USE_OR_WARN_USERS_THEY_CANNOT_UPGRADE = w2, e2.__COMPILER_RUNTIME = {
+    e2.Activity = f2, e2.Children = M2, e2.Component = v2, e2.Fragment = r2, e2.Profiler = a2, e2.PureComponent = b2, e2.StrictMode = i2, e2.Suspense = l2, e2.__CLIENT_INTERNALS_DO_NOT_USE_OR_WARN_USERS_THEY_CANNOT_UPGRADE = w2, e2.__COMPILER_RUNTIME = {
       __proto__: null,
       c: function(e3) {
         return w2.H.useMemoCache(e3);
@@ -274,7 +274,7 @@
           _status: -1,
           _result: e3
         },
-        _init: j2
+        _init: A2
       };
     }, e2.memo = function(e3, t3) {
       return {
@@ -287,9 +287,9 @@
       w2.T = n3;
       try {
         var r3 = e3(), i3 = w2.S;
-        i3 !== null && i3(n3, r3), typeof r3 == `object` && r3 && typeof r3.then == `function` && r3.then(C2, M2);
+        i3 !== null && i3(n3, r3), typeof r3 == `object` && r3 && typeof r3.then == `function` && r3.then(C2, j2);
       } catch (e4) {
-        M2(e4);
+        j2(e4);
       } finally {
         t3 !== null && n3.types !== null && (t3.types = n3.types), w2.T = t3;
       }
@@ -390,7 +390,7 @@
       if (h2 = false, b2(e3), !m2) if (n2(c2) !== null) m2 = true, S2 || (S2 = true, ne2());
       else {
         var t3 = n2(l2);
-        t3 !== null && D2(x2, t3.startTime - e3);
+        t3 !== null && ie2(x2, t3.startTime - e3);
       }
     }
     var S2 = false, C2 = -1, w2 = 5, ee2 = -1;
@@ -424,7 +424,7 @@
                 if (d2 !== null) i3 = true;
                 else {
                   var u3 = n2(l2);
-                  u3 !== null && D2(x2, u3.startTime - t3), i3 = false;
+                  u3 !== null && ie2(x2, u3.startTime - t3), i3 = false;
                 }
               }
               break a;
@@ -450,7 +450,7 @@
     } else ne2 = function() {
       _2(te2, 0);
     };
-    function D2(t3, n3) {
+    function ie2(t3, n3) {
       C2 = _2(function() {
         t3(e2.unstable_now());
       }, n3);
@@ -523,7 +523,7 @@
         startTime: a3,
         expirationTime: s3,
         sortIndex: -1
-      }, a3 > o3 ? (r3.sortIndex = a3, t2(l2, r3), n2(c2) === null && r3 === n2(l2) && (h2 ? (v2(C2), C2 = -1) : h2 = true, D2(x2, a3 - o3))) : (r3.sortIndex = s3, t2(c2, r3), m2 || p2 || (m2 = true, S2 || (S2 = true, ne2()))), r3;
+      }, a3 > o3 ? (r3.sortIndex = a3, t2(l2, r3), n2(c2) === null && r3 === n2(l2) && (h2 ? (v2(C2), C2 = -1) : h2 = true, ie2(x2, a3 - o3))) : (r3.sortIndex = s3, t2(c2, r3), m2 || p2 || (m2 = true, S2 || (S2 = true, ne2()))), r3;
     }, e2.unstable_shouldYield = T2, e2.unstable_wrapCallback = function(e3) {
       var t3 = f2;
       return function() {
@@ -772,14 +772,14 @@
       }
       return null;
     }
-    var h2 = Object.assign, g2 = /* @__PURE__ */ Symbol.for(`react.element`), _2 = /* @__PURE__ */ Symbol.for(`react.transitional.element`), v2 = /* @__PURE__ */ Symbol.for(`react.portal`), y2 = /* @__PURE__ */ Symbol.for(`react.fragment`), b2 = /* @__PURE__ */ Symbol.for(`react.strict_mode`), x2 = /* @__PURE__ */ Symbol.for(`react.profiler`), S2 = /* @__PURE__ */ Symbol.for(`react.consumer`), C2 = /* @__PURE__ */ Symbol.for(`react.context`), w2 = /* @__PURE__ */ Symbol.for(`react.forward_ref`), ee2 = /* @__PURE__ */ Symbol.for(`react.suspense`), T2 = /* @__PURE__ */ Symbol.for(`react.suspense_list`), te2 = /* @__PURE__ */ Symbol.for(`react.memo`), ne2 = /* @__PURE__ */ Symbol.for(`react.lazy`), re2 = /* @__PURE__ */ Symbol.for(`react.activity`), E2 = /* @__PURE__ */ Symbol.for(`react.memo_cache_sentinel`), D2 = Symbol.iterator;
-    function O2(e3) {
-      return typeof e3 != `object` || !e3 ? null : (e3 = D2 && e3[D2] || e3[`@@iterator`], typeof e3 == `function` ? e3 : null);
+    var h2 = Object.assign, g2 = /* @__PURE__ */ Symbol.for(`react.element`), _2 = /* @__PURE__ */ Symbol.for(`react.transitional.element`), v2 = /* @__PURE__ */ Symbol.for(`react.portal`), y2 = /* @__PURE__ */ Symbol.for(`react.fragment`), b2 = /* @__PURE__ */ Symbol.for(`react.strict_mode`), x2 = /* @__PURE__ */ Symbol.for(`react.profiler`), S2 = /* @__PURE__ */ Symbol.for(`react.consumer`), C2 = /* @__PURE__ */ Symbol.for(`react.context`), w2 = /* @__PURE__ */ Symbol.for(`react.forward_ref`), ee2 = /* @__PURE__ */ Symbol.for(`react.suspense`), T2 = /* @__PURE__ */ Symbol.for(`react.suspense_list`), te2 = /* @__PURE__ */ Symbol.for(`react.memo`), ne2 = /* @__PURE__ */ Symbol.for(`react.lazy`), re2 = /* @__PURE__ */ Symbol.for(`react.activity`), E2 = /* @__PURE__ */ Symbol.for(`react.memo_cache_sentinel`), ie2 = Symbol.iterator;
+    function D2(e3) {
+      return typeof e3 != `object` || !e3 ? null : (e3 = ie2 && e3[ie2] || e3[`@@iterator`], typeof e3 == `function` ? e3 : null);
     }
-    var k2 = /* @__PURE__ */ Symbol.for(`react.client.reference`);
-    function A2(e3) {
+    var O2 = /* @__PURE__ */ Symbol.for(`react.client.reference`);
+    function k2(e3) {
       if (e3 == null) return null;
-      if (typeof e3 == `function`) return e3.$$typeof === k2 ? null : e3.displayName || e3.name || null;
+      if (typeof e3 == `function`) return e3.$$typeof === O2 ? null : e3.displayName || e3.name || null;
       if (typeof e3 == `string`) return e3;
       switch (e3) {
         case y2:
@@ -806,17 +806,17 @@
           var t3 = e3.render;
           return e3 = e3.displayName, e3 ||= (e3 = t3.displayName || t3.name || ``, e3 === `` ? `ForwardRef` : `ForwardRef(` + e3 + `)`), e3;
         case te2:
-          return t3 = e3.displayName || null, t3 === null ? A2(e3.type) || `Memo` : t3;
+          return t3 = e3.displayName || null, t3 === null ? k2(e3.type) || `Memo` : t3;
         case ne2:
           t3 = e3._payload, e3 = e3._init;
           try {
-            return A2(e3(t3));
+            return k2(e3(t3));
           } catch {
           }
       }
       return null;
     }
-    var j2 = Array.isArray, M2 = n2.__CLIENT_INTERNALS_DO_NOT_USE_OR_WARN_USERS_THEY_CANNOT_UPGRADE, N2 = r2.__DOM_INTERNALS_DO_NOT_USE_OR_WARN_USERS_THEY_CANNOT_UPGRADE, ie2 = {
+    var A2 = Array.isArray, j2 = n2.__CLIENT_INTERNALS_DO_NOT_USE_OR_WARN_USERS_THEY_CANNOT_UPGRADE, M2 = r2.__DOM_INTERNALS_DO_NOT_USE_OR_WARN_USERS_THEY_CANNOT_UPGRADE, N2 = {
       pending: false,
       data: null,
       method: null,
@@ -864,7 +864,7 @@
       t3 !== n3 && (se2(le2, e3), se2(ce2, n3));
     }
     function he2(e3) {
-      le2.current === e3 && (oe2(ce2), oe2(le2)), de2.current === e3 && (oe2(de2), $f._currentValue = ie2);
+      le2.current === e3 && (oe2(ce2), oe2(le2)), de2.current === e3 && (oe2(de2), $f._currentValue = N2);
     }
     var ge2, _e2;
     function ve2(e3) {
@@ -1204,15 +1204,15 @@ Error generating stack: ` + e4.message + `
       return e3 &= -e3, 2 < e3 ? 8 < e3 ? e3 & 134217727 ? 32 : 268435456 : 8 : 2;
     }
     function rt2() {
-      var e3 = N2.p;
+      var e3 = M2.p;
       return e3 === 0 ? (e3 = window.event, e3 === void 0 ? 32 : hp(e3.type)) : e3;
     }
     function it2(e3, t3) {
-      var n3 = N2.p;
+      var n3 = M2.p;
       try {
-        return N2.p = e3, t3();
+        return M2.p = e3, t3();
       } finally {
-        N2.p = n3;
+        M2.p = n3;
       }
     }
     var at2 = Math.random().toString(36).slice(2), ot2 = `__reactFiber$` + at2, st2 = `__reactProps$` + at2, ct2 = `__reactContainer$` + at2, lt2 = `__reactEvents$` + at2, ut2 = `__reactListeners$` + at2, dt2 = `__reactHandles$` + at2, ft2 = `__reactResources$` + at2, pt2 = `__reactMarker$` + at2;
@@ -1429,7 +1429,7 @@ Error generating stack: ` + e4.message + `
       if (t3 == null) {
         if (r3 != null) {
           if (n3 != null) throw Error(i2(92));
-          if (j2(r3)) {
+          if (A2(r3)) {
             if (1 < r3.length) throw Error(i2(93));
             r3 = r3[0];
           }
@@ -2094,9 +2094,9 @@ Error generating stack: ` + e4.message + `
       13,
       27,
       32
-    ], Rn2 = tn2 && `CompositionEvent` in window, zn = null;
-    tn2 && `documentMode` in document && (zn = document.documentMode);
-    var Bn = tn2 && `TextEvent` in window && !zn, Vn = tn2 && (!Rn2 || zn && 8 < zn && 11 >= zn), Hn = ` `, Un = false;
+    ], Rn2 = tn2 && `CompositionEvent` in window, zn2 = null;
+    tn2 && `documentMode` in document && (zn2 = document.documentMode);
+    var Bn = tn2 && `TextEvent` in window && !zn2, Vn = tn2 && (!Rn2 || zn2 && 8 < zn2 && 11 >= zn2), Hn = ` `, Un = false;
     function Wn(e3, t3) {
       switch (e3) {
         case `keyup`:
@@ -2760,8 +2760,8 @@ Error generating stack: ` + e4.message + `
         for (r3.status = `rejected`, r3.reason = e4, e4 = 0; e4 < n3.length; e4++) (0, n3[e4])(void 0);
       }), r3;
     }
-    var la = M2.S;
-    M2.S = function(e3, t3) {
+    var la = j2.S;
+    j2.S = function(e3, t3) {
       $l = Oe2(), typeof t3 == `object` && t3 && typeof t3.then == `function` && oa(e3, t3), la !== null && la(e3, t3);
     };
     var ua = ae2(null);
@@ -2896,7 +2896,7 @@ Error generating stack: ` + e4.message + `
             case ne2:
               return t4 = ba(t4), f2(e4, t4, n4);
           }
-          if (j2(t4) || O2(t4)) return t4 = ai(t4, e4.mode, n4, null), t4.return = e4, t4;
+          if (A2(t4) || D2(t4)) return t4 = ai(t4, e4.mode, n4, null), t4.return = e4, t4;
           if (typeof t4.then == `function`) return f2(e4, Ea(t4), n4);
           if (t4.$$typeof === C2) return f2(e4, Ji(e4, t4), n4);
           Oa(e4, t4);
@@ -2915,7 +2915,7 @@ Error generating stack: ` + e4.message + `
             case ne2:
               return n4 = ba(n4), p3(e4, t4, n4, r4);
           }
-          if (j2(n4) || O2(n4)) return i3 === null ? d3(e4, t4, n4, r4, null) : null;
+          if (A2(n4) || D2(n4)) return i3 === null ? d3(e4, t4, n4, r4, null) : null;
           if (typeof n4.then == `function`) return p3(e4, t4, Ea(n4), r4);
           if (n4.$$typeof === C2) return p3(e4, t4, Ji(e4, n4), r4);
           Oa(e4, n4);
@@ -2933,7 +2933,7 @@ Error generating stack: ` + e4.message + `
             case ne2:
               return r4 = ba(r4), m2(e4, t4, n4, r4, i3);
           }
-          if (j2(r4) || O2(r4)) return e4 = e4.get(n4) || null, d3(t4, e4, r4, i3, null);
+          if (A2(r4) || D2(r4)) return e4 = e4.get(n4) || null, d3(t4, e4, r4, i3, null);
           if (typeof r4.then == `function`) return m2(e4, t4, n4, Ea(r4), i3);
           if (r4.$$typeof === C2) return m2(e4, t4, n4, Ji(t4, r4), i3);
           Oa(t4, r4);
@@ -3024,9 +3024,9 @@ Error generating stack: ` + e4.message + `
             case ne2:
               return o4 = ba(o4), b3(e4, r4, o4, c4);
           }
-          if (j2(o4)) return h3(e4, r4, o4, c4);
-          if (O2(o4)) {
-            if (l4 = O2(o4), typeof l4 != `function`) throw Error(i2(150));
+          if (A2(o4)) return h3(e4, r4, o4, c4);
+          if (D2(o4)) {
+            if (l4 = D2(o4), typeof l4 != `function`) throw Error(i2(150));
             return o4 = l4.call(o4), g3(e4, r4, o4, c4);
           }
           if (typeof o4.then == `function`) return b3(e4, r4, Ea(o4), c4);
@@ -3260,10 +3260,10 @@ Error generating stack: ` + e4.message + `
       return true;
     }
     function _o(e3, t3, n3, r3, i3, a3) {
-      return io = a3, Y = t3, t3.memoizedState = null, t3.updateQueue = null, t3.lanes = 0, M2.H = e3 === null || e3.memoizedState === null ? Ps : Fs, lo = false, a3 = n3(r3, i3), lo = false, co && (a3 = yo(t3, n3, r3, i3)), vo(e3), a3;
+      return io = a3, Y = t3, t3.memoizedState = null, t3.updateQueue = null, t3.lanes = 0, j2.H = e3 === null || e3.memoizedState === null ? Ps : Fs, lo = false, a3 = n3(r3, i3), lo = false, co && (a3 = yo(t3, n3, r3, i3)), vo(e3), a3;
     }
     function vo(e3) {
-      M2.H = Ns;
+      j2.H = Ns;
       var t3 = ao !== null && ao.next !== null;
       if (io = 0, oo = ao = Y = null, so = false, fo = 0, po = null, t3) throw Error(i2(300));
       e3 === null || Qs || (e3 = e3.dependencies, e3 !== null && Gi(e3) && (Qs = true));
@@ -3277,12 +3277,12 @@ Error generating stack: ` + e4.message + `
           var o3 = e3.updateQueue;
           o3.lastEffect = null, o3.events = null, o3.stores = null, o3.memoCache != null && (o3.memoCache.index = 0);
         }
-        M2.H = Is, o3 = t3(n3, r3);
+        j2.H = Is, o3 = t3(n3, r3);
       } while (co);
       return o3;
     }
     function bo() {
-      var e3 = M2.H, t3 = e3.useState()[0];
+      var e3 = j2.H, t3 = e3.useState()[0];
       return t3 = typeof t3.then == `function` ? Do(t3) : t3, e3 = e3.useState()[0], (ao === null ? null : ao.memoizedState) !== e3 && (Y.flags |= 1024), t3;
     }
     function xo() {
@@ -3341,7 +3341,7 @@ Error generating stack: ` + e4.message + `
     }
     function Do(e3) {
       var t3 = fo;
-      return fo += 1, po === null && (po = []), e3 = ya(po, e3, t3), t3 = Y, (oo === null ? t3.memoizedState : oo.next) === null && (t3 = t3.alternate, M2.H = t3 === null || t3.memoizedState === null ? Ps : Fs), e3;
+      return fo += 1, po === null && (po = []), e3 = ya(po, e3, t3), t3 = Y, (oo === null ? t3.memoizedState : oo.next) === null && (t3 = t3.alternate, j2.H = t3 === null || t3.memoizedState === null ? Ps : Fs), e3;
     }
     function Oo(e3) {
       if (typeof e3 == `object` && e3) {
@@ -3541,21 +3541,21 @@ Error generating stack: ` + e4.message + `
             o3.listeners.push(e4);
           }
         };
-        M2.T === null ? o3.isTransition = false : n3(true), r3(o3), n3 = t3.pending, n3 === null ? (o3.next = t3.pending = o3, Uo(t3, o3)) : (o3.next = n3.next, t3.pending = n3.next = o3);
+        j2.T === null ? o3.isTransition = false : n3(true), r3(o3), n3 = t3.pending, n3 === null ? (o3.next = t3.pending = o3, Uo(t3, o3)) : (o3.next = n3.next, t3.pending = n3.next = o3);
       }
     }
     function Uo(e3, t3) {
       var n3 = t3.action, r3 = t3.payload, i3 = e3.state;
       if (t3.isTransition) {
-        var a3 = M2.T, o3 = {};
-        M2.T = o3;
+        var a3 = j2.T, o3 = {};
+        j2.T = o3;
         try {
-          var s3 = n3(i3, r3), c3 = M2.S;
+          var s3 = n3(i3, r3), c3 = j2.S;
           c3 !== null && c3(o3, s3), Wo(e3, t3, s3);
         } catch (n4) {
           Ko(e3, t3, n4);
         } finally {
-          a3 !== null && o3.types !== null && (a3.types = o3.types), M2.T = a3;
+          a3 !== null && o3.types !== null && (a3.types = o3.types), j2.T = a3;
         }
       } else try {
         a3 = n3(i3, r3), Wo(e3, t3, a3);
@@ -3786,12 +3786,12 @@ Error generating stack: ` + e4.message + `
       return mr(n3, t3) ? n3 : Wa.current === null ? !(io & 42) || io & 1073741824 && !(Q & 261930) ? (Qs = true, e3.memoizedState = n3) : (e3 = pu(), Y.lanes |= e3, Wl |= e3, t3) : (e3 = hs(e3, n3, r3), mr(e3, t3) || (Qs = true), e3);
     }
     function _s(e3, t3, n3, r3, i3) {
-      var a3 = N2.p;
-      N2.p = a3 !== 0 && 8 > a3 ? a3 : 8;
-      var o3 = M2.T, s3 = {};
-      M2.T = s3, ks(e3, false, t3, n3);
+      var a3 = M2.p;
+      M2.p = a3 !== 0 && 8 > a3 ? a3 : 8;
+      var o3 = j2.T, s3 = {};
+      j2.T = s3, ks(e3, false, t3, n3);
       try {
-        var c3 = i3(), l3 = M2.S;
+        var c3 = i3(), l3 = j2.S;
         l3 !== null && l3(s3, c3), typeof c3 == `object` && c3 && typeof c3.then == `function` ? Os(e3, t3, ca(c3, r3), fu(e3)) : Os(e3, t3, r3, fu(e3));
       } catch (n4) {
         Os(e3, t3, {
@@ -3801,7 +3801,7 @@ Error generating stack: ` + e4.message + `
           reason: n4
         }, fu());
       } finally {
-        N2.p = a3, o3 !== null && s3.types !== null && (o3.types = s3.types), M2.T = o3;
+        M2.p = a3, o3 !== null && s3.types !== null && (o3.types = s3.types), j2.T = o3;
       }
     }
     function vs() {
@@ -3809,7 +3809,7 @@ Error generating stack: ` + e4.message + `
     function ys(e3, t3, n3, r3) {
       if (e3.tag !== 5) throw Error(i2(476));
       var a3 = bs(e3).queue;
-      _s(e3, a3, t3, ie2, n3 === null ? vs : function() {
+      _s(e3, a3, t3, N2, n3 === null ? vs : function() {
         return xs(e3), n3(r3);
       });
     }
@@ -3817,15 +3817,15 @@ Error generating stack: ` + e4.message + `
       var t3 = e3.memoizedState;
       if (t3 !== null) return t3;
       t3 = {
-        memoizedState: ie2,
-        baseState: ie2,
+        memoizedState: N2,
+        baseState: N2,
         baseQueue: null,
         queue: {
           pending: null,
           lanes: 0,
           dispatch: null,
           lastRenderedReducer: Ao,
-          lastRenderedState: ie2
+          lastRenderedState: N2
         },
         next: null
       };
@@ -4708,7 +4708,7 @@ Error generating stack: ` + e4.message + `
                   break a;
                 }
               }
-              throw t3 = A2(e3) || e3, Error(i2(306, t3, ``));
+              throw t3 = k2(e3) || e3, Error(i2(306, t3, ``));
             }
           }
           return t3;
@@ -6064,7 +6064,7 @@ Error generating stack: ` + e4.message + `
       }
     }, Fl = typeof WeakMap == `function` ? WeakMap : Map, X = 0, Il = null, Z = null, Q = 0, Ll = 0, Rl = null, zl = false, Bl = false, Vl = false, Hl = 0, Ul = 0, Wl = 0, Gl = 0, Kl = 0, ql = 0, Jl = 0, Yl = null, Xl = null, Zl = false, Ql = 0, $l = 0, eu = 1 / 0, tu = null, nu = null, ru = 0, iu = null, au = null, ou = 0, su = 0, cu = null, lu = null, uu = 0, du = null;
     function fu() {
-      return X & 2 && Q !== 0 ? Q & -Q : M2.T === null ? rt2() : dd();
+      return X & 2 && Q !== 0 ? Q & -Q : j2.T === null ? rt2() : dd();
     }
     function pu() {
       if (ql === 0) if (!(Q & 536870912) || J) {
@@ -6218,19 +6218,19 @@ Error generating stack: ` + e4.message + `
       return Hl = t3, Kr(), n3;
     }
     function Su(e3, t3) {
-      Y = null, M2.H = Ns, t3 === ma || t3 === ga ? (t3 = Sa(), Ll = 3) : t3 === ha ? (t3 = Sa(), Ll = 4) : Ll = t3 === Zs ? 8 : typeof t3 == `object` && t3 && typeof t3.then == `function` ? 6 : 1, Rl = t3, Z === null && (Ul = 1, Gs(e3, ui(t3, e3.current)));
+      Y = null, j2.H = Ns, t3 === ma || t3 === ga ? (t3 = Sa(), Ll = 3) : t3 === ha ? (t3 = Sa(), Ll = 4) : Ll = t3 === Zs ? 8 : typeof t3 == `object` && t3 && typeof t3.then == `function` ? 6 : 1, Rl = t3, Z === null && (Ul = 1, Gs(e3, ui(t3, e3.current)));
     }
     function Cu() {
       var e3 = Ya.current;
       return e3 === null ? true : (Q & 4194048) === Q ? Xa === null : (Q & 62914560) === Q || Q & 536870912 ? e3 === Xa : false;
     }
     function wu() {
-      var e3 = M2.H;
-      return M2.H = Ns, e3 === null ? Ns : e3;
+      var e3 = j2.H;
+      return j2.H = Ns, e3 === null ? Ns : e3;
     }
     function Tu() {
-      var e3 = M2.A;
-      return M2.A = Pl, e3;
+      var e3 = j2.A;
+      return j2.A = Pl, e3;
     }
     function Eu() {
       Ul = 4, zl || (Q & 4194048) !== Q && Ya.current !== null || (Bl = true), !(Wl & 134217727) && !(Gl & 134217727) || Il === null || vu(Il, Q, ql, false);
@@ -6270,7 +6270,7 @@ Error generating stack: ` + e4.message + `
           Su(e3, t4);
         }
       while (1);
-      return t3 && e3.shellSuspendCounter++, zi = Ri = null, X = r3, M2.H = i3, M2.A = a3, Z === null && (Il = null, Q = 0, Kr()), o3;
+      return t3 && e3.shellSuspendCounter++, zi = Ri = null, X = r3, j2.H = i3, j2.A = a3, Z === null && (Il = null, Q = 0, Kr()), o3;
     }
     function Ou() {
       for (; Z !== null; ) ju(Z);
@@ -6345,7 +6345,7 @@ Error generating stack: ` + e4.message + `
           Su(e3, t4);
         }
       while (1);
-      return zi = Ri = null, M2.H = r3, M2.A = a3, X = n3, Z === null ? (Il = null, Q = 0, Kr(), Ul) : 0;
+      return zi = Ri = null, j2.H = r3, j2.A = a3, X = n3, Z === null ? (Il = null, Q = 0, Kr(), Ul) : 0;
     }
     function Au() {
       for (; Z !== null && !Ee2(); ) ju(Z);
@@ -6433,11 +6433,11 @@ Error generating stack: ` + e4.message + `
         if (o3 = t3.lanes | t3.childLanes, o3 |= Gr, Ze2(e3, n3, o3, s3, c3, l3), e3 === Il && (Z = Il = null, Q = 0), au = t3, iu = e3, ou = n3, su = o3, cu = a3, lu = r3, t3.subtreeFlags & 10256 || t3.flags & 10256 ? (e3.callbackNode = null, e3.callbackPriority = 0, Xu(Me2, function() {
           return Hu(), null;
         })) : (e3.callbackNode = null, e3.callbackPriority = 0), r3 = (t3.flags & 13878) != 0, t3.subtreeFlags & 13878 || r3) {
-          r3 = M2.T, M2.T = null, a3 = N2.p, N2.p = 2, s3 = X, X |= 4;
+          r3 = j2.T, j2.T = null, a3 = M2.p, M2.p = 2, s3 = X, X |= 4;
           try {
             tl(e3, t3, n3);
           } finally {
-            X = s3, N2.p = a3, M2.T = r3;
+            X = s3, M2.p = a3, j2.T = r3;
           }
         }
         ru = 1, Lu(), Ru(), zu();
@@ -6448,9 +6448,9 @@ Error generating stack: ` + e4.message + `
         ru = 0;
         var e3 = iu, t3 = au, n3 = (t3.flags & 13878) != 0;
         if (t3.subtreeFlags & 13878 || n3) {
-          n3 = M2.T, M2.T = null;
-          var r3 = N2.p;
-          N2.p = 2;
+          n3 = j2.T, j2.T = null;
+          var r3 = M2.p;
+          M2.p = 2;
           var i3 = X;
           X |= 4;
           try {
@@ -6485,7 +6485,7 @@ Error generating stack: ` + e4.message + `
             }
             cp = !!zd, Bd = zd = null;
           } finally {
-            X = i3, N2.p = r3, M2.T = n3;
+            X = i3, M2.p = r3, j2.T = n3;
           }
         }
         e3.current = t3, ru = 2;
@@ -6496,15 +6496,15 @@ Error generating stack: ` + e4.message + `
         ru = 0;
         var e3 = iu, t3 = au, n3 = (t3.flags & 8772) != 0;
         if (t3.subtreeFlags & 8772 || n3) {
-          n3 = M2.T, M2.T = null;
-          var r3 = N2.p;
-          N2.p = 2;
+          n3 = j2.T, j2.T = null;
+          var r3 = M2.p;
+          M2.p = 2;
           var i3 = X;
           X |= 4;
           try {
             nl(e3, t3.alternate, t3);
           } finally {
-            X = i3, N2.p = r3, M2.T = n3;
+            X = i3, M2.p = r3, j2.T = n3;
           }
         }
         ru = 3;
@@ -6521,7 +6521,7 @@ Error generating stack: ` + e4.message + `
         } catch {
         }
         if (r3 !== null) {
-          t3 = M2.T, i3 = N2.p, N2.p = 2, M2.T = null;
+          t3 = j2.T, i3 = M2.p, M2.p = 2, j2.T = null;
           try {
             for (var a3 = e3.onRecoverableError, o3 = 0; o3 < r3.length; o3++) {
               var s3 = r3[o3];
@@ -6530,7 +6530,7 @@ Error generating stack: ` + e4.message + `
               });
             }
           } finally {
-            M2.T = t3, N2.p = i3;
+            j2.T = t3, M2.p = i3;
           }
         }
         ou & 3 && Vu(), rd(e3), i3 = e3.pendingLanes, n3 & 261930 && i3 & 42 ? e3 === du ? uu++ : (uu = 0, du = e3) : uu = 0, id(0, false);
@@ -6546,9 +6546,9 @@ Error generating stack: ` + e4.message + `
       if (ru !== 5) return false;
       var e3 = iu, t3 = su;
       su = 0;
-      var n3 = nt2(ou), r3 = M2.T, a3 = N2.p;
+      var n3 = nt2(ou), r3 = j2.T, a3 = M2.p;
       try {
-        N2.p = 32 > n3 ? 32 : n3, M2.T = null, n3 = cu, cu = null;
+        M2.p = 32 > n3 ? 32 : n3, j2.T = null, n3 = cu, cu = null;
         var o3 = iu, s3 = ou;
         if (ru = 0, au = iu = null, ou = 0, X & 6) throw Error(i2(331));
         var c3 = X;
@@ -6558,7 +6558,7 @@ Error generating stack: ` + e4.message + `
         }
         return true;
       } finally {
-        N2.p = a3, M2.T = r3, Bu(e3, t3);
+        M2.p = a3, j2.T = r3, Bu(e3, t3);
       }
     }
     function Uu(e3, t3, n3) {
@@ -7874,8 +7874,8 @@ Error generating stack: ` + e4.message + `
     function _f(e3) {
       return typeof e3.getRootNode == `function` ? e3.getRootNode() : e3.nodeType === 9 ? e3 : e3.ownerDocument;
     }
-    var vf = N2.d;
-    N2.d = {
+    var vf = M2.d;
+    M2.d = {
       f: yf,
       r: bf,
       D: Cf,
@@ -8283,8 +8283,8 @@ Error generating stack: ` + e4.message + `
       $$typeof: C2,
       Provider: null,
       Consumer: null,
-      _currentValue: ie2,
-      _currentValue2: ie2,
+      _currentValue: N2,
+      _currentValue2: N2,
       _threadCount: 0
     };
     function ep(e3, t3, n3, r3, i3, a3, o3, s3, c3) {
@@ -8330,23 +8330,23 @@ Error generating stack: ` + e4.message + `
     }
     var cp = true;
     function lp(e3, t3, n3, r3) {
-      var i3 = M2.T;
-      M2.T = null;
-      var a3 = N2.p;
+      var i3 = j2.T;
+      j2.T = null;
+      var a3 = M2.p;
       try {
-        N2.p = 2, dp(e3, t3, n3, r3);
+        M2.p = 2, dp(e3, t3, n3, r3);
       } finally {
-        N2.p = a3, M2.T = i3;
+        M2.p = a3, j2.T = i3;
       }
     }
     function up(e3, t3, n3, r3) {
-      var i3 = M2.T;
-      M2.T = null;
-      var a3 = N2.p;
+      var i3 = j2.T;
+      j2.T = null;
+      var a3 = M2.p;
       try {
-        N2.p = 8, dp(e3, t3, n3, r3);
+        M2.p = 8, dp(e3, t3, n3, r3);
       } finally {
-        N2.p = a3, M2.T = i3;
+        M2.p = a3, j2.T = i3;
       }
     }
     function dp(e3, t3, n3, r3) {
@@ -8707,7 +8707,7 @@ Error generating stack: ` + e4.message + `
     };
     var Rp = n2.version;
     if (Rp !== `19.2.7`) throw Error(i2(527, Rp, `19.2.7`));
-    N2.findDOMNode = function(e3) {
+    M2.findDOMNode = function(e3) {
       var t3 = e3._reactInternals;
       if (t3 === void 0) throw typeof e3.render == `function` ? Error(i2(188)) : (e3 = Object.keys(e3).join(`,`), Error(i2(268, e3)));
       return e3 = d2(t3), e3 = e3 === null ? null : p2(e3), e3 = e3 === null ? null : e3.stateNode, e3;
@@ -8716,7 +8716,7 @@ Error generating stack: ` + e4.message + `
       bundleType: 0,
       version: `19.2.7`,
       rendererPackageName: `react-dom`,
-      currentDispatcherRef: M2,
+      currentDispatcherRef: j2,
       reconcilerVersion: `19.2.7`
     };
     if (typeof __REACT_DEVTOOLS_GLOBAL_HOOK__ < `u`) {
@@ -8888,8 +8888,8 @@ Error generating stack: ` + e4.message + `
         l2.delete(e3);
       })
     }, a2.skipHydration || h2(), m2 || p2;
-  }, ne = `https://router.project-osrm.org/table/v1/driving`, re = `https://router.project-osrm.org/route/v1/driving`, E = 9999999, D = 1e4, O = 1100, k = 300, A = (e2) => new Promise((t2) => setTimeout(t2, e2));
-  async function j(e2, t2 = 3e4) {
+  }, ne = `https://router.project-osrm.org/table/v1/driving`, re = `https://router.project-osrm.org/route/v1/driving`, E = 9999999, ie = 1e4, D = 1100, O = 300, k = (e2) => new Promise((t2) => setTimeout(t2, e2));
+  async function A(e2, t2 = 3e4) {
     let n2 = new AbortController(), r2 = setTimeout(() => n2.abort(), t2);
     try {
       return await fetch(e2, {
@@ -8901,26 +8901,26 @@ Error generating stack: ` + e4.message + `
       clearTimeout(r2);
     }
   }
-  async function M(e2, t2, n2) {
+  async function j(e2, t2, n2) {
     let r2 = e2.length;
     if (r2 < 2) throw Error(`Need at least two points to build a route.`);
-    if (r2 > k) throw Error(`Too many points (${r2}). This client supports up to ${k}.`);
-    let i2 = e2.map((e3) => `${e3.lng},${e3.lat}`).join(`;`), a2 = Math.max(1, Math.floor(D / r2)), o2 = Math.ceil(r2 / a2), s2 = [];
+    if (r2 > O) throw Error(`Too many points (${r2}). This client supports up to ${O}.`);
+    let i2 = e2.map((e3) => `${e3.lng},${e3.lat}`).join(`;`), a2 = Math.max(1, Math.floor(ie / r2)), o2 = Math.ceil(r2 / a2), s2 = [];
     for (let e3 = 0; e3 < o2; e3++) {
       let c2 = e3 * a2, l2 = Math.min(r2, c2 + a2), u2 = Array.from({
         length: l2 - c2
-      }, (e4, t3) => c2 + t3).join(`;`), d2 = await j(`${ne}/${i2}?annotations=${t2}` + (o2 > 1 ? `&sources=${u2}` : ``));
+      }, (e4, t3) => c2 + t3).join(`;`), d2 = await A(`${ne}/${i2}?annotations=${t2}` + (o2 > 1 ? `&sources=${u2}` : ``));
       if (!d2.ok) throw Error(`OSRM table request failed: ${d2.status} ${d2.statusText}`);
       let f2 = await d2.json(), p2 = t2 === `distance` ? f2.distances : f2.durations;
       if (f2.code !== `Ok` || !p2) throw Error(`OSRM could not build a ${t2} matrix (${f2.message ?? f2.code}).`);
       for (let e4 of p2) s2.push(e4);
-      n2?.(e3 + 1, o2), e3 < o2 - 1 && await A(O);
+      n2?.(e3 + 1, o2), e3 < o2 - 1 && await k(D);
     }
     return s2.map((e3) => e3.map((e4) => e4 == null ? E : Math.round(e4)));
   }
-  async function N(e2) {
+  async function M(e2) {
     if (e2.length < 2) throw Error(`A route needs at least two points.`);
-    let t2 = await j(`${re}/${e2.map((e3) => `${e3.lng},${e3.lat}`).join(`;`)}?overview=full&geometries=geojson`);
+    let t2 = await A(`${re}/${e2.map((e3) => `${e3.lng},${e3.lat}`).join(`;`)}?overview=full&geometries=geojson`);
     if (!t2.ok) throw Error(`OSRM route request failed: ${t2.status} ${t2.statusText}`);
     let n2 = await t2.json();
     if (n2.code !== `Ok` || !n2.routes?.length) throw Error(`OSRM could not build a route (${n2.message ?? n2.code}).`);
@@ -8931,7 +8931,7 @@ Error generating stack: ` + e4.message + `
       durationSeconds: r2.duration
     };
   }
-  function ie() {
+  function N() {
     return typeof globalThis.WebAssembly?.promising == `function`;
   }
   function P() {
@@ -8939,7 +8939,7 @@ Error generating stack: ` + e4.message + `
     return typeof e2.Bun < `u` ? `bun` : typeof e2.Deno < `u` ? `deno` : typeof e2.window < `u` && typeof e2.document < `u` ? `browser-main` : typeof WorkerGlobalScope < `u` && globalThis instanceof WorkerGlobalScope ? `browser-worker` : typeof process < `u` && typeof process.versions?.node == `string` ? `node` : `other`;
   }
   function F(e2 = P()) {
-    return e2 === `browser-main` || e2 === `bun` || e2 === `deno` ? `asyncify` : ie() ? `jspi` : `asyncify`;
+    return e2 === `browser-main` || e2 === `bun` || e2 === `deno` ? `asyncify` : N() ? `jspi` : `asyncify`;
   }
   function ae(e2) {
     let t2 = {}, n2 = null;
@@ -9979,7 +9979,7 @@ Error generating stack: ` + e4.message + `
     if (s2.length < 2) throw Error(`Add at least two points (upload a file, or set start/end).`);
     let c2 = e2 ? 0 : null, l2 = t2 ? s2.length - 1 : null, u2 = r2 ?? o2.length, d2 = (c2 === null ? 0 : 1) + (l2 === null ? 0 : 1);
     a2?.(`Fetching cost matrix\u2026`);
-    let f2 = await M(s2, i2, (e3, t3) => {
+    let f2 = await j(s2, i2, (e3, t3) => {
       a2?.(t3 > 1 ? `Fetching cost matrix\u2026 ${e3}/${t3}` : `Fetching cost matrix\u2026`);
     });
     a2?.(`Optimizing route\u2026`);
@@ -9991,7 +9991,7 @@ Error generating stack: ` + e4.message + `
     for (let e3 = 0; e3 < p2.length - 1; e3++) h2 += f2[p2[e3]][p2[e3 + 1]];
     a2?.(`Building road route\u2026`);
     try {
-      let e3 = await N(m2);
+      let e3 = await M(m2);
       return {
         orderedWaypoints: m2,
         geometry: e3.geometry,
@@ -10063,12 +10063,17 @@ Error generating stack: ` + e4.message + `
         delivered: true
       } : e4)
     })),
-    markDeliveredByCoord: (t3, n2) => e2((e3) => ({
-      waypoints: e3.waypoints.map((e4) => e4.lat === t3 && e4.lng === n2 ? {
-        ...e4,
-        delivered: true
-      } : e4)
-    })),
+    markDeliveredByCoord: (t3, n2) => e2((e3) => {
+      let r2 = (e4) => !!e4 && e4.lat === t3 && e4.lng === n2;
+      return {
+        waypoints: e3.waypoints.map((e4) => e4.lat === t3 && e4.lng === n2 ? {
+          ...e4,
+          delivered: true
+        } : e4),
+        startLocation: r2(e3.startLocation) ? null : e3.startLocation,
+        endLocation: r2(e3.endLocation) ? null : e3.endLocation
+      };
+    }),
     restoreStop: (t3) => e2((e3) => ({
       waypoints: e3.waypoints.map((e4) => e4.id === t3 ? {
         ...e4,
@@ -10537,32 +10542,32 @@ Error generating stack: ` + e4.message + `
               else if (_3) return P2();
               if (!r3 || T2.substring(0, x3) !== r3) {
                 if (C2) {
-                  if (w2 = [], j2(T2.split(t4)), F2(), m3) return P2();
-                } else j2(T2.split(t4));
+                  if (w2 = [], A2(T2.split(t4)), F2(), m3) return P2();
+                } else A2(T2.split(t4));
                 if (a3 && a3 <= re2) return w2 = w2.slice(0, a3), P2(true);
               }
             }
             return P2();
           }
-          for (var E2 = s3.indexOf(t4, p3), D2 = s3.indexOf(n3, p3), O2 = new RegExp(h2(f3) + h2(d3), `g`), k2 = s3.indexOf(d3, p3); ; ) if (s3[p3] === d3) for (k2 = p3, p3++; ; ) {
-            if ((k2 = s3.indexOf(d3, k2 + 1)) === -1) return _3 || ee2.push({
+          for (var E2 = s3.indexOf(t4, p3), ie2 = s3.indexOf(n3, p3), D2 = new RegExp(h2(f3) + h2(d3), `g`), O2 = s3.indexOf(d3, p3); ; ) if (s3[p3] === d3) for (O2 = p3, p3++; ; ) {
+            if ((O2 = s3.indexOf(d3, O2 + 1)) === -1) return _3 || ee2.push({
               type: `Quotes`,
               code: `MissingQuotes`,
               message: `Quoted field unterminated`,
               row: w2.length,
               index: p3
-            }), N2();
-            if (k2 === v3 - 1) return N2(s3.substring(p3, k2).replace(O2, d3));
-            if (d3 === f3 && s3[k2 + 1] === f3) k2++;
-            else if (d3 === f3 || k2 === 0 || s3[k2 - 1] !== f3) {
-              E2 !== -1 && E2 < k2 + 1 && (E2 = s3.indexOf(t4, k2 + 1));
-              var A2 = M2((D2 = D2 !== -1 && D2 < k2 + 1 ? s3.indexOf(n3, k2 + 1) : D2) === -1 ? E2 : Math.min(E2, D2));
-              if (s3.substr(k2 + 1 + A2, y3) === t4) {
-                T2.push(s3.substring(p3, k2).replace(O2, d3)), s3[p3 = k2 + 1 + A2 + y3] !== d3 && (k2 = s3.indexOf(d3, p3)), E2 = s3.indexOf(t4, p3), D2 = s3.indexOf(n3, p3);
+            }), M2();
+            if (O2 === v3 - 1) return M2(s3.substring(p3, O2).replace(D2, d3));
+            if (d3 === f3 && s3[O2 + 1] === f3) O2++;
+            else if (d3 === f3 || O2 === 0 || s3[O2 - 1] !== f3) {
+              E2 !== -1 && E2 < O2 + 1 && (E2 = s3.indexOf(t4, O2 + 1));
+              var k2 = j2((ie2 = ie2 !== -1 && ie2 < O2 + 1 ? s3.indexOf(n3, O2 + 1) : ie2) === -1 ? E2 : Math.min(E2, ie2));
+              if (s3.substr(O2 + 1 + k2, y3) === t4) {
+                T2.push(s3.substring(p3, O2).replace(D2, d3)), s3[p3 = O2 + 1 + k2 + y3] !== d3 && (O2 = s3.indexOf(d3, p3)), E2 = s3.indexOf(t4, p3), ie2 = s3.indexOf(n3, p3);
                 break;
               }
-              if (A2 = M2(D2), s3.substring(k2 + 1 + A2, k2 + 1 + A2 + b3) === n3) {
-                if (T2.push(s3.substring(p3, k2).replace(O2, d3)), ie2(k2 + 1 + A2 + b3), E2 = s3.indexOf(t4, p3), k2 = s3.indexOf(d3, p3), C2 && (F2(), m3)) return P2();
+              if (k2 = j2(ie2), s3.substring(O2 + 1 + k2, O2 + 1 + k2 + b3) === n3) {
+                if (T2.push(s3.substring(p3, O2).replace(D2, d3)), N2(O2 + 1 + k2 + b3), E2 = s3.indexOf(t4, p3), O2 = s3.indexOf(d3, p3), C2 && (F2(), m3)) return P2();
                 if (a3 && w2.length >= a3) return P2(true);
                 break;
               }
@@ -10572,31 +10577,31 @@ Error generating stack: ` + e4.message + `
                 message: `Trailing quote on quoted field is malformed`,
                 row: w2.length,
                 index: p3
-              }), k2++;
+              }), O2++;
             }
           }
           else if (r3 && T2.length === 0 && s3.substring(p3, p3 + x3) === r3) {
-            if (D2 === -1) return P2();
-            p3 = D2 + b3, D2 = s3.indexOf(n3, p3), E2 = s3.indexOf(t4, p3);
-          } else if (E2 !== -1 && (E2 < D2 || D2 === -1)) T2.push(s3.substring(p3, E2)), p3 = E2 + y3, E2 = s3.indexOf(t4, p3);
+            if (ie2 === -1) return P2();
+            p3 = ie2 + b3, ie2 = s3.indexOf(n3, p3), E2 = s3.indexOf(t4, p3);
+          } else if (E2 !== -1 && (E2 < ie2 || ie2 === -1)) T2.push(s3.substring(p3, E2)), p3 = E2 + y3, E2 = s3.indexOf(t4, p3);
           else {
-            if (D2 === -1) break;
-            if (T2.push(s3.substring(p3, D2)), ie2(D2 + b3), C2 && (F2(), m3)) return P2();
+            if (ie2 === -1) break;
+            if (T2.push(s3.substring(p3, ie2)), N2(ie2 + b3), C2 && (F2(), m3)) return P2();
             if (a3 && w2.length >= a3) return P2(true);
           }
-          return N2();
-          function j2(e5) {
+          return M2();
+          function A2(e5) {
             w2.push(e5), te2 = p3;
           }
-          function M2(e5) {
+          function j2(e5) {
             var t5 = 0;
-            return t5 = e5 !== -1 && (e5 = s3.substring(k2 + 1, e5)) && e5.trim() === `` ? e5.length : t5;
+            return t5 = e5 !== -1 && (e5 = s3.substring(O2 + 1, e5)) && e5.trim() === `` ? e5.length : t5;
+          }
+          function M2(e5) {
+            return _3 || (e5 === void 0 && (e5 = s3.substring(p3)), T2.push(e5), p3 = v3, A2(T2), C2 && F2()), P2();
           }
           function N2(e5) {
-            return _3 || (e5 === void 0 && (e5 = s3.substring(p3)), T2.push(e5), p3 = v3, j2(T2), C2 && F2()), P2();
-          }
-          function ie2(e5) {
-            p3 = e5, j2(T2), T2 = [], D2 = s3.indexOf(n3, p3);
+            p3 = e5, A2(T2), T2 = [], ie2 = s3.indexOf(n3, p3);
           }
           function P2(r4) {
             if (e4.header && !g3 && w2.length && !u3) {
@@ -11456,8 +11461,8 @@ Error generating stack: ` + e4.message + `
     }
     return t2;
   }
-  var Qt = (e2) => `${e2.lat},${e2.lng}`;
-  function $t({ n: e2, color: t2 }) {
+  var Qt = (e2) => `${e2.lat},${e2.lng}`, $t = (e2, t2) => !!e2 && e2.lat === t2.lat && e2.lng === t2.lng;
+  function en({ n: e2, color: t2 }) {
     return (0, V.jsx)(`span`, {
       className: `flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white`,
       style: {
@@ -11466,43 +11471,66 @@ Error generating stack: ` + e4.message + `
       children: e2
     });
   }
-  function en({ route: e2 }) {
-    let t2 = e2.orderedWaypoints, n2 = Zt(t2), r2 = B((e3) => e3.waypoints), i2 = B((e3) => e3.markDeliveredByCoord), a2 = (0, _.useMemo)(() => new Set(r2.filter((e3) => e3.delivered).map(Qt)), [
+  function tn({ route: e2 }) {
+    let { waypoints: t2, startLocation: n2, endLocation: r2 } = B(Ft((e3) => ({
+      waypoints: e3.waypoints,
+      startLocation: e3.startLocation,
+      endLocation: e3.endLocation
+    }))), i2 = B((e3) => e3.markDeliveredByCoord), { deliveredKeys: a2, stopKeys: o2 } = (0, _.useMemo)(() => {
+      let e3 = /* @__PURE__ */ new Set(), n3 = /* @__PURE__ */ new Set();
+      for (let r3 of t2) n3.add(Qt(r3)), r3.delivered && e3.add(Qt(r3));
+      return {
+        deliveredKeys: e3,
+        stopKeys: n3
+      };
+    }, [
+      t2
+    ]), s2 = (0, _.useMemo)(() => e2.orderedWaypoints.filter((e3) => {
+      let t3 = Qt(e3);
+      return o2.has(t3) ? !a2.has(t3) : $t(n2, e3) || $t(r2, e3);
+    }), [
+      e2,
+      o2,
+      a2,
+      n2,
       r2
-    ]), o2 = `block rounded-md bg-emerald-600 px-3 py-2 text-center text-sm font-semibold text-white transition-colors hover:bg-emerald-700`;
-    return (0, V.jsxs)(`div`, {
+    ]), c2 = s2.filter((e3) => o2.has(Qt(e3))).length, l2 = s2.length >= 2 ? Zt(s2) : [], u2 = `block rounded-md bg-emerald-600 px-3 py-2 text-center text-sm font-semibold text-white transition-colors hover:bg-emerald-700`;
+    return e2.candidatesTotal > 0 && c2 === 0 ? (0, V.jsx)(`div`, {
+      className: `rounded-md border border-emerald-200 bg-emerald-50 p-3 text-center text-sm font-medium text-emerald-700`,
+      children: `\u2713 All stops delivered. Restore any from the Delivered section to bring them back.`
+    }) : (0, V.jsxs)(`div`, {
       className: `space-y-3`,
       children: [
-        (0, V.jsx)(`div`, {
+        l2.length > 0 && (0, V.jsx)(`div`, {
           className: `space-y-1.5`,
-          children: n2.length === 1 ? (0, V.jsx)(`a`, {
-            href: n2[0].url,
+          children: l2.length === 1 ? (0, V.jsx)(`a`, {
+            href: l2[0].url,
             target: `_blank`,
             rel: `noopener noreferrer`,
-            className: o2,
-            children: `Navigate Entire Route in Google Maps`
+            className: u2,
+            children: `Navigate Remaining Route in Google Maps`
           }) : (0, V.jsxs)(V.Fragment, {
             children: [
               (0, V.jsxs)(`p`, {
                 className: `text-xs text-amber-600`,
                 children: [
-                  t2.length - 2,
-                  ` waypoints exceed Google Maps\u2019 limit \u2014 split into`,
+                  s2.length,
+                  ` stops exceed Google Maps\u2019 limit \u2014 split into`,
                   ` `,
-                  n2.length,
+                  l2.length,
                   ` legs:`
                 ]
               }),
-              n2.map((e3, t3) => (0, V.jsxs)(`a`, {
+              l2.map((e3, t3) => (0, V.jsxs)(`a`, {
                 href: e3.url,
                 target: `_blank`,
                 rel: `noopener noreferrer`,
-                className: o2,
+                className: u2,
                 children: [
                   `Navigate Part `,
                   t3 + 1,
                   ` of `,
-                  n2.length,
+                  l2.length,
                   ` (stops `,
                   e3.fromIndex + 1,
                   `\u2013`,
@@ -11515,28 +11543,31 @@ Error generating stack: ` + e4.message + `
         }),
         (0, V.jsx)(`ol`, {
           className: `divide-y divide-slate-100 overflow-hidden rounded-md border border-slate-200`,
-          children: t2.map((e3, n3) => {
-            let r3 = n3 === 0, o3 = n3 === t2.length - 1, s2 = r3 ? `#059669` : o3 ? `#e11d48` : `#2563eb`, c2 = r3 ? `Start` : o3 ? `End` : `Stop ${n3 + 1}`, l2 = a2.has(Qt(e3));
+          children: s2.map((e3, t3) => {
+            let a3 = o2.has(Qt(e3)), c3 = $t(n2, e3), l3 = $t(r2, e3), u3 = t3 === 0 ? `#059669` : t3 === s2.length - 1 ? `#e11d48` : `#2563eb`, d2 = c3 ? `Start` : l3 ? `End` : `Stop ${t3 + 1}`;
             return (0, V.jsxs)(`li`, {
               className: `flex items-center gap-2 px-2 py-2 text-sm`,
               children: [
-                (0, V.jsx)(`button`, {
+                a3 ? (0, V.jsx)(`button`, {
                   onClick: () => i2(e3.lat, e3.lng),
-                  disabled: l2,
-                  title: l2 ? `Delivered` : `Mark delivered`,
-                  className: `flex h-5 w-5 shrink-0 items-center justify-center rounded-full border text-[11px] ${l2 ? `border-emerald-500 bg-emerald-500 text-white` : `border-slate-300 text-transparent hover:border-emerald-500 hover:text-emerald-500`}`,
+                  title: `Mark delivered`,
+                  className: `flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-slate-300 text-[11px] text-transparent hover:border-emerald-500 hover:text-emerald-500`,
                   children: `\u2713`
+                }) : (0, V.jsx)(`span`, {
+                  title: `Reference point (not a stop)`,
+                  className: `flex h-5 w-5 shrink-0 items-center justify-center text-slate-300`,
+                  children: `\u2691`
                 }),
-                (0, V.jsx)($t, {
-                  n: n3 + 1,
-                  color: l2 ? `#94a3b8` : s2
+                (0, V.jsx)(en, {
+                  n: t3 + 1,
+                  color: u3
                 }),
                 (0, V.jsxs)(`span`, {
                   className: `min-w-0 flex-1`,
                   children: [
                     (0, V.jsx)(`span`, {
-                      className: `font-medium ${l2 ? `text-slate-400 line-through` : `text-slate-700`}`,
-                      children: c2
+                      className: `font-medium text-slate-700`,
+                      children: d2
                     }),
                     (0, V.jsx)(`span`, {
                       className: `block truncate text-xs text-slate-500`,
@@ -11552,39 +11583,55 @@ Error generating stack: ` + e4.message + `
                   children: `Maps \u2197`
                 })
               ]
-            }, `${e3.lat},${e3.lng},${n3}`);
+            }, Qt(e3));
           })
         })
       ]
     });
   }
-  function tn() {
-    let e2 = B((e3) => e3.optimizedRoute);
-    return e2 ? (0, V.jsxs)(`section`, {
+  function nn() {
+    let e2 = B((e3) => e3.optimizedRoute), t2 = B((e3) => {
+      if (!e3.optimizedRoute) return 0;
+      let t3 = new Set(e3.optimizedRoute.orderedWaypoints.map((e4) => `${e4.lat},${e4.lng}`));
+      return e3.waypoints.filter((e4) => e4.delivered && t3.has(`${e4.lat},${e4.lng}`)).length;
+    });
+    if (!e2) return null;
+    let n2 = e2.candidatesVisited - t2;
+    return (0, V.jsxs)(`section`, {
       className: `space-y-2`,
       children: [
         (0, V.jsxs)(`p`, {
           className: `text-xs text-slate-500`,
           children: [
-            `Visiting `,
+            `Optimized `,
             e2.candidatesVisited,
             ` of `,
             e2.candidatesTotal,
-            ` candidate stop`,
+            ` stop`,
             e2.candidatesTotal === 1 ? `` : `s`,
-            `.`
+            `.`,
+            t2 > 0 && (0, V.jsxs)(`span`, {
+              className: `font-medium text-emerald-600`,
+              children: [
+                ` `,
+                t2,
+                ` delivered \xB7 `,
+                n2,
+                ` to go.`
+              ]
+            })
           ]
         }),
         (0, V.jsx)(qt, {
           route: e2
         }),
-        (0, V.jsx)(en, {
+        (0, V.jsx)(tn, {
           route: e2
         })
       ]
-    }) : null;
+    });
   }
-  function nn() {
+  function rn() {
     let e2 = B(Ft((e3) => e3.favorites)), t2 = B((e3) => !!(e3.startLocation || e3.endLocation || e3.waypoints.length > 0)), n2 = B((e3) => e3.saveFavorite), r2 = B((e3) => e3.loadFavorite), i2 = B((e3) => e3.deleteFavorite), [a2, o2] = (0, _.useState)(``);
     function s2() {
       n2(a2), o2(``);
@@ -11647,7 +11694,7 @@ Error generating stack: ` + e4.message + `
       ]
     });
   }
-  function rn(e2, t2) {
+  function an(e2, t2) {
     let n2 = (0, _.useRef)(t2);
     (0, _.useEffect)(function() {
       t2 !== n2.current && e2.attributionControl != null && (n2.current != null && e2.attributionControl.removeAttribution(n2.current), t2 != null && e2.attributionControl.addAttribution(t2)), n2.current = t2;
@@ -11656,37 +11703,37 @@ Error generating stack: ` + e4.message + `
       t2
     ]);
   }
-  function an(e2) {
+  function on(e2) {
     return Object.freeze({
       __version: 1,
       map: e2
     });
   }
-  function on(e2, t2) {
+  function sn(e2, t2) {
     return Object.freeze({
       ...e2,
       ...t2
     });
   }
-  var sn = (0, _.createContext)(null);
-  function cn() {
-    let e2 = (0, _.use)(sn);
+  var cn = (0, _.createContext)(null);
+  function ln() {
+    let e2 = (0, _.use)(cn);
     if (e2 == null) throw Error(`No context provided: useLeafletContext() can only be used in a descendant of <MapContainer>`);
     return e2;
   }
-  var ln = m();
-  function q(e2) {
+  var q = m();
+  function un(e2) {
     function t2(t3, n2) {
       let { instance: r2, context: i2 } = e2(t3).current;
       (0, _.useImperativeHandle)(n2, () => r2);
       let { children: a2 } = t3;
-      return a2 == null ? null : _.createElement(sn, {
+      return a2 == null ? null : _.createElement(cn, {
         value: i2
       }, a2);
     }
     return (0, _.forwardRef)(t2);
   }
-  function un(e2) {
+  function dn(e2) {
     function t2(t3, n2) {
       let [r2, i2] = (0, _.useState)(false), { instance: a2 } = e2(t3, i2).current;
       (0, _.useImperativeHandle)(n2, () => a2), (0, _.useEffect)(function() {
@@ -11697,18 +11744,18 @@ Error generating stack: ` + e4.message + `
         t3.children
       ]);
       let o2 = a2._contentNode;
-      return o2 ? (0, ln.createPortal)(t3.children, o2) : null;
+      return o2 ? (0, q.createPortal)(t3.children, o2) : null;
     }
     return (0, _.forwardRef)(t2);
   }
-  function dn(e2) {
+  function fn(e2) {
     function t2(t3, n2) {
       let { instance: r2 } = e2(t3).current;
       return (0, _.useImperativeHandle)(n2, () => r2), null;
     }
     return (0, _.forwardRef)(t2);
   }
-  function fn(e2, t2) {
+  function pn(e2, t2) {
     let n2 = (0, _.useRef)(void 0);
     (0, _.useEffect)(function() {
       return t2 != null && e2.instance.on(t2), n2.current = t2, function() {
@@ -11719,20 +11766,20 @@ Error generating stack: ` + e4.message + `
       t2
     ]);
   }
-  function pn(e2, t2) {
+  function mn(e2, t2) {
     let n2 = e2.pane ?? t2.pane;
     return n2 ? {
       ...e2,
       pane: n2
     } : e2;
   }
-  function mn(e2, t2) {
+  function hn(e2, t2) {
     return function(n2, r2) {
-      let i2 = cn(), a2 = e2(pn(n2, i2), i2);
-      return rn(i2.map, n2.attribution), fn(a2.current, n2.eventHandlers), t2(a2.current, i2, n2, r2), a2;
+      let i2 = ln(), a2 = e2(mn(n2, i2), i2);
+      return an(i2.map, n2.attribution), pn(a2.current, n2.eventHandlers), t2(a2.current, i2, n2, r2), a2;
     };
   }
-  var hn = o(((e2, t2) => {
+  var gn = o(((e2, t2) => {
     (function(n2, r2) {
       typeof e2 == `object` && t2 !== void 0 ? r2(e2) : typeof define == `function` && define.amd ? define([
         `exports`
@@ -12004,25 +12051,25 @@ Error generating stack: ` + e4.message + `
         }
       };
       E2.addEventListener = E2.on, E2.removeEventListener = E2.clearAllEventListeners = E2.off, E2.addOneTimeEventListener = E2.once, E2.fireEvent = E2.fire, E2.hasEventListeners = E2.listens;
-      var D2 = ne2.extend(E2);
-      function O2(e4, t4, n3) {
+      var ie2 = ne2.extend(E2);
+      function D2(e4, t4, n3) {
         this.x = n3 ? Math.round(e4) : e4, this.y = n3 ? Math.round(t4) : t4;
       }
-      var k2 = Math.trunc || function(e4) {
+      var O2 = Math.trunc || function(e4) {
         return e4 > 0 ? Math.floor(e4) : Math.ceil(e4);
       };
-      O2.prototype = {
+      D2.prototype = {
         clone: function() {
-          return new O2(this.x, this.y);
+          return new D2(this.x, this.y);
         },
         add: function(e4) {
-          return this.clone()._add(A2(e4));
+          return this.clone()._add(k2(e4));
         },
         _add: function(e4) {
           return this.x += e4.x, this.y += e4.y, this;
         },
         subtract: function(e4) {
-          return this.clone()._subtract(A2(e4));
+          return this.clone()._subtract(k2(e4));
         },
         _subtract: function(e4) {
           return this.x -= e4.x, this.y -= e4.y, this;
@@ -12040,10 +12087,10 @@ Error generating stack: ` + e4.message + `
           return this.x *= e4, this.y *= e4, this;
         },
         scaleBy: function(e4) {
-          return new O2(this.x * e4.x, this.y * e4.y);
+          return new D2(this.x * e4.x, this.y * e4.y);
         },
         unscaleBy: function(e4) {
-          return new O2(this.x / e4.x, this.y / e4.y);
+          return new D2(this.x / e4.x, this.y / e4.y);
         },
         round: function() {
           return this.clone()._round();
@@ -12067,48 +12114,48 @@ Error generating stack: ` + e4.message + `
           return this.clone()._trunc();
         },
         _trunc: function() {
-          return this.x = k2(this.x), this.y = k2(this.y), this;
+          return this.x = O2(this.x), this.y = O2(this.y), this;
         },
         distanceTo: function(e4) {
-          e4 = A2(e4);
+          e4 = k2(e4);
           var t4 = e4.x - this.x, n3 = e4.y - this.y;
           return Math.sqrt(t4 * t4 + n3 * n3);
         },
         equals: function(e4) {
-          return e4 = A2(e4), e4.x === this.x && e4.y === this.y;
+          return e4 = k2(e4), e4.x === this.x && e4.y === this.y;
         },
         contains: function(e4) {
-          return e4 = A2(e4), Math.abs(e4.x) <= Math.abs(this.x) && Math.abs(e4.y) <= Math.abs(this.y);
+          return e4 = k2(e4), Math.abs(e4.x) <= Math.abs(this.x) && Math.abs(e4.y) <= Math.abs(this.y);
         },
         toString: function() {
           return `Point(` + u2(this.x) + `, ` + u2(this.y) + `)`;
         }
       };
-      function A2(e4, t4, n3) {
-        return e4 instanceof O2 ? e4 : _2(e4) ? new O2(e4[0], e4[1]) : e4 == null ? e4 : typeof e4 == `object` && `x` in e4 && `y` in e4 ? new O2(e4.x, e4.y) : new O2(e4, t4, n3);
+      function k2(e4, t4, n3) {
+        return e4 instanceof D2 ? e4 : _2(e4) ? new D2(e4[0], e4[1]) : e4 == null ? e4 : typeof e4 == `object` && `x` in e4 && `y` in e4 ? new D2(e4.x, e4.y) : new D2(e4, t4, n3);
       }
-      function j2(e4, t4) {
+      function A2(e4, t4) {
         if (e4) for (var n3 = t4 ? [
           e4,
           t4
         ] : e4, r3 = 0, i3 = n3.length; r3 < i3; r3++) this.extend(n3[r3]);
       }
-      j2.prototype = {
+      A2.prototype = {
         extend: function(e4) {
           var t4, n3;
           if (!e4) return this;
-          if (e4 instanceof O2 || typeof e4[0] == `number` || `x` in e4) t4 = n3 = A2(e4);
-          else if (e4 = M2(e4), t4 = e4.min, n3 = e4.max, !t4 || !n3) return this;
+          if (e4 instanceof D2 || typeof e4[0] == `number` || `x` in e4) t4 = n3 = k2(e4);
+          else if (e4 = j2(e4), t4 = e4.min, n3 = e4.max, !t4 || !n3) return this;
           return !this.min && !this.max ? (this.min = t4.clone(), this.max = n3.clone()) : (this.min.x = Math.min(t4.x, this.min.x), this.max.x = Math.max(n3.x, this.max.x), this.min.y = Math.min(t4.y, this.min.y), this.max.y = Math.max(n3.y, this.max.y)), this;
         },
         getCenter: function(e4) {
-          return A2((this.min.x + this.max.x) / 2, (this.min.y + this.max.y) / 2, e4);
+          return k2((this.min.x + this.max.x) / 2, (this.min.y + this.max.y) / 2, e4);
         },
         getBottomLeft: function() {
-          return A2(this.min.x, this.max.y);
+          return k2(this.min.x, this.max.y);
         },
         getTopRight: function() {
-          return A2(this.max.x, this.min.y);
+          return k2(this.max.x, this.min.y);
         },
         getTopLeft: function() {
           return this.min;
@@ -12121,15 +12168,15 @@ Error generating stack: ` + e4.message + `
         },
         contains: function(e4) {
           var t4, n3;
-          return e4 = typeof e4[0] == `number` || e4 instanceof O2 ? A2(e4) : M2(e4), e4 instanceof j2 ? (t4 = e4.min, n3 = e4.max) : t4 = n3 = e4, t4.x >= this.min.x && n3.x <= this.max.x && t4.y >= this.min.y && n3.y <= this.max.y;
+          return e4 = typeof e4[0] == `number` || e4 instanceof D2 ? k2(e4) : j2(e4), e4 instanceof A2 ? (t4 = e4.min, n3 = e4.max) : t4 = n3 = e4, t4.x >= this.min.x && n3.x <= this.max.x && t4.y >= this.min.y && n3.y <= this.max.y;
         },
         intersects: function(e4) {
-          e4 = M2(e4);
+          e4 = j2(e4);
           var t4 = this.min, n3 = this.max, r3 = e4.min, i3 = e4.max, a3 = i3.x >= t4.x && r3.x <= n3.x, o3 = i3.y >= t4.y && r3.y <= n3.y;
           return a3 && o3;
         },
         overlaps: function(e4) {
-          e4 = M2(e4);
+          e4 = j2(e4);
           var t4 = this.min, n3 = this.max, r3 = e4.min, i3 = e4.max, a3 = i3.x > t4.x && r3.x < n3.x, o3 = i3.y > t4.y && r3.y < n3.y;
           return a3 && o3;
         },
@@ -12138,33 +12185,33 @@ Error generating stack: ` + e4.message + `
         },
         pad: function(e4) {
           var t4 = this.min, n3 = this.max, r3 = Math.abs(t4.x - n3.x) * e4, i3 = Math.abs(t4.y - n3.y) * e4;
-          return M2(A2(t4.x - r3, t4.y - i3), A2(n3.x + r3, n3.y + i3));
+          return j2(k2(t4.x - r3, t4.y - i3), k2(n3.x + r3, n3.y + i3));
         },
         equals: function(e4) {
-          return e4 ? (e4 = M2(e4), this.min.equals(e4.getTopLeft()) && this.max.equals(e4.getBottomRight())) : false;
+          return e4 ? (e4 = j2(e4), this.min.equals(e4.getTopLeft()) && this.max.equals(e4.getBottomRight())) : false;
         }
       };
-      function M2(e4, t4) {
-        return !e4 || e4 instanceof j2 ? e4 : new j2(e4, t4);
+      function j2(e4, t4) {
+        return !e4 || e4 instanceof A2 ? e4 : new A2(e4, t4);
       }
-      function N2(e4, t4) {
+      function M2(e4, t4) {
         if (e4) for (var n3 = t4 ? [
           e4,
           t4
         ] : e4, r3 = 0, i3 = n3.length; r3 < i3; r3++) this.extend(n3[r3]);
       }
-      N2.prototype = {
+      M2.prototype = {
         extend: function(e4) {
           var t4 = this._southWest, n3 = this._northEast, r3, i3;
           if (e4 instanceof P2) r3 = e4, i3 = e4;
-          else if (e4 instanceof N2) {
+          else if (e4 instanceof M2) {
             if (r3 = e4._southWest, i3 = e4._northEast, !r3 || !i3) return this;
-          } else return e4 ? this.extend(F2(e4) || ie2(e4)) : this;
+          } else return e4 ? this.extend(F2(e4) || N2(e4)) : this;
           return !t4 && !n3 ? (this._southWest = new P2(r3.lat, r3.lng), this._northEast = new P2(i3.lat, i3.lng)) : (t4.lat = Math.min(r3.lat, t4.lat), t4.lng = Math.min(r3.lng, t4.lng), n3.lat = Math.max(i3.lat, n3.lat), n3.lng = Math.max(i3.lng, n3.lng)), this;
         },
         pad: function(e4) {
           var t4 = this._southWest, n3 = this._northEast, r3 = Math.abs(t4.lat - n3.lat) * e4, i3 = Math.abs(t4.lng - n3.lng) * e4;
-          return new N2(new P2(t4.lat - r3, t4.lng - i3), new P2(n3.lat + r3, n3.lng + i3));
+          return new M2(new P2(t4.lat - r3, t4.lng - i3), new P2(n3.lat + r3, n3.lng + i3));
         },
         getCenter: function() {
           return new P2((this._southWest.lat + this._northEast.lat) / 2, (this._southWest.lng + this._northEast.lng) / 2);
@@ -12194,17 +12241,17 @@ Error generating stack: ` + e4.message + `
           return this._northEast.lat;
         },
         contains: function(e4) {
-          e4 = typeof e4[0] == `number` || e4 instanceof P2 || `lat` in e4 ? F2(e4) : ie2(e4);
+          e4 = typeof e4[0] == `number` || e4 instanceof P2 || `lat` in e4 ? F2(e4) : N2(e4);
           var t4 = this._southWest, n3 = this._northEast, r3, i3;
-          return e4 instanceof N2 ? (r3 = e4.getSouthWest(), i3 = e4.getNorthEast()) : r3 = i3 = e4, r3.lat >= t4.lat && i3.lat <= n3.lat && r3.lng >= t4.lng && i3.lng <= n3.lng;
+          return e4 instanceof M2 ? (r3 = e4.getSouthWest(), i3 = e4.getNorthEast()) : r3 = i3 = e4, r3.lat >= t4.lat && i3.lat <= n3.lat && r3.lng >= t4.lng && i3.lng <= n3.lng;
         },
         intersects: function(e4) {
-          e4 = ie2(e4);
+          e4 = N2(e4);
           var t4 = this._southWest, n3 = this._northEast, r3 = e4.getSouthWest(), i3 = e4.getNorthEast(), a3 = i3.lat >= t4.lat && r3.lat <= n3.lat, o3 = i3.lng >= t4.lng && r3.lng <= n3.lng;
           return a3 && o3;
         },
         overlaps: function(e4) {
-          e4 = ie2(e4);
+          e4 = N2(e4);
           var t4 = this._southWest, n3 = this._northEast, r3 = e4.getSouthWest(), i3 = e4.getNorthEast(), a3 = i3.lat > t4.lat && r3.lat < n3.lat, o3 = i3.lng > t4.lng && r3.lng < n3.lng;
           return a3 && o3;
         },
@@ -12217,14 +12264,14 @@ Error generating stack: ` + e4.message + `
           ].join(`,`);
         },
         equals: function(e4, t4) {
-          return e4 ? (e4 = ie2(e4), this._southWest.equals(e4.getSouthWest(), t4) && this._northEast.equals(e4.getNorthEast(), t4)) : false;
+          return e4 ? (e4 = N2(e4), this._southWest.equals(e4.getSouthWest(), t4) && this._northEast.equals(e4.getNorthEast(), t4)) : false;
         },
         isValid: function() {
           return !!(this._southWest && this._northEast);
         }
       };
-      function ie2(e4, t4) {
-        return e4 instanceof N2 ? e4 : new N2(e4, t4);
+      function N2(e4, t4) {
+        return e4 instanceof M2 ? e4 : new M2(e4, t4);
       }
       function P2(e4, t4, n3) {
         if (isNaN(e4) || isNaN(t4)) throw Error(`Invalid LatLng object: (` + e4 + `, ` + t4 + `)`);
@@ -12245,7 +12292,7 @@ Error generating stack: ` + e4.message + `
         },
         toBounds: function(e4) {
           var t4 = 180 * e4 / 40075017, n3 = t4 / Math.cos(Math.PI / 180 * this.lat);
-          return ie2([
+          return N2([
             this.lat - t4,
             this.lng - n3
           ], [
@@ -12284,7 +12331,7 @@ Error generating stack: ` + e4.message + `
         getProjectedBounds: function(e4) {
           if (this.infinite) return null;
           var t4 = this.projection.bounds, n3 = this.scale(e4);
-          return new j2(this.transformation.transform(t4.min, n3), this.transformation.transform(t4.max, n3));
+          return new A2(this.transformation.transform(t4.min, n3), this.transformation.transform(t4.max, n3));
         },
         infinite: false,
         wrapLatLng: function(e4) {
@@ -12295,7 +12342,7 @@ Error generating stack: ` + e4.message + `
           var t4 = e4.getCenter(), n3 = this.wrapLatLng(t4), r3 = t4.lat - n3.lat, i3 = t4.lng - n3.lng;
           if (r3 === 0 && i3 === 0) return e4;
           var a3 = e4.getSouthWest(), o3 = e4.getNorthEast();
-          return new N2(new P2(a3.lat - r3, a3.lng - i3), new P2(o3.lat - r3, o3.lng - i3));
+          return new M2(new P2(a3.lat - r3, a3.lng - i3), new P2(o3.lat - r3, o3.lng - i3));
         }
       }, oe2 = n2({}, ae2, {
         wrapLng: [
@@ -12312,7 +12359,7 @@ Error generating stack: ` + e4.message + `
         MAX_LATITUDE: 85.0511287798,
         project: function(e4) {
           var t4 = Math.PI / 180, n3 = this.MAX_LATITUDE, r3 = Math.max(Math.min(n3, e4.lat), -n3), i3 = Math.sin(r3 * t4);
-          return new O2(this.R * e4.lng * t4, this.R * Math.log((1 + i3) / (1 - i3)) / 2);
+          return new D2(this.R * e4.lng * t4, this.R * Math.log((1 + i3) / (1 - i3)) / 2);
         },
         unproject: function(e4) {
           var t4 = 180 / Math.PI;
@@ -12320,7 +12367,7 @@ Error generating stack: ` + e4.message + `
         },
         bounds: (function() {
           var e4 = se2 * Math.PI;
-          return new j2([
+          return new A2([
             -e4,
             -e4
           ], [
@@ -12344,7 +12391,7 @@ Error generating stack: ` + e4.message + `
           return t4 ||= 1, e4.x = t4 * (this._a * e4.x + this._b), e4.y = t4 * (this._c * e4.y + this._d), e4;
         },
         untransform: function(e4, t4) {
-          return t4 ||= 1, new O2((e4.x / t4 - this._b) / this._a, (e4.y / t4 - this._d) / this._c);
+          return t4 ||= 1, new D2((e4.x / t4 - this._b) / this._a, (e4.y / t4 - this._d) / this._c);
         }
       };
       function ue2(e4, t4, n3, r3) {
@@ -12596,14 +12643,14 @@ Error generating stack: ` + e4.message + `
         return false;
       }
       function At2(e4, t4, n3) {
-        var r3 = t4 || new O2(0, 0);
+        var r3 = t4 || new D2(0, 0);
         e4.style[_t2] = (z2.ie3d ? `translate(` + r3.x + `px,` + r3.y + `px)` : `translate3d(` + r3.x + `px,` + r3.y + `px,0)`) + (n3 ? ` scale(` + n3 + `)` : ``);
       }
       function jt2(e4, t4) {
         e4._leaflet_pos = t4, z2.any3d ? At2(e4, t4) : (e4.style.left = t4.x + `px`, e4.style.top = t4.y + `px`);
       }
       function Mt2(e4) {
-        return e4._leaflet_pos || new O2(0, 0);
+        return e4._leaflet_pos || new D2(0, 0);
       }
       var Nt2, Pt2, Ft2;
       if (`onselectstart` in document) Nt2 = function() {
@@ -12759,9 +12806,9 @@ Error generating stack: ` + e4.message + `
         return t4;
       }
       function rn2(e4, t4) {
-        if (!t4) return new O2(e4.clientX, e4.clientY);
+        if (!t4) return new D2(e4.clientX, e4.clientY);
         var n3 = Wt2(t4), r3 = n3.boundingClientRect;
-        return new O2((e4.clientX - r3.left) / n3.x - t4.clientLeft, (e4.clientY - r3.top) / n3.y - t4.clientTop);
+        return new D2((e4.clientX - r3.left) / n3.x - t4.clientLeft, (e4.clientY - r3.top) / n3.y - t4.clientTop);
       }
       var an2 = z2.linux && z2.chrome ? window.devicePixelRatio : z2.mac ? window.devicePixelRatio * 3 : window.devicePixelRatio > 0 ? 2 * window.devicePixelRatio : 1;
       function on2(e4) {
@@ -12792,7 +12839,7 @@ Error generating stack: ` + e4.message + `
         isExternalTarget: sn2,
         addListener: G2,
         removeListener: K2
-      }, ln2 = D2.extend({
+      }, ln2 = ie2.extend({
         run: function(e4, t4, n3, r3) {
           this.stop(), this._el = e4, this._inProgress = true, this._duration = n3 || 0.25, this._easeOutPower = 1 / Math.max(r3 || 0.5, 0.2), this._startPos = Mt2(e4), this._offset = t4.subtract(this._startPos), this._startTime = +/* @__PURE__ */ new Date(), this.fire(`start`), this._animate();
         },
@@ -12816,7 +12863,7 @@ Error generating stack: ` + e4.message + `
         _easeOut: function(e4) {
           return 1 - (1 - e4) ** this._easeOutPower;
         }
-      }), q2 = D2.extend({
+      }), q2 = ie2.extend({
         options: {
           crs: de2,
           center: void 0,
@@ -12860,17 +12907,17 @@ Error generating stack: ` + e4.message + `
           return e4 ||= z2.any3d ? this.options.zoomDelta : 1, this.setZoom(this._zoom - e4, t4);
         },
         setZoomAround: function(e4, t4, n3) {
-          var r3 = this.getZoomScale(t4), i3 = this.getSize().divideBy(2), a3 = (e4 instanceof O2 ? e4 : this.latLngToContainerPoint(e4)).subtract(i3).multiplyBy(1 - 1 / r3), o3 = this.containerPointToLatLng(i3.add(a3));
+          var r3 = this.getZoomScale(t4), i3 = this.getSize().divideBy(2), a3 = (e4 instanceof D2 ? e4 : this.latLngToContainerPoint(e4)).subtract(i3).multiplyBy(1 - 1 / r3), o3 = this.containerPointToLatLng(i3.add(a3));
           return this.setView(o3, t4, {
             zoom: n3
           });
         },
         _getBoundsCenterZoom: function(e4, t4) {
-          t4 ||= {}, e4 = e4.getBounds ? e4.getBounds() : ie2(e4);
-          var n3 = A2(t4.paddingTopLeft || t4.padding || [
+          t4 ||= {}, e4 = e4.getBounds ? e4.getBounds() : N2(e4);
+          var n3 = k2(t4.paddingTopLeft || t4.padding || [
             0,
             0
-          ]), r3 = A2(t4.paddingBottomRight || t4.padding || [
+          ]), r3 = k2(t4.paddingBottomRight || t4.padding || [
             0,
             0
           ]), i3 = this.getBoundsZoom(e4, false, n3.add(r3));
@@ -12885,7 +12932,7 @@ Error generating stack: ` + e4.message + `
           };
         },
         fitBounds: function(e4, t4) {
-          if (e4 = ie2(e4), !e4.isValid()) throw Error(`Bounds are not valid.`);
+          if (e4 = N2(e4), !e4.isValid()) throw Error(`Bounds are not valid.`);
           var n3 = this._getBoundsCenterZoom(e4, t4);
           return this.setView(n3.center, n3.zoom, t4);
         },
@@ -12907,7 +12954,7 @@ Error generating stack: ` + e4.message + `
           });
         },
         panBy: function(e4, t4) {
-          if (e4 = A2(e4).round(), t4 ||= {}, !e4.x && !e4.y) return this.fire(`moveend`);
+          if (e4 = k2(e4).round(), t4 ||= {}, !e4.x && !e4.y) return this.fire(`moveend`);
           if (t4.animate !== true && !this.getSize().contains(e4)) return this._resetView(this.unproject(this.project(this.getCenter()).add(e4)), this.getZoom()), this;
           if (this._panAnim || (this._panAnim = new ln2(), this._panAnim.on({
             step: this._onPanTransitionStep,
@@ -12962,7 +13009,7 @@ Error generating stack: ` + e4.message + `
           return this.flyTo(n3.center, n3.zoom, t4);
         },
         setMaxBounds: function(e4) {
-          return e4 = ie2(e4), this.listens(`moveend`, this._panInsideMaxBounds) && this.off(`moveend`, this._panInsideMaxBounds), e4.isValid() ? (this.options.maxBounds = e4, this._loaded && this._panInsideMaxBounds(), this.on(`moveend`, this._panInsideMaxBounds)) : (this.options.maxBounds = null, this);
+          return e4 = N2(e4), this.listens(`moveend`, this._panInsideMaxBounds) && this.off(`moveend`, this._panInsideMaxBounds), e4.isValid() ? (this.options.maxBounds = e4, this._loaded && this._panInsideMaxBounds(), this.on(`moveend`, this._panInsideMaxBounds)) : (this.options.maxBounds = null, this);
         },
         setMinZoom: function(e4) {
           var t4 = this.options.minZoom;
@@ -12974,18 +13021,18 @@ Error generating stack: ` + e4.message + `
         },
         panInsideBounds: function(e4, t4) {
           this._enforcingBounds = true;
-          var n3 = this.getCenter(), r3 = this._limitCenter(n3, this._zoom, ie2(e4));
+          var n3 = this.getCenter(), r3 = this._limitCenter(n3, this._zoom, N2(e4));
           return n3.equals(r3) || this.panTo(r3, t4), this._enforcingBounds = false, this;
         },
         panInside: function(e4, t4) {
           t4 ||= {};
-          var n3 = A2(t4.paddingTopLeft || t4.padding || [
+          var n3 = k2(t4.paddingTopLeft || t4.padding || [
             0,
             0
-          ]), r3 = A2(t4.paddingBottomRight || t4.padding || [
+          ]), r3 = k2(t4.paddingBottomRight || t4.padding || [
             0,
             0
-          ]), i3 = this.project(this.getCenter()), a3 = this.project(e4), o3 = this.getPixelBounds(), s3 = M2([
+          ]), i3 = this.project(this.getCenter()), a3 = this.project(e4), o3 = this.getPixelBounds(), s3 = j2([
             o3.min.add(n3),
             o3.max.subtract(r3)
           ]), c3 = s3.getSize();
@@ -13082,7 +13129,7 @@ Error generating stack: ` + e4.message + `
         },
         getBounds: function() {
           var e4 = this.getPixelBounds();
-          return new N2(this.unproject(e4.getBottomLeft()), this.unproject(e4.getTopRight()));
+          return new M2(this.unproject(e4.getBottomLeft()), this.unproject(e4.getTopRight()));
         },
         getMinZoom: function() {
           return this.options.minZoom === void 0 ? this._layersMinZoom || 0 : this.options.minZoom;
@@ -13091,19 +13138,19 @@ Error generating stack: ` + e4.message + `
           return this.options.maxZoom === void 0 ? this._layersMaxZoom === void 0 ? 1 / 0 : this._layersMaxZoom : this.options.maxZoom;
         },
         getBoundsZoom: function(e4, t4, n3) {
-          e4 = ie2(e4), n3 = A2(n3 || [
+          e4 = N2(e4), n3 = k2(n3 || [
             0,
             0
           ]);
-          var r3 = this.getZoom() || 0, i3 = this.getMinZoom(), a3 = this.getMaxZoom(), o3 = e4.getNorthWest(), s3 = e4.getSouthEast(), c3 = this.getSize().subtract(n3), l3 = M2(this.project(s3, r3), this.project(o3, r3)).getSize(), u3 = z2.any3d ? this.options.zoomSnap : 1, d3 = c3.x / l3.x, f3 = c3.y / l3.y, p3 = t4 ? Math.max(d3, f3) : Math.min(d3, f3);
+          var r3 = this.getZoom() || 0, i3 = this.getMinZoom(), a3 = this.getMaxZoom(), o3 = e4.getNorthWest(), s3 = e4.getSouthEast(), c3 = this.getSize().subtract(n3), l3 = j2(this.project(s3, r3), this.project(o3, r3)).getSize(), u3 = z2.any3d ? this.options.zoomSnap : 1, d3 = c3.x / l3.x, f3 = c3.y / l3.y, p3 = t4 ? Math.max(d3, f3) : Math.min(d3, f3);
           return r3 = this.getScaleZoom(p3, r3), u3 && (r3 = Math.round(r3 / (u3 / 100)) * (u3 / 100), r3 = t4 ? Math.ceil(r3 / u3) * u3 : Math.floor(r3 / u3) * u3), Math.max(i3, Math.min(a3, r3));
         },
         getSize: function() {
-          return (!this._size || this._sizeChanged) && (this._size = new O2(this._container.clientWidth || 0, this._container.clientHeight || 0), this._sizeChanged = false), this._size.clone();
+          return (!this._size || this._sizeChanged) && (this._size = new D2(this._container.clientWidth || 0, this._container.clientHeight || 0), this._sizeChanged = false), this._size.clone();
         },
         getPixelBounds: function(e4, t4) {
           var n3 = this._getTopLeftPoint(e4, t4);
-          return new j2(n3, n3.add(this.getSize()));
+          return new A2(n3, n3.add(this.getSize()));
         },
         getPixelOrigin: function() {
           return this._checkIfLoaded(), this._pixelOrigin;
@@ -13134,10 +13181,10 @@ Error generating stack: ` + e4.message + `
           return t4 = t4 === void 0 ? this._zoom : t4, this.options.crs.latLngToPoint(F2(e4), t4);
         },
         unproject: function(e4, t4) {
-          return t4 = t4 === void 0 ? this._zoom : t4, this.options.crs.pointToLatLng(A2(e4), t4);
+          return t4 = t4 === void 0 ? this._zoom : t4, this.options.crs.pointToLatLng(k2(e4), t4);
         },
         layerPointToLatLng: function(e4) {
-          var t4 = A2(e4).add(this.getPixelOrigin());
+          var t4 = k2(e4).add(this.getPixelOrigin());
           return this.unproject(t4);
         },
         latLngToLayerPoint: function(e4) {
@@ -13147,19 +13194,19 @@ Error generating stack: ` + e4.message + `
           return this.options.crs.wrapLatLng(F2(e4));
         },
         wrapLatLngBounds: function(e4) {
-          return this.options.crs.wrapLatLngBounds(ie2(e4));
+          return this.options.crs.wrapLatLngBounds(N2(e4));
         },
         distance: function(e4, t4) {
           return this.options.crs.distance(F2(e4), F2(t4));
         },
         containerPointToLayerPoint: function(e4) {
-          return A2(e4).subtract(this._getMapPanePos());
+          return k2(e4).subtract(this._getMapPanePos());
         },
         layerPointToContainerPoint: function(e4) {
-          return A2(e4).add(this._getMapPanePos());
+          return k2(e4).add(this._getMapPanePos());
         },
         containerPointToLatLng: function(e4) {
-          var t4 = this.containerPointToLayerPoint(A2(e4));
+          var t4 = this.containerPointToLayerPoint(k2(e4));
           return this.layerPointToLatLng(t4);
         },
         latLngToContainerPoint: function(e4) {
@@ -13188,10 +13235,10 @@ Error generating stack: ` + e4.message + `
         },
         _initPanes: function() {
           var e4 = this._panes = {};
-          this._paneRenderers = {}, this._mapPane = this.createPane(`mapPane`, this._container), jt2(this._mapPane, new O2(0, 0)), this.createPane(`tilePane`), this.createPane(`overlayPane`), this.createPane(`shadowPane`), this.createPane(`markerPane`), this.createPane(`tooltipPane`), this.createPane(`popupPane`), this.options.markerZoomAnimation || (W2(e4.markerPane, `leaflet-zoom-hide`), W2(e4.shadowPane, `leaflet-zoom-hide`));
+          this._paneRenderers = {}, this._mapPane = this.createPane(`mapPane`, this._container), jt2(this._mapPane, new D2(0, 0)), this.createPane(`tilePane`), this.createPane(`overlayPane`), this.createPane(`shadowPane`), this.createPane(`markerPane`), this.createPane(`tooltipPane`), this.createPane(`popupPane`), this.options.markerZoomAnimation || (W2(e4.markerPane, `leaflet-zoom-hide`), W2(e4.shadowPane, `leaflet-zoom-hide`));
         },
         _resetView: function(e4, t4, n3) {
-          jt2(this._mapPane, new O2(0, 0));
+          jt2(this._mapPane, new D2(0, 0));
           var r3 = !this._loaded;
           this._loaded = true, t4 = this._limitZoom(t4), this.fire(`viewprereset`);
           var i3 = this._zoom !== t4;
@@ -13309,7 +13356,7 @@ Error generating stack: ` + e4.message + `
           }) : this.on(`load`, e4, t4), this;
         },
         _getMapPanePos: function() {
-          return Mt2(this._mapPane) || new O2(0, 0);
+          return Mt2(this._mapPane) || new D2(0, 0);
         },
         _moved: function() {
           var e4 = this._getMapPanePos();
@@ -13331,7 +13378,7 @@ Error generating stack: ` + e4.message + `
         },
         _latLngBoundsToNewLayerBounds: function(e4, t4, n3) {
           var r3 = this._getNewPixelOrigin(n3, t4);
-          return M2([
+          return j2([
             this.project(e4.getSouthWest(), t4)._subtract(r3),
             this.project(e4.getNorthWest(), t4)._subtract(r3),
             this.project(e4.getSouthEast(), t4)._subtract(r3),
@@ -13346,17 +13393,17 @@ Error generating stack: ` + e4.message + `
         },
         _limitCenter: function(e4, t4, n3) {
           if (!n3) return e4;
-          var r3 = this.project(e4, t4), i3 = this.getSize().divideBy(2), a3 = new j2(r3.subtract(i3), r3.add(i3)), o3 = this._getBoundsOffset(a3, n3, t4);
+          var r3 = this.project(e4, t4), i3 = this.getSize().divideBy(2), a3 = new A2(r3.subtract(i3), r3.add(i3)), o3 = this._getBoundsOffset(a3, n3, t4);
           return Math.abs(o3.x) <= 1 && Math.abs(o3.y) <= 1 ? e4 : this.unproject(r3.add(o3), t4);
         },
         _limitOffset: function(e4, t4) {
           if (!t4) return e4;
-          var n3 = this.getPixelBounds(), r3 = new j2(n3.min.add(e4), n3.max.add(e4));
+          var n3 = this.getPixelBounds(), r3 = new A2(n3.min.add(e4), n3.max.add(e4));
           return e4.add(this._getBoundsOffset(r3, t4));
         },
         _getBoundsOffset: function(e4, t4, n3) {
-          var r3 = M2(this.project(t4.getNorthEast(), n3), this.project(t4.getSouthWest(), n3)), i3 = r3.min.subtract(e4.min), a3 = r3.max.subtract(e4.max);
-          return new O2(this._rebound(i3.x, -a3.x), this._rebound(i3.y, -a3.y));
+          var r3 = j2(this.project(t4.getNorthEast(), n3), this.project(t4.getSouthWest(), n3)), i3 = r3.min.subtract(e4.min), a3 = r3.max.subtract(e4.max);
+          return new D2(this._rebound(i3.x, -a3.x), this._rebound(i3.y, -a3.y));
         },
         _rebound: function(e4, t4) {
           return e4 + t4 > 0 ? Math.round(e4 - t4) / 2 : Math.max(0, Math.ceil(e4)) - Math.max(0, Math.floor(t4));
@@ -13748,7 +13795,7 @@ Error generating stack: ` + e4.message + `
       };
       var xn2 = {
         Events: E2
-      }, Sn2 = z2.touch ? `touchstart mousedown` : `mousedown`, Cn2 = D2.extend({
+      }, Sn2 = z2.touch ? `touchstart mousedown` : `mousedown`, Cn2 = ie2.extend({
         options: {
           clickTolerance: 3
         },
@@ -13770,7 +13817,7 @@ Error generating stack: ` + e4.message + `
             if (!(Cn2._dragging || e4.shiftKey || e4.which !== 1 && e4.button !== 1 && !e4.touches) && (Cn2._dragging = this, this._preventOutline && Vt2(this._element), Lt2(), Nt2(), !this._moving)) {
               this.fire(`down`);
               var t4 = e4.touches ? e4.touches[0] : e4, n3 = Ut2(this._element);
-              this._startPoint = new O2(t4.clientX, t4.clientY), this._startPos = Mt2(this._element), this._parentScale = Wt2(n3);
+              this._startPoint = new D2(t4.clientX, t4.clientY), this._startPos = Mt2(this._element), this._parentScale = Wt2(n3);
               var r3 = e4.type === `mousedown`;
               G2(document, r3 ? `mousemove` : `touchmove`, this._onMove, this), G2(document, r3 ? `mouseup` : `touchend touchcancel`, this._onUp, this);
             }
@@ -13782,7 +13829,7 @@ Error generating stack: ` + e4.message + `
               this._moved = true;
               return;
             }
-            var t4 = e4.touches && e4.touches.length === 1 ? e4.touches[0] : e4, n3 = new O2(t4.clientX, t4.clientY)._subtract(this._startPoint);
+            var t4 = e4.touches && e4.touches.length === 1 ? e4.touches[0] : e4, n3 = new D2(t4.clientX, t4.clientY)._subtract(this._startPoint);
             !n3.x && !n3.y || Math.abs(n3.x) + Math.abs(n3.y) < this.options.clickTolerance || (n3.x /= this._parentScale.x, n3.y /= this._parentScale.y, en2(e4), this._moved || (this.fire(`dragstart`), this._moved = true, W2(document.body, `leaflet-dragging`), this._lastTarget = e4.target || e4.srcElement, window.SVGElementInstance && this._lastTarget instanceof window.SVGElementInstance && (this._lastTarget = this._lastTarget.correspondingUseElement), W2(this._lastTarget, `leaflet-drag-target`)), this._newPos = this._startPos.add(n3), this._moving = true, this._lastEvent = e4, this._updatePosition());
           }
         },
@@ -13825,7 +13872,7 @@ Error generating stack: ` + e4.message + `
         var d3 = F2([
           0,
           0
-        ]), f3 = ie2(e4);
+        ]), f3 = N2(e4);
         f3.getNorthWest().distanceTo(f3.getSouthWest()) * f3.getNorthEast().distanceTo(f3.getNorthWest()) < 1700 && (d3 = En2(e4));
         var p3 = e4.length, m3 = [];
         for (n3 = 0; n3 < p3; n3++) {
@@ -13840,7 +13887,7 @@ Error generating stack: ` + e4.message + `
           c3 / s3,
           l3 / s3
         ];
-        var g3 = t4.unproject(A2(u3));
+        var g3 = t4.unproject(k2(u3));
         return F2([
           g3.lat + d3.lat,
           g3.lng + d3.lng
@@ -13868,10 +13915,10 @@ Error generating stack: ` + e4.message + `
         return e4 = Nn2(e4, n3), e4 = jn2(e4, n3), e4;
       }
       function kn2(e4, t4, n3) {
-        return Math.sqrt(zn(e4, t4, n3, true));
+        return Math.sqrt(zn2(e4, t4, n3, true));
       }
       function An2(e4, t4, n3) {
-        return zn(e4, t4, n3);
+        return zn2(e4, t4, n3);
       }
       function jn2(e4, t4) {
         var n3 = e4.length, r3 = new (typeof Uint8Array < `u` ? Uint8Array : Array)(n3);
@@ -13882,7 +13929,7 @@ Error generating stack: ` + e4.message + `
       }
       function Mn2(e4, t4, n3, r3, i3) {
         var a3 = 0, o3, s3, c3;
-        for (s3 = r3 + 1; s3 <= i3 - 1; s3++) c3 = zn(e4[s3], e4[r3], e4[i3], true), c3 > a3 && (o3 = s3, a3 = c3);
+        for (s3 = r3 + 1; s3 <= i3 - 1; s3++) c3 = zn2(e4[s3], e4[r3], e4[i3], true), c3 > a3 && (o3 = s3, a3 = c3);
         a3 > n3 && (t4[o3] = 1, Mn2(e4, t4, n3, r3, o3), Mn2(e4, t4, n3, o3, i3));
       }
       function Nn2(e4, t4) {
@@ -13905,7 +13952,7 @@ Error generating stack: ` + e4.message + `
       }
       function In2(e4, t4, n3, r3, i3) {
         var a3 = t4.x - e4.x, o3 = t4.y - e4.y, s3 = r3.min, c3 = r3.max, l3, u3;
-        return n3 & 8 ? (l3 = e4.x + a3 * (c3.y - e4.y) / o3, u3 = c3.y) : n3 & 4 ? (l3 = e4.x + a3 * (s3.y - e4.y) / o3, u3 = s3.y) : n3 & 2 ? (l3 = c3.x, u3 = e4.y + o3 * (c3.x - e4.x) / a3) : n3 & 1 && (l3 = s3.x, u3 = e4.y + o3 * (s3.x - e4.x) / a3), new O2(l3, u3, i3);
+        return n3 & 8 ? (l3 = e4.x + a3 * (c3.y - e4.y) / o3, u3 = c3.y) : n3 & 4 ? (l3 = e4.x + a3 * (s3.y - e4.y) / o3, u3 = s3.y) : n3 & 2 ? (l3 = c3.x, u3 = e4.y + o3 * (c3.x - e4.x) / a3) : n3 & 1 && (l3 = s3.x, u3 = e4.y + o3 * (s3.x - e4.x) / a3), new D2(l3, u3, i3);
       }
       function Ln2(e4, t4) {
         var n3 = 0;
@@ -13915,9 +13962,9 @@ Error generating stack: ` + e4.message + `
         var n3 = t4.x - e4.x, r3 = t4.y - e4.y;
         return n3 * n3 + r3 * r3;
       }
-      function zn(e4, t4, n3, r3) {
+      function zn2(e4, t4, n3, r3) {
         var i3 = t4.x, a3 = t4.y, o3 = n3.x - i3, s3 = n3.y - a3, c3 = o3 * o3 + s3 * s3, l3;
-        return c3 > 0 && (l3 = ((e4.x - i3) * o3 + (e4.y - a3) * s3) / c3, l3 > 1 ? (i3 = n3.x, a3 = n3.y) : l3 > 0 && (i3 += o3 * l3, a3 += s3 * l3)), o3 = e4.x - i3, s3 = e4.y - a3, r3 ? o3 * o3 + s3 * s3 : new O2(i3, a3);
+        return c3 > 0 && (l3 = ((e4.x - i3) * o3 + (e4.y - a3) * s3) / c3, l3 > 1 ? (i3 = n3.x, a3 = n3.y) : l3 > 0 && (i3 += o3 * l3, a3 += s3 * l3)), o3 = e4.x - i3, s3 = e4.y - a3, r3 ? o3 * o3 + s3 * s3 : new D2(i3, a3);
       }
       function Bn(e4) {
         return !_2(e4[0]) || typeof e4[0][0] != `object` && e4[0][0] !== void 0;
@@ -13932,7 +13979,7 @@ Error generating stack: ` + e4.message + `
         var u3 = F2([
           0,
           0
-        ]), d3 = ie2(e4);
+        ]), d3 = N2(e4);
         d3.getNorthWest().distanceTo(d3.getSouthWest()) * d3.getNorthEast().distanceTo(d3.getNorthWest()) < 1700 && (u3 = En2(e4));
         var f3 = e4.length, p3 = [];
         for (n3 = 0; n3 < f3; n3++) {
@@ -13951,7 +13998,7 @@ Error generating stack: ` + e4.message + `
           ];
           break;
         }
-        var h3 = t4.unproject(A2(l3));
+        var h3 = t4.unproject(k2(l3));
         return F2([
           h3.lat + u3.lat,
           h3.lng + u3.lng
@@ -13965,18 +14012,18 @@ Error generating stack: ` + e4.message + `
         clipSegment: Fn2,
         _getEdgeIntersection: In2,
         _getBitCode: Ln2,
-        _sqClosestPointOnSegment: zn,
+        _sqClosestPointOnSegment: zn2,
         isFlat: Bn,
         _flat: Vn,
         polylineCenter: Hn
       }, Wn = {
         project: function(e4) {
-          return new O2(e4.lng, e4.lat);
+          return new D2(e4.lng, e4.lat);
         },
         unproject: function(e4) {
           return new P2(e4.y, e4.x);
         },
-        bounds: new j2([
+        bounds: new A2([
           -180,
           -90
         ], [
@@ -13986,7 +14033,7 @@ Error generating stack: ` + e4.message + `
       }, Gn = {
         R: 6378137,
         R_MINOR: 6356752314245179e-9,
-        bounds: new j2([
+        bounds: new A2([
           -2003750834279e-5,
           -1549657073972e-5
         ], [
@@ -13995,7 +14042,7 @@ Error generating stack: ` + e4.message + `
         ]),
         project: function(e4) {
           var t4 = Math.PI / 180, n3 = this.R, r3 = e4.lat * t4, i3 = this.R_MINOR / n3, a3 = Math.sqrt(1 - i3 * i3), o3 = a3 * Math.sin(r3), s3 = Math.tan(Math.PI / 4 - r3 / 2) / ((1 - o3) / (1 + o3)) ** (a3 / 2);
-          return r3 = -n3 * Math.log(Math.max(s3, 1e-10)), new O2(e4.lng * t4 * n3, r3);
+          return r3 = -n3 * Math.log(Math.max(s3, 1e-10)), new D2(e4.lng * t4 * n3, r3);
         },
         unproject: function(e4) {
           for (var t4 = 180 / Math.PI, n3 = this.R, r3 = this.R_MINOR / n3, i3 = Math.sqrt(1 - r3 * r3), a3 = Math.exp(-e4.y / n3), o3 = Math.PI / 2 - 2 * Math.atan(a3), s3 = 0, c3 = 0.1, l3; s3 < 15 && Math.abs(c3) > 1e-7; s3++) l3 = i3 * Math.sin(o3), l3 = ((1 - l3) / (1 + l3)) ** (i3 / 2), c3 = Math.PI / 2 - 2 * Math.atan(a3 * l3) - o3, o3 += c3;
@@ -14033,7 +14080,7 @@ Error generating stack: ` + e4.message + `
         infinite: true
       });
       ae2.Earth = oe2, ae2.EPSG3395 = qn, ae2.EPSG3857 = de2, ae2.EPSG900913 = fe2, ae2.EPSG4326 = Jn, ae2.Simple = Yn;
-      var Xn = D2.extend({
+      var Xn = ie2.extend({
         options: {
           pane: `overlayPane`,
           attribution: null,
@@ -14187,7 +14234,7 @@ Error generating stack: ` + e4.message + `
           return this.invoke(`bringToBack`);
         },
         getBounds: function() {
-          var e4 = new N2();
+          var e4 = new M2();
           for (var t4 in this._layers) {
             var n3 = this._layers[t4];
             e4.extend(n3.getBounds ? n3.getBounds() : n3.getLatLng());
@@ -14232,7 +14279,7 @@ Error generating stack: ` + e4.message + `
             r3,
             r3
           ]);
-          var i3 = A2(r3), a3 = A2(t4 === `shadow` && n3.shadowAnchor || n3.iconAnchor || i3 && i3.divideBy(2, true));
+          var i3 = k2(r3), a3 = k2(t4 === `shadow` && n3.shadowAnchor || n3.iconAnchor || i3 && i3.divideBy(2, true));
           e4.className = `leaflet-marker-` + t4 + ` ` + (n3.className || ``), a3 && (e4.style.marginLeft = -a3.x + `px`, e4.style.marginTop = -a3.y + `px`), i3 && (e4.style.width = i3.x + `px`, e4.style.height = i3.y + `px`);
         },
         _createImg: function(e4, t4) {
@@ -14312,9 +14359,9 @@ Error generating stack: ` + e4.message + `
           return this._draggable && this._draggable._moved;
         },
         _adjustPan: function(e4) {
-          var t4 = this._marker, n3 = t4._map, r3 = this._marker.options.autoPanSpeed, i3 = this._marker.options.autoPanPadding, a3 = Mt2(t4._icon), o3 = n3.getPixelBounds(), s3 = n3.getPixelOrigin(), c3 = M2(o3.min._subtract(s3).add(i3), o3.max._subtract(s3).subtract(i3));
+          var t4 = this._marker, n3 = t4._map, r3 = this._marker.options.autoPanSpeed, i3 = this._marker.options.autoPanPadding, a3 = Mt2(t4._icon), o3 = n3.getPixelBounds(), s3 = n3.getPixelOrigin(), c3 = j2(o3.min._subtract(s3).add(i3), o3.max._subtract(s3).subtract(i3));
           if (!c3.contains(a3)) {
-            var l3 = A2((Math.max(c3.max.x, a3.x) - c3.max.x) / (o3.max.x - c3.max.x) - (Math.min(c3.min.x, a3.x) - c3.min.x) / (o3.min.x - c3.min.x), (Math.max(c3.max.y, a3.y) - c3.max.y) / (o3.max.y - c3.max.y) - (Math.min(c3.min.y, a3.y) - c3.min.y) / (o3.min.y - c3.min.y)).multiplyBy(r3);
+            var l3 = k2((Math.max(c3.max.x, a3.x) - c3.max.x) / (o3.max.x - c3.max.x) - (Math.min(c3.min.x, a3.x) - c3.min.x) / (o3.min.x - c3.min.x), (Math.max(c3.max.y, a3.y) - c3.max.y) / (o3.max.y - c3.max.y) - (Math.min(c3.min.y, a3.y) - c3.min.y) / (o3.min.y - c3.min.y)).multiplyBy(r3);
             n3.panBy(l3, {
               animate: false
             }), this._draggable._newPos._add(l3), this._draggable._startPos._add(l3), jt2(t4._icon, this._draggable._newPos), this._onDrag(e4), this._panRequest = ee2(this._adjustPan.bind(this, e4));
@@ -14450,7 +14497,7 @@ Error generating stack: ` + e4.message + `
         _panOnFocus: function() {
           var e4 = this._map;
           if (e4) {
-            var t4 = this.options.icon.options, n3 = t4.iconSize ? A2(t4.iconSize) : A2(0, 0), r3 = t4.iconAnchor ? A2(t4.iconAnchor) : A2(0, 0);
+            var t4 = this.options.icon.options, n3 = t4.iconSize ? k2(t4.iconSize) : k2(0, 0), r3 = t4.iconAnchor ? k2(t4.iconAnchor) : k2(0, 0);
             e4.panInside(this._latlng, {
               paddingTopLeft: r3,
               paddingBottomRight: n3.subtract(r3)
@@ -14550,7 +14597,7 @@ Error generating stack: ` + e4.message + `
             e4 + n3,
             t4 + n3
           ];
-          this._pxBounds = new j2(this._point.subtract(r3), this._point.add(r3));
+          this._pxBounds = new A2(this._point.subtract(r3), this._point.add(r3));
         },
         _update: function() {
           this._map && this._updatePath();
@@ -14586,7 +14633,7 @@ Error generating stack: ` + e4.message + `
             this._radius,
             this._radiusY || this._radius
           ];
-          return new N2(this._map.layerPointToLatLng(this._point.subtract(e4)), this._map.layerPointToLatLng(this._point.add(e4)));
+          return new M2(this._map.layerPointToLatLng(this._point.subtract(e4)), this._map.layerPointToLatLng(this._point.add(e4)));
         },
         setStyle: sr.prototype.setStyle,
         _project: function() {
@@ -14634,7 +14681,7 @@ Error generating stack: ` + e4.message + `
           return !this._latlngs.length;
         },
         closestLayerPoint: function(e4) {
-          for (var t4 = 1 / 0, n3 = null, r3 = zn, i3, a3, o3 = 0, s3 = this._parts.length; o3 < s3; o3++) for (var c3 = this._parts[o3], l3 = 1, u3 = c3.length; l3 < u3; l3++) {
+          for (var t4 = 1 / 0, n3 = null, r3 = zn2, i3, a3, o3 = 0, s3 = this._parts.length; o3 < s3; o3++) for (var c3 = this._parts[o3], l3 = 1, u3 = c3.length; l3 < u3; l3++) {
             i3 = c3[l3 - 1], a3 = c3[l3];
             var d3 = r3(e4, i3, a3, true);
             d3 < t4 && (t4 = d3, n3 = r3(e4, i3, a3));
@@ -14652,7 +14699,7 @@ Error generating stack: ` + e4.message + `
           return t4 ||= this._defaultShape(), e4 = F2(e4), t4.push(e4), this._bounds.extend(e4), this.redraw();
         },
         _setLatLngs: function(e4) {
-          this._bounds = new N2(), this._latlngs = this._convertLatLngs(e4);
+          this._bounds = new M2(), this._latlngs = this._convertLatLngs(e4);
         },
         _defaultShape: function() {
           return Bn(this._latlngs) ? this._latlngs : this._latlngs[0];
@@ -14662,12 +14709,12 @@ Error generating stack: ` + e4.message + `
           return t4;
         },
         _project: function() {
-          var e4 = new j2();
+          var e4 = new A2();
           this._rings = [], this._projectLatlngs(this._latlngs, this._rings, e4), this._bounds.isValid() && e4.isValid() && (this._rawPxBounds = e4, this._updateBounds());
         },
         _updateBounds: function() {
-          var e4 = this._clickTolerance(), t4 = new O2(e4, e4);
-          this._rawPxBounds && (this._pxBounds = new j2([
+          var e4 = this._clickTolerance(), t4 = new D2(e4, e4);
+          this._rawPxBounds && (this._pxBounds = new A2([
             this._rawPxBounds.min.subtract(t4),
             this._rawPxBounds.max.add(t4)
           ]));
@@ -14734,8 +14781,8 @@ Error generating stack: ` + e4.message + `
           return Bn(this._latlngs[0]) ? this._latlngs[0] : this._latlngs[0][0];
         },
         _clipPoints: function() {
-          var e4 = this._renderer._bounds, t4 = this.options.weight, n3 = new O2(t4, t4);
-          if (e4 = new j2(e4.min.subtract(n3), e4.max.add(n3)), this._parts = [], !(!this._pxBounds || !this._pxBounds.intersects(e4))) {
+          var e4 = this._renderer._bounds, t4 = this.options.weight, n3 = new D2(t4, t4);
+          if (e4 = new A2(e4.min.subtract(n3), e4.max.add(n3)), this._parts = [], !(!this._pxBounds || !this._pxBounds.intersects(e4))) {
             if (this.options.noClip) {
               this._parts = this._rings;
               return;
@@ -14926,7 +14973,7 @@ Error generating stack: ` + e4.message + `
           className: ``
         },
         initialize: function(e4, t4, n3) {
-          this._url = e4, this._bounds = ie2(t4), p2(this, n3);
+          this._url = e4, this._bounds = N2(t4), p2(this, n3);
         },
         onAdd: function() {
           this._image || (this._initImage(), this.options.opacity < 1 && this._updateOpacity()), this.options.interactive && (W2(this._image, `leaflet-interactive`), this.addInteractiveTarget(this._image)), this.getPane().appendChild(this._image), this._reset();
@@ -14950,7 +14997,7 @@ Error generating stack: ` + e4.message + `
           return this._url = e4, this._image && (this._image.src = e4), this;
         },
         setBounds: function(e4) {
-          return this._bounds = ie2(e4), this._map && this._reset(), this;
+          return this._bounds = N2(e4), this._map && this._reset(), this;
         },
         getEvents: function() {
           var e4 = {
@@ -14981,7 +15028,7 @@ Error generating stack: ` + e4.message + `
           At2(this._image, n3, t4);
         },
         _reset: function() {
-          var e4 = this._image, t4 = new j2(this._map.latLngToLayerPoint(this._bounds.getNorthWest()), this._map.latLngToLayerPoint(this._bounds.getSouthEast())), n3 = t4.getSize();
+          var e4 = this._image, t4 = new A2(this._map.latLngToLayerPoint(this._bounds.getNorthWest()), this._map.latLngToLayerPoint(this._bounds.getSouthEast())), n3 = t4.getSize();
           jt2(e4, t4.min), e4.style.width = n3.x + `px`, e4.style.height = n3.y + `px`;
         },
         _updateOpacity: function() {
@@ -15133,7 +15180,7 @@ Error generating stack: ` + e4.message + `
         },
         _updatePosition: function() {
           if (this._map) {
-            var e4 = this._map.latLngToLayerPoint(this._latlng), t4 = A2(this.options.offset), n3 = this._getAnchor();
+            var e4 = this._map.latLngToLayerPoint(this._latlng), t4 = k2(this.options.offset), n3 = this._getAnchor();
             this._zoomAnimated ? jt2(this._container, e4.add(n3)) : t4 = t4.add(e4).add(n3);
             var r3 = this._containerBottom = -t4.y, i3 = this._containerLeft = -Math.round(this._containerWidth / 2) + t4.x;
             this._container.style.bottom = r3 + `px`, this._container.style.left = i3 + `px`;
@@ -15228,9 +15275,9 @@ Error generating stack: ` + e4.message + `
               this._autopanning = false;
               return;
             }
-            var e4 = this._map, t4 = parseInt(V2(this._container, `marginBottom`), 10) || 0, n3 = this._container.offsetHeight + t4, r3 = this._containerWidth, i3 = new O2(this._containerLeft, -n3 - this._containerBottom);
+            var e4 = this._map, t4 = parseInt(V2(this._container, `marginBottom`), 10) || 0, n3 = this._container.offsetHeight + t4, r3 = this._containerWidth, i3 = new D2(this._containerLeft, -n3 - this._containerBottom);
             i3._add(Mt2(this._container));
-            var a3 = e4.layerPointToContainerPoint(i3), o3 = A2(this.options.autoPanPadding), s3 = A2(this.options.autoPanPaddingTopLeft || o3), c3 = A2(this.options.autoPanPaddingBottomRight || o3), l3 = e4.getSize(), u3 = 0, d3 = 0;
+            var a3 = e4.layerPointToContainerPoint(i3), o3 = k2(this.options.autoPanPadding), s3 = k2(this.options.autoPanPaddingTopLeft || o3), c3 = k2(this.options.autoPanPaddingBottomRight || o3), l3 = e4.getSize(), u3 = 0, d3 = 0;
             a3.x + r3 + c3.x > l3.x && (u3 = a3.x + r3 - l3.x + c3.x), a3.x - u3 - s3.x < 0 && (u3 = a3.x - s3.x), a3.y + n3 + c3.y > l3.y && (d3 = a3.y + n3 - l3.y + c3.y), a3.y - d3 - s3.y < 0 && (d3 = a3.y - s3.y), (u3 || d3) && (this.options.keepInView && (this._autopanning = true), e4.fire(`autopanstart`).panBy([
               u3,
               d3
@@ -15238,7 +15285,7 @@ Error generating stack: ` + e4.message + `
           }
         },
         _getAnchor: function() {
-          return A2(this._source && this._source._getPopupAnchor ? this._source._getPopupAnchor() : [
+          return k2(this._source && this._source._getPopupAnchor ? this._source._getPopupAnchor() : [
             0,
             0
           ]);
@@ -15347,8 +15394,8 @@ Error generating stack: ` + e4.message + `
         _adjustPan: function() {
         },
         _setPosition: function(e4) {
-          var t4, n3, r3 = this._map, i3 = this._container, a3 = r3.latLngToContainerPoint(r3.getCenter()), o3 = r3.layerPointToContainerPoint(e4), s3 = this.options.direction, c3 = i3.offsetWidth, l3 = i3.offsetHeight, u3 = A2(this.options.offset), d3 = this._getAnchor();
-          s3 === `top` ? (t4 = c3 / 2, n3 = l3) : s3 === `bottom` ? (t4 = c3 / 2, n3 = 0) : s3 === `center` ? (t4 = c3 / 2, n3 = l3 / 2) : s3 === `right` ? (t4 = 0, n3 = l3 / 2) : s3 === `left` ? (t4 = c3, n3 = l3 / 2) : o3.x < a3.x ? (s3 = `right`, t4 = 0, n3 = l3 / 2) : (s3 = `left`, t4 = c3 + (u3.x + d3.x) * 2, n3 = l3 / 2), e4 = e4.subtract(A2(t4, n3, true)).add(u3).add(d3), wt2(i3, `leaflet-tooltip-right`), wt2(i3, `leaflet-tooltip-left`), wt2(i3, `leaflet-tooltip-top`), wt2(i3, `leaflet-tooltip-bottom`), W2(i3, `leaflet-tooltip-` + s3), jt2(i3, e4);
+          var t4, n3, r3 = this._map, i3 = this._container, a3 = r3.latLngToContainerPoint(r3.getCenter()), o3 = r3.layerPointToContainerPoint(e4), s3 = this.options.direction, c3 = i3.offsetWidth, l3 = i3.offsetHeight, u3 = k2(this.options.offset), d3 = this._getAnchor();
+          s3 === `top` ? (t4 = c3 / 2, n3 = l3) : s3 === `bottom` ? (t4 = c3 / 2, n3 = 0) : s3 === `center` ? (t4 = c3 / 2, n3 = l3 / 2) : s3 === `right` ? (t4 = 0, n3 = l3 / 2) : s3 === `left` ? (t4 = c3, n3 = l3 / 2) : o3.x < a3.x ? (s3 = `right`, t4 = 0, n3 = l3 / 2) : (s3 = `left`, t4 = c3 + (u3.x + d3.x) * 2, n3 = l3 / 2), e4 = e4.subtract(k2(t4, n3, true)).add(u3).add(d3), wt2(i3, `leaflet-tooltip-right`), wt2(i3, `leaflet-tooltip-left`), wt2(i3, `leaflet-tooltip-top`), wt2(i3, `leaflet-tooltip-bottom`), W2(i3, `leaflet-tooltip-` + s3), jt2(i3, e4);
         },
         _updatePosition: function() {
           var e4 = this._map.latLngToLayerPoint(this._latlng);
@@ -15362,7 +15409,7 @@ Error generating stack: ` + e4.message + `
           this._setPosition(t4);
         },
         _getAnchor: function() {
-          return A2(this._source && this._source._getTooltipAnchor && !this.options.sticky ? this._source._getTooltipAnchor() : [
+          return k2(this._source && this._source._getTooltipAnchor && !this.options.sticky ? this._source._getTooltipAnchor() : [
             0,
             0
           ]);
@@ -15455,7 +15502,7 @@ Error generating stack: ` + e4.message + `
         createIcon: function(e4) {
           var t4 = e4 && e4.tagName === `DIV` ? e4 : document.createElement(`div`), n3 = this.options;
           if (n3.html instanceof Element ? (bt2(t4), t4.appendChild(n3.html)) : t4.innerHTML = n3.html === false ? `` : n3.html, n3.bgPos) {
-            var r3 = A2(n3.bgPos);
+            var r3 = k2(n3.bgPos);
             t4.style.backgroundPosition = -r3.x + `px ` + -r3.y + `px`;
           }
           return this._setIconStyles(t4, `icon`), t4;
@@ -15538,7 +15585,7 @@ Error generating stack: ` + e4.message + `
         },
         getTileSize: function() {
           var e4 = this.options.tileSize;
-          return e4 instanceof O2 ? e4 : new O2(e4, e4);
+          return e4 instanceof D2 ? e4 : new D2(e4, e4);
         },
         _updateZIndex: function() {
           this._container && this.options.zIndex !== void 0 && this.options.zIndex !== null && (this._container.style.zIndex = this.options.zIndex);
@@ -15602,14 +15649,14 @@ Error generating stack: ` + e4.message + `
           this._removeAllTiles(), this._tileZoom = void 0;
         },
         _retainParent: function(e4, t4, n3, r3) {
-          var i3 = Math.floor(e4 / 2), a3 = Math.floor(t4 / 2), o3 = n3 - 1, s3 = new O2(+i3, +a3);
+          var i3 = Math.floor(e4 / 2), a3 = Math.floor(t4 / 2), o3 = n3 - 1, s3 = new D2(+i3, +a3);
           s3.z = +o3;
           var c3 = this._tileCoordsToKey(s3), l3 = this._tiles[c3];
           return l3 && l3.active ? (l3.retain = true, true) : (l3 && l3.loaded && (l3.retain = true), o3 > r3 && this._retainParent(i3, a3, o3, r3));
         },
         _retainChildren: function(e4, t4, n3, r3) {
           for (var i3 = 2 * e4; i3 < 2 * e4 + 2; i3++) for (var a3 = 2 * t4; a3 < 2 * t4 + 2; a3++) {
-            var o3 = new O2(i3, a3);
+            var o3 = new D2(i3, a3);
             o3.z = n3 + 1;
             var s3 = this._tileCoordsToKey(o3), c3 = this._tiles[s3];
             if (c3 && c3.active) {
@@ -15670,14 +15717,14 @@ Error generating stack: ` + e4.message + `
         },
         _getTiledPixelBounds: function(e4) {
           var t4 = this._map, n3 = t4._animatingZoom ? Math.max(t4._animateToZoom, t4.getZoom()) : t4.getZoom(), r3 = t4.getZoomScale(n3, this._tileZoom), i3 = t4.project(e4, this._tileZoom).floor(), a3 = t4.getSize().divideBy(r3 * 2);
-          return new j2(i3.subtract(a3), i3.add(a3));
+          return new A2(i3.subtract(a3), i3.add(a3));
         },
         _update: function(e4) {
           var t4 = this._map;
           if (t4) {
             var n3 = this._clampZoom(t4.getZoom());
             if (e4 === void 0 && (e4 = t4.getCenter()), this._tileZoom !== void 0) {
-              var r3 = this._getTiledPixelBounds(e4), i3 = this._pxBoundsToTileRange(r3), a3 = i3.getCenter(), o3 = [], s3 = this.options.keepBuffer, c3 = new j2(i3.getBottomLeft().subtract([
+              var r3 = this._getTiledPixelBounds(e4), i3 = this._pxBoundsToTileRange(r3), a3 = i3.getCenter(), o3 = [], s3 = this.options.keepBuffer, c3 = new A2(i3.getBottomLeft().subtract([
                 s3,
                 -s3
               ]), i3.getTopRight().add([
@@ -15687,14 +15734,14 @@ Error generating stack: ` + e4.message + `
               if (!(isFinite(i3.min.x) && isFinite(i3.min.y) && isFinite(i3.max.x) && isFinite(i3.max.y))) throw Error(`Attempted to load an infinite number of tiles`);
               for (var l3 in this._tiles) {
                 var u3 = this._tiles[l3].coords;
-                (u3.z !== this._tileZoom || !c3.contains(new O2(u3.x, u3.y))) && (this._tiles[l3].current = false);
+                (u3.z !== this._tileZoom || !c3.contains(new D2(u3.x, u3.y))) && (this._tiles[l3].current = false);
               }
               if (Math.abs(n3 - this._tileZoom) > 1) {
                 this._setView(e4, n3);
                 return;
               }
               for (var d3 = i3.min.y; d3 <= i3.max.y; d3++) for (var f3 = i3.min.x; f3 <= i3.max.x; f3++) {
-                var p3 = new O2(f3, d3);
+                var p3 = new D2(f3, d3);
                 if (p3.z = this._tileZoom, this._isValidTile(p3)) {
                   var m3 = this._tiles[this._tileCoordsToKey(p3)];
                   m3 ? m3.current = true : o3.push(p3);
@@ -15719,7 +15766,7 @@ Error generating stack: ` + e4.message + `
           }
           if (!this.options.bounds) return true;
           var r3 = this._tileCoordsToBounds(e4);
-          return ie2(this.options.bounds).overlaps(r3);
+          return N2(this.options.bounds).overlaps(r3);
         },
         _keyToBounds: function(e4) {
           return this._tileCoordsToBounds(this._keyToTileCoords(e4));
@@ -15732,14 +15779,14 @@ Error generating stack: ` + e4.message + `
           ];
         },
         _tileCoordsToBounds: function(e4) {
-          var t4 = this._tileCoordsToNwSe(e4), n3 = new N2(t4[0], t4[1]);
+          var t4 = this._tileCoordsToNwSe(e4), n3 = new M2(t4[0], t4[1]);
           return this.options.noWrap || (n3 = this._map.wrapLatLngBounds(n3)), n3;
         },
         _tileCoordsToKey: function(e4) {
           return e4.x + `:` + e4.y + `:` + e4.z;
         },
         _keyToTileCoords: function(e4) {
-          var t4 = e4.split(`:`), n3 = new O2(+t4[0], +t4[1]);
+          var t4 = e4.split(`:`), n3 = new D2(+t4[0], +t4[1]);
           return n3.z = +t4[2], n3;
         },
         _removeTile: function(e4) {
@@ -15781,12 +15828,12 @@ Error generating stack: ` + e4.message + `
           return e4.scaleBy(this.getTileSize()).subtract(this._level.origin);
         },
         _wrapCoords: function(e4) {
-          var t4 = new O2(this._wrapX ? c2(e4.x, this._wrapX) : e4.x, this._wrapY ? c2(e4.y, this._wrapY) : e4.y);
+          var t4 = new D2(this._wrapX ? c2(e4.x, this._wrapX) : e4.x, this._wrapY ? c2(e4.y, this._wrapY) : e4.y);
           return t4.z = e4.z, t4;
         },
         _pxBoundsToTileRange: function(e4) {
           var t4 = this.getTileSize();
-          return new j2(e4.min.unscaleBy(t4).floor(), e4.max.unscaleBy(t4).ceil().subtract([
+          return new A2(e4.min.unscaleBy(t4).floor(), e4.max.unscaleBy(t4).ceil().subtract([
             1,
             1
           ]));
@@ -15904,7 +15951,7 @@ Error generating stack: ` + e4.message + `
           this.wmsParams[t4] = this._crs.code, Ur.prototype.onAdd.call(this, e4);
         },
         getTileUrl: function(e4) {
-          var t4 = this._tileCoordsToNwSe(e4), n3 = this._crs, r3 = M2(n3.project(t4[0]), n3.project(t4[1])), i3 = r3.min, a3 = r3.max, o3 = (this._wmsVersion >= 1.3 && this._crs === Jn ? [
+          var t4 = this._tileCoordsToNwSe(e4), n3 = this._crs, r3 = j2(n3.project(t4[0]), n3.project(t4[1])), i3 = r3.min, a3 = r3.max, o3 = (this._wmsVersion >= 1.3 && this._crs === Jn ? [
             i3.y,
             i3.x,
             a3.y,
@@ -15968,7 +16015,7 @@ Error generating stack: ` + e4.message + `
         },
         _update: function() {
           var e4 = this.options.padding, t4 = this._map.getSize(), n3 = this._map.containerPointToLayerPoint(t4.multiplyBy(-e4)).round();
-          this._bounds = new j2(n3, n3.add(t4.multiplyBy(1 + e4 * 2)).round()), this._center = this._map.getCenter(), this._zoom = this._map.getZoom();
+          this._bounds = new A2(n3, n3.add(t4.multiplyBy(1 + e4 * 2)).round()), this._center = this._map.getCenter(), this._zoom = this._map.getZoom();
         }
       }), Jr = qr.extend({
         options: {
@@ -16046,7 +16093,7 @@ Error generating stack: ` + e4.message + `
         _extendRedrawBounds: function(e4) {
           if (e4._pxBounds) {
             var t4 = (e4.options.weight || 0) + 1;
-            this._redrawBounds = this._redrawBounds || new j2(), this._redrawBounds.extend(e4._pxBounds.min.subtract([
+            this._redrawBounds = this._redrawBounds || new A2(), this._redrawBounds.extend(e4._pxBounds.min.subtract([
               t4,
               t4
             ])), this._redrawBounds.extend(e4._pxBounds.max.add([
@@ -16279,7 +16326,7 @@ Error generating stack: ` + e4.message + `
           return this.setLatLngs(this._boundsToLatLngs(e4));
         },
         _boundsToLatLngs: function(e4) {
-          return e4 = ie2(e4), [
+          return e4 = N2(e4), [
             e4.getSouthWest(),
             e4.getNorthWest(),
             e4.getNorthEast(),
@@ -16326,7 +16373,7 @@ Error generating stack: ` + e4.message + `
         },
         _onMouseMove: function(e4) {
           this._moved || (this._moved = true, this._box = H2(`div`, `leaflet-zoom-box`, this._container), W2(this._container, `leaflet-crosshair`), this._map.fire(`boxzoomstart`)), this._point = this._map.mouseEventToContainerPoint(e4);
-          var t4 = new j2(this._point, this._startPoint), n3 = t4.getSize();
+          var t4 = new A2(this._point, this._startPoint), n3 = t4.getSize();
           jt2(this._box, t4.min), this._box.style.width = n3.x + `px`, this._box.style.height = n3.y + `px`;
         },
         _finish: function() {
@@ -16340,7 +16387,7 @@ Error generating stack: ` + e4.message + `
         _onMouseUp: function(e4) {
           if (!(e4.which !== 1 && e4.button !== 1) && (this._finish(), this._moved)) {
             this._clearDeferredResetState(), this._resetStateTimeout = setTimeout(i2(this._resetState, this), 0);
-            var t4 = new N2(this._map.containerPointToLatLng(this._startPoint), this._map.containerPointToLatLng(this._point));
+            var t4 = new M2(this._map.containerPointToLatLng(this._startPoint), this._map.containerPointToLatLng(this._point));
             this._map.fitBounds(t4).fire(`boxzoomend`, {
               boxZoomBounds: t4
             });
@@ -16398,8 +16445,8 @@ Error generating stack: ` + e4.message + `
         _onDragStart: function() {
           var e4 = this._map;
           if (e4._stop(), this._map.options.maxBounds && this._map.options.maxBoundsViscosity) {
-            var t4 = ie2(this._map.options.maxBounds);
-            this._offsetLimit = M2(this._map.latLngToContainerPoint(t4.getNorthWest()).multiplyBy(-1), this._map.latLngToContainerPoint(t4.getSouthEast()).multiplyBy(-1).add(this._map.getSize())), this._viscosity = Math.min(1, Math.max(0, this._map.options.maxBoundsViscosity));
+            var t4 = N2(this._map.options.maxBounds);
+            this._offsetLimit = j2(this._map.latLngToContainerPoint(t4.getNorthWest()).multiplyBy(-1), this._map.latLngToContainerPoint(t4.getSouthEast()).multiplyBy(-1).add(this._map.getSize())), this._viscosity = Math.min(1, Math.max(0, this._map.options.maxBoundsViscosity));
           } else this._offsetLimit = null;
           e4.fire(`movestart`).fire(`dragstart`), e4.options.inertia && (this._positions = [], this._times = []);
         },
@@ -16554,7 +16601,7 @@ Error generating stack: ` + e4.message + `
           if (!(e4.altKey || e4.ctrlKey || e4.metaKey)) {
             var t4 = e4.keyCode, n3 = this._map, r3;
             if (t4 in this._panKeys) {
-              if (!n3._panAnim || !n3._panAnim._inProgress) if (r3 = this._panKeys[t4], e4.shiftKey && (r3 = A2(r3).multiplyBy(3)), n3.options.maxBounds && (r3 = n3._limitOffset(A2(r3), n3.options.maxBounds)), n3.options.worldCopyJump) {
+              if (!n3._panAnim || !n3._panAnim._inProgress) if (r3 = this._panKeys[t4], e4.shiftKey && (r3 = k2(r3).multiplyBy(3)), n3.options.maxBounds && (r3 = n3._limitOffset(k2(r3), n3.options.maxBounds)), n3.options.worldCopyJump) {
                 var i3 = n3.wrapLatLng(n3.unproject(n3.project(n3.getCenter()).add(r3)));
                 n3.panTo(i3);
               } else n3.panBy(r3);
@@ -16606,7 +16653,7 @@ Error generating stack: ` + e4.message + `
         _onDown: function(e4) {
           if (clearTimeout(this._holdTimeout), e4.touches.length === 1) {
             var t4 = e4.touches[0];
-            this._startPos = this._newPos = new O2(t4.clientX, t4.clientY), this._holdTimeout = setTimeout(i2(function() {
+            this._startPos = this._newPos = new D2(t4.clientX, t4.clientY), this._holdTimeout = setTimeout(i2(function() {
               this._cancel(), this._isTapValid() && (G2(document, `touchend`, en2), G2(document, `touchend touchcancel`, this._cancelClickPrevent), this._simulateEvent(`contextmenu`, t4));
             }, this), ci), G2(document, `touchend touchcancel contextmenu`, this._cancel, this), G2(document, `touchmove`, this._onMove, this);
           }
@@ -16619,7 +16666,7 @@ Error generating stack: ` + e4.message + `
         },
         _onMove: function(e4) {
           var t4 = e4.touches[0];
-          this._newPos = new O2(t4.clientX, t4.clientY);
+          this._newPos = new D2(t4.clientX, t4.clientY);
         },
         _isTapValid: function() {
           return this._newPos.distanceTo(this._startPos) <= this._map.options.tapTolerance;
@@ -16681,21 +16728,21 @@ Error generating stack: ` + e4.message + `
           this._zooming = false, T2(this._animRequest), K2(document, `touchmove`, this._onTouchMove, this), K2(document, `touchend touchcancel`, this._onTouchEnd, this), this._map.options.zoomAnimation ? this._map._animateZoom(this._center, this._map._limitZoom(this._zoom), true, this._map.options.zoomSnap) : this._map._resetView(this._center, this._map._limitZoom(this._zoom));
         }
       });
-      q2.addInitHook(`addHandler`, `touchZoom`, ui), q2.BoxZoom = ri, q2.DoubleClickZoom = ii, q2.Drag = ai, q2.Keyboard = oi, q2.ScrollWheelZoom = si, q2.TapHold = li, q2.TouchZoom = ui, e3.Bounds = j2, e3.Browser = z2, e3.CRS = ae2, e3.Canvas = Jr, e3.Circle = ur, e3.CircleMarker = cr, e3.Class = ne2, e3.Control = dn2, e3.DivIcon = zr, e3.DivOverlay = Pr, e3.DomEvent = cn2, e3.DomUtil = Gt2, e3.Draggable = Cn2, e3.Evented = D2, e3.FeatureGroup = $n, e3.GeoJSON = gr, e3.GridLayer = Vr, e3.Handler = bn2, e3.Icon = tr, e3.ImageOverlay = Or, e3.LatLng = P2, e3.LatLngBounds = N2, e3.Layer = Xn, e3.LayerGroup = Zn, e3.LineUtil = Un, e3.Map = q2, e3.Marker = ar, e3.Mixin = xn2, e3.Path = sr, e3.Point = O2, e3.PolyUtil = Dn2, e3.Polygon = mr, e3.Polyline = fr, e3.Popup = Fr, e3.PosAnimation = ln2, e3.Projection = Kn, e3.Rectangle = ti, e3.Renderer = qr, e3.SVG = $r, e3.SVGOverlay = Mr, e3.TileLayer = Ur, e3.Tooltip = Lr, e3.Transformation = le2, e3.Util = te2, e3.VideoOverlay = Ar, e3.bind = i2, e3.bounds = M2, e3.canvas = Yr, e3.circle = dr, e3.circleMarker = lr, e3.control = fn2, e3.divIcon = Br, e3.extend = n2, e3.featureGroup = er, e3.geoJSON = Er, e3.geoJson = Dr, e3.gridLayer = Hr, e3.icon = nr, e3.imageOverlay = kr, e3.latLng = F2, e3.latLngBounds = ie2, e3.layerGroup = Qn, e3.map = un2, e3.marker = or, e3.point = A2, e3.polygon = hr, e3.polyline = pr, e3.popup = Ir, e3.rectangle = ni, e3.setOptions = p2, e3.stamp = o2, e3.svg = ei, e3.svgOverlay = Nr, e3.tileLayer = Wr, e3.tooltip = Rr, e3.transformation = ue2, e3.version = t3, e3.videoOverlay = jr;
+      q2.addInitHook(`addHandler`, `touchZoom`, ui), q2.BoxZoom = ri, q2.DoubleClickZoom = ii, q2.Drag = ai, q2.Keyboard = oi, q2.ScrollWheelZoom = si, q2.TapHold = li, q2.TouchZoom = ui, e3.Bounds = A2, e3.Browser = z2, e3.CRS = ae2, e3.Canvas = Jr, e3.Circle = ur, e3.CircleMarker = cr, e3.Class = ne2, e3.Control = dn2, e3.DivIcon = zr, e3.DivOverlay = Pr, e3.DomEvent = cn2, e3.DomUtil = Gt2, e3.Draggable = Cn2, e3.Evented = ie2, e3.FeatureGroup = $n, e3.GeoJSON = gr, e3.GridLayer = Vr, e3.Handler = bn2, e3.Icon = tr, e3.ImageOverlay = Or, e3.LatLng = P2, e3.LatLngBounds = M2, e3.Layer = Xn, e3.LayerGroup = Zn, e3.LineUtil = Un, e3.Map = q2, e3.Marker = ar, e3.Mixin = xn2, e3.Path = sr, e3.Point = D2, e3.PolyUtil = Dn2, e3.Polygon = mr, e3.Polyline = fr, e3.Popup = Fr, e3.PosAnimation = ln2, e3.Projection = Kn, e3.Rectangle = ti, e3.Renderer = qr, e3.SVG = $r, e3.SVGOverlay = Mr, e3.TileLayer = Ur, e3.Tooltip = Lr, e3.Transformation = le2, e3.Util = te2, e3.VideoOverlay = Ar, e3.bind = i2, e3.bounds = j2, e3.canvas = Yr, e3.circle = dr, e3.circleMarker = lr, e3.control = fn2, e3.divIcon = Br, e3.extend = n2, e3.featureGroup = er, e3.geoJSON = Er, e3.geoJson = Dr, e3.gridLayer = Hr, e3.icon = nr, e3.imageOverlay = kr, e3.latLng = F2, e3.latLngBounds = N2, e3.layerGroup = Qn, e3.map = un2, e3.marker = or, e3.point = k2, e3.polygon = hr, e3.polyline = pr, e3.popup = Ir, e3.rectangle = ni, e3.setOptions = p2, e3.stamp = o2, e3.svg = ei, e3.svgOverlay = Nr, e3.tileLayer = Wr, e3.tooltip = Rr, e3.transformation = ue2, e3.version = t3, e3.videoOverlay = jr;
       var di = window.L;
       e3.noConflict = function() {
         return window.L = di, this;
       }, window.L = e3;
     }));
   }));
-  function gn(e2, t2, n2) {
+  function _n(e2, t2, n2) {
     return Object.freeze({
       instance: e2,
       context: t2,
       container: n2
     });
   }
-  function _n(e2, t2) {
+  function vn(e2, t2) {
     return t2 == null ? function(t3, n2) {
       let r2 = (0, _.useRef)(void 0);
       return r2.current ||= e2(t3, n2), r2;
@@ -16712,7 +16759,7 @@ Error generating stack: ` + e4.message + `
       ]), i2;
     };
   }
-  function vn(e2, t2) {
+  function yn(e2, t2) {
     (0, _.useEffect)(function() {
       return (t2.layerContainer ?? t2.map).addLayer(e2.instance), function() {
         t2.layerContainer?.removeLayer(e2.instance), t2.map.removeLayer(e2.instance);
@@ -16722,13 +16769,13 @@ Error generating stack: ` + e4.message + `
       e2
     ]);
   }
-  function yn(e2) {
+  function bn(e2) {
     return function(t2) {
-      let n2 = cn(), r2 = e2(pn(t2, n2), n2);
-      return rn(n2.map, t2.attribution), fn(r2.current, t2.eventHandlers), vn(r2.current, n2), r2;
+      let n2 = ln(), r2 = e2(mn(t2, n2), n2);
+      return an(n2.map, t2.attribution), pn(r2.current, t2.eventHandlers), yn(r2.current, n2), r2;
     };
   }
-  function bn(e2, t2) {
+  function xn(e2, t2) {
     let n2 = (0, _.useRef)(void 0);
     (0, _.useEffect)(function() {
       if (t2.pathOptions !== n2.current) {
@@ -16740,33 +16787,33 @@ Error generating stack: ` + e4.message + `
       t2
     ]);
   }
-  function xn(e2) {
+  function Sn(e2) {
     return function(t2) {
-      let n2 = cn(), r2 = e2(pn(t2, n2), n2);
-      return fn(r2.current, t2.eventHandlers), vn(r2.current, n2), bn(r2.current, t2), r2;
+      let n2 = ln(), r2 = e2(mn(t2, n2), n2);
+      return pn(r2.current, t2.eventHandlers), yn(r2.current, n2), xn(r2.current, t2), r2;
     };
   }
-  function Sn(e2, t2) {
-    return q(yn(_n(e2, t2)));
-  }
   function Cn(e2, t2) {
-    return un(mn(_n(e2), t2));
+    return un(bn(vn(e2, t2)));
   }
   function wn(e2, t2) {
-    return q(xn(_n(e2, t2)));
+    return dn(hn(vn(e2), t2));
   }
   function Tn(e2, t2) {
-    return dn(yn(_n(e2, t2)));
+    return un(Sn(vn(e2, t2)));
   }
-  function En(e2, t2, n2) {
+  function En(e2, t2) {
+    return fn(bn(vn(e2, t2)));
+  }
+  function Dn(e2, t2, n2) {
     let { opacity: r2, zIndex: i2 } = t2;
     r2 != null && r2 !== n2.opacity && e2.setOpacity(r2), i2 != null && i2 !== n2.zIndex && e2.setZIndex(i2);
   }
-  function Dn() {
-    return cn().map;
+  function On() {
+    return ln().map;
   }
-  var On = c(hn(), 1);
-  function kn({ bounds: e2, boundsOptions: t2, center: n2, children: r2, className: i2, id: a2, placeholder: o2, style: s2, whenReady: c2, zoom: l2, ...u2 }, d2) {
+  var kn = c(gn(), 1);
+  function An({ bounds: e2, boundsOptions: t2, center: n2, children: r2, className: i2, id: a2, placeholder: o2, style: s2, whenReady: c2, zoom: l2, ...u2 }, d2) {
     let [f2] = (0, _.useState)({
       className: i2,
       id: a2,
@@ -16777,8 +16824,8 @@ Error generating stack: ` + e4.message + `
     ]);
     let g2 = (0, _.useCallback)((r3) => {
       if (r3 !== null && !h2.current) {
-        let i3 = new On.Map(r3, u2);
-        h2.current = i3, n2 != null && l2 != null ? i3.setView(n2, l2) : e2 != null && i3.fitBounds(e2, t2), c2 != null && i3.whenReady(c2), m2(an(i3));
+        let i3 = new kn.Map(r3, u2);
+        h2.current = i3, n2 != null && l2 != null ? i3.setView(n2, l2) : e2 != null && i3.fitBounds(e2, t2), c2 != null && i3.whenReady(c2), m2(on(i3));
       }
     }, []);
     (0, _.useEffect)(() => () => {
@@ -16786,7 +16833,7 @@ Error generating stack: ` + e4.message + `
     }, [
       p2
     ]);
-    let v2 = p2 ? _.createElement(sn, {
+    let v2 = p2 ? _.createElement(cn, {
       value: p2
     }, r2) : o2 ?? null;
     return _.createElement(`div`, {
@@ -16794,22 +16841,22 @@ Error generating stack: ` + e4.message + `
       ref: g2
     }, v2);
   }
-  var An = (0, _.forwardRef)(kn), jn = Sn(function({ position: e2, ...t2 }, n2) {
-    let r2 = new On.Marker(e2, t2);
-    return gn(r2, on(n2, {
+  var jn = (0, _.forwardRef)(An), Mn = Cn(function({ position: e2, ...t2 }, n2) {
+    let r2 = new kn.Marker(e2, t2);
+    return _n(r2, sn(n2, {
       overlayContainer: r2
     }));
   }, function(e2, t2, n2) {
     t2.position !== n2.position && e2.setLatLng(t2.position), t2.icon != null && t2.icon !== n2.icon && e2.setIcon(t2.icon), t2.zIndexOffset != null && t2.zIndexOffset !== n2.zIndexOffset && e2.setZIndexOffset(t2.zIndexOffset), t2.opacity != null && t2.opacity !== n2.opacity && e2.setOpacity(t2.opacity), e2.dragging != null && t2.draggable !== n2.draggable && (t2.draggable === true ? e2.dragging.enable() : e2.dragging.disable());
-  }), Mn = wn(function({ positions: e2, ...t2 }, n2) {
-    let r2 = new On.Polyline(e2, t2);
-    return gn(r2, on(n2, {
+  }), Nn = Tn(function({ positions: e2, ...t2 }, n2) {
+    let r2 = new kn.Polyline(e2, t2);
+    return _n(r2, sn(n2, {
       overlayContainer: r2
     }));
   }, function(e2, t2, n2) {
     t2.positions !== n2.positions && e2.setLatLngs(t2.positions);
-  }), Nn = Cn(function(e2, t2) {
-    return gn(new On.Popup(e2, t2.overlayContainer), t2);
+  }), Pn = wn(function(e2, t2) {
+    return _n(new kn.Popup(e2, t2.overlayContainer), t2);
   }, function(e2, t2, { position: n2 }, r2) {
     (0, _.useEffect)(function() {
       let { instance: i2 } = e2;
@@ -16834,15 +16881,15 @@ Error generating stack: ` + e4.message + `
       r2,
       n2
     ]);
-  }), Pn = Tn(function({ url: e2, ...t2 }, n2) {
-    return gn(new On.TileLayer(e2, pn(t2, n2)), n2);
+  }), Fn = En(function({ url: e2, ...t2 }, n2) {
+    return _n(new kn.TileLayer(e2, mn(t2, n2)), n2);
   }, function(e2, t2, n2) {
-    En(e2, t2, n2);
+    Dn(e2, t2, n2);
     let { url: r2 } = t2;
     r2 != null && r2 !== n2.url && e2.setUrl(r2);
   });
-  function Fn(e2, t2) {
-    return On.default.divIcon({
+  function In(e2, t2) {
+    return kn.default.divIcon({
       className: ``,
       html: `<div style="
       width:26px;height:26px;border-radius:50%;
@@ -16864,8 +16911,8 @@ Error generating stack: ` + e4.message + `
       ]
     });
   }
-  function In({ points: e2, fitKey: t2 }) {
-    let n2 = Dn();
+  function Ln({ points: e2, fitKey: t2 }) {
+    let n2 = On();
     return (0, _.useEffect)(() => {
       if (e2.length === 0) return;
       if (e2.length === 1) {
@@ -16875,7 +16922,7 @@ Error generating stack: ` + e4.message + `
         ], 13);
         return;
       }
-      let t3 = On.default.latLngBounds(e2.map((e3) => [
+      let t3 = kn.default.latLngBounds(e2.map((e3) => [
         e3.lat,
         e3.lng
       ]));
@@ -16890,39 +16937,43 @@ Error generating stack: ` + e4.message + `
       t2
     ]), null;
   }
-  function Ln() {
+  function Rn() {
     let { startLocation: e2, endLocation: t2, waypoints: n2, optimizedRoute: r2 } = B(Ft((e3) => ({
       startLocation: e3.startLocation,
       endLocation: e3.endLocation,
       waypoints: e3.waypoints,
       optimizedRoute: e3.optimizedRoute
     }))), i2 = (0, _.useMemo)(() => {
+      let i3 = new Set(n2.filter((e3) => e3.delivered).map((e3) => `${e3.lat},${e3.lng}`));
       if (r2) {
         let e3 = r2.orderedWaypoints, t3 = e3.length - 1;
-        return e3.map((e4, n3) => ({
-          point: e4,
-          label: String(n3 + 1),
-          color: n3 === 0 ? `#059669` : n3 === t3 ? `#e11d48` : `#2563eb`,
-          role: n3 === 0 ? `Start` : n3 === t3 ? `End` : `Stop ${n3 + 1}`
-        }));
+        return e3.map((e4, n3) => {
+          let r3 = i3.has(`${e4.lat},${e4.lng}`);
+          return {
+            point: e4,
+            label: String(n3 + 1),
+            color: r3 ? `#cbd5e1` : n3 === 0 ? `#059669` : n3 === t3 ? `#e11d48` : `#2563eb`,
+            role: r3 ? `Delivered` : n3 === 0 ? `Start` : n3 === t3 ? `End` : `Stop ${n3 + 1}`
+          };
+        });
       }
-      let i3 = [];
-      return e2 && i3.push({
+      let a3 = [];
+      return e2 && a3.push({
         point: e2,
         label: `S`,
         color: `#059669`,
         role: `Start`
-      }), n2.filter((e3) => !e3.delivered).forEach((e3, t3) => i3.push({
+      }), n2.filter((e3) => !e3.delivered).forEach((e3, t3) => a3.push({
         point: e3,
         label: String(t3 + 1),
         color: `#2563eb`,
         role: `Waypoint ${t3 + 1}`
-      })), t2 && i3.push({
+      })), t2 && a3.push({
         point: t2,
         label: `E`,
         color: `#e11d48`,
         role: `End`
-      }), i3;
+      }), a3;
     }, [
       r2,
       e2,
@@ -16936,7 +16987,7 @@ Error generating stack: ` + e4.message + `
     ]), o2 = (0, _.useMemo)(() => i2.map((e3) => e3.point), [
       i2
     ]), s2 = o2.map((e3) => `${e3.lat},${e3.lng}`).join(`|`);
-    return (0, V.jsxs)(An, {
+    return (0, V.jsxs)(jn, {
       center: [
         20,
         0
@@ -16945,17 +16996,17 @@ Error generating stack: ` + e4.message + `
       className: `h-full w-full`,
       scrollWheelZoom: true,
       children: [
-        (0, V.jsx)(Pn, {
+        (0, V.jsx)(Fn, {
           url: `https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png`,
           attribution: `\xA9 <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors`
         }),
-        i2.map((e3, t3) => (0, V.jsx)(jn, {
+        i2.map((e3, t3) => (0, V.jsx)(Mn, {
           position: [
             e3.point.lat,
             e3.point.lng
           ],
-          icon: Fn(e3.color, e3.label),
-          children: (0, V.jsxs)(Nn, {
+          icon: In(e3.color, e3.label),
+          children: (0, V.jsxs)(Pn, {
             children: [
               (0, V.jsx)(`strong`, {
                 children: e3.role
@@ -16965,7 +17016,7 @@ Error generating stack: ` + e4.message + `
             ]
           })
         }, `${e3.point.lat},${e3.point.lng},${t3}`)),
-        a2.length > 0 && (0, V.jsx)(Mn, {
+        a2.length > 0 && (0, V.jsx)(Nn, {
           positions: a2,
           pathOptions: {
             color: `#2563eb`,
@@ -16973,14 +17024,14 @@ Error generating stack: ` + e4.message + `
             opacity: 0.8
           }
         }),
-        (0, V.jsx)(In, {
+        (0, V.jsx)(Ln, {
           points: o2,
           fitKey: s2
         })
       ]
     });
   }
-  function Rn() {
+  function zn() {
     let e2 = B((e3) => e3.warmUp);
     return (0, _.useEffect)(() => {
       let t2 = setTimeout(() => e2(), 3e3);
@@ -16998,18 +17049,18 @@ Error generating stack: ` + e4.message + `
             (0, V.jsx)(Vt, {}),
             (0, V.jsx)(Gt, {}),
             (0, V.jsx)(G, {}),
-            (0, V.jsx)(tn, {}),
-            (0, V.jsx)(nn, {})
+            (0, V.jsx)(nn, {}),
+            (0, V.jsx)(rn, {})
           ]
         }),
         (0, V.jsx)(`main`, {
           className: `relative flex-1`,
-          children: (0, V.jsx)(Ln, {})
+          children: (0, V.jsx)(Rn, {})
         })
       ]
     });
   }
   (0, v.createRoot)(document.getElementById(`root`)).render((0, V.jsx)(_.StrictMode, {
-    children: (0, V.jsx)(Rn, {})
+    children: (0, V.jsx)(zn, {})
   }));
 })();
