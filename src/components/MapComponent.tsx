@@ -63,15 +63,34 @@ export function MapComponent() {
   //    numbered by visiting order — works whether or not start/end were fixed.
   //  - without a route: the preview — start (green), end (red), candidates (blue).
   const markers = useMemo(() => {
+    const deliveredKeys = new Set(
+      waypoints.filter((w) => w.delivered).map((w) => `${w.lat},${w.lng}`),
+    )
     if (optimizedRoute) {
       const seq = optimizedRoute.orderedWaypoints
       const last = seq.length - 1
-      return seq.map((point, i) => ({
-        point,
-        label: String(i + 1),
-        color: i === 0 ? '#059669' : i === last ? '#e11d48' : '#2563eb',
-        role: i === 0 ? 'Start' : i === last ? 'End' : `Stop ${i + 1}`,
-      }))
+      return seq.map((point, i) => {
+        const done = deliveredKeys.has(`${point.lat},${point.lng}`)
+        return {
+          point,
+          label: String(i + 1),
+          // Delivered stops fade to grey; the rest keep start/stop/end colors.
+          color: done
+            ? '#cbd5e1'
+            : i === 0
+              ? '#059669'
+              : i === last
+                ? '#e11d48'
+                : '#2563eb',
+          role: done
+            ? 'Delivered'
+            : i === 0
+              ? 'Start'
+              : i === last
+                ? 'End'
+                : `Stop ${i + 1}`,
+        }
+      })
     }
     const list: { point: LatLng; label: string; color: string; role: string }[] = []
     if (startLocation)

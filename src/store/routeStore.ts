@@ -81,11 +81,17 @@ export const useRouteStore = create<RouteState>()(
           ),
         })),
       markDeliveredByCoord: (lat, lng) =>
-        set((s) => ({
-          waypoints: s.waypoints.map((w) =>
-            w.lat === lat && w.lng === lng ? { ...w, delivered: true } : w,
-          ),
-        })),
+        set((s) => {
+          const match = (p: LatLng | null) => !!p && p.lat === lat && p.lng === lng
+          return {
+            waypoints: s.waypoints.map((w) =>
+              w.lat === lat && w.lng === lng ? { ...w, delivered: true } : w,
+            ),
+            // Completing the stop that was the start/end releases that anchor.
+            startLocation: match(s.startLocation) ? null : s.startLocation,
+            endLocation: match(s.endLocation) ? null : s.endLocation,
+          }
+        }),
       restoreStop: (id) =>
         set((s) => ({
           waypoints: s.waypoints.map((w) =>
