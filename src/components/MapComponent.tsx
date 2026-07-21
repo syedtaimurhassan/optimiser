@@ -110,22 +110,22 @@ export function MapComponent() {
     })
 
     if (optimizedRoute) {
-      const seq = optimizedRoute.orderedWaypoints.filter(
-        (p) => stopByKey.has(ckey(p)) || isAnchor(p),
-      )
-      const remainingKeys = seq
-        .filter((p) => {
-          const st = stopByKey.get(ckey(p))
-          return st ? !st.delivered : isAnchor(p)
+      // Each entry keeps its stable route position (`seq`); removed stops drop out.
+      const entries = optimizedRoute.orderedWaypoints
+        .map((point, idx) => ({ point, seq: idx + 1 }))
+        .filter(({ point }) => stopByKey.has(ckey(point)) || isAnchor(point))
+      const remainingKeys = entries
+        .filter(({ point }) => {
+          const st = stopByKey.get(ckey(point))
+          return st ? !st.delivered : isAnchor(point)
         })
-        .map(ckey)
+        .map(({ point }) => ckey(point))
       const currentKey = remainingKeys[0]
       const lastKey = remainingKeys[remainingKeys.length - 1]
 
-      return seq.map((point) => {
+      return entries.map(({ point, seq }) => {
         const k = ckey(point)
         const st = stopByKey.get(k)
-        const label = st ? String(st.num) : sameCoord(startLocation, point) ? 'S' : 'E'
         const color = st?.delivered
           ? '#cbd5e1'
           : k === currentKey
@@ -140,7 +140,9 @@ export function MapComponent() {
             : k === lastKey
               ? 'Last'
               : 'Stop'
-        return mk(point, label, color, role)
+        // Marker label = delivery sequence (route position); the popup shows the
+        // stable stop identity (#num).
+        return mk(point, String(seq), color, role)
       })
     }
 
