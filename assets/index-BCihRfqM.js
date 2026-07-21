@@ -2089,18 +2089,18 @@ Error generating stack: ` + e4.message + `
     })), In2 = dn2(h2({}, fn2, {
       newState: 0,
       oldState: 0
-    })), Ln = [
+    })), Ln2 = [
       9,
       13,
       27,
       32
-    ], Rn = tn2 && `CompositionEvent` in window, zn = null;
+    ], Rn2 = tn2 && `CompositionEvent` in window, zn = null;
     tn2 && `documentMode` in document && (zn = document.documentMode);
-    var Bn = tn2 && `TextEvent` in window && !zn, Vn = tn2 && (!Rn || zn && 8 < zn && 11 >= zn), Hn = ` `, Un = false;
+    var Bn = tn2 && `TextEvent` in window && !zn, Vn = tn2 && (!Rn2 || zn && 8 < zn && 11 >= zn), Hn = ` `, Un = false;
     function Wn(e3, t3) {
       switch (e3) {
         case `keyup`:
-          return Ln.indexOf(t3.keyCode) !== -1;
+          return Ln2.indexOf(t3.keyCode) !== -1;
         case `keydown`:
           return t3.keyCode !== 229;
         case `keypress`:
@@ -2128,7 +2128,7 @@ Error generating stack: ` + e4.message + `
       }
     }
     function Jn(e3, t3) {
-      if (Kn) return e3 === `compositionend` || !Rn && Wn(e3, t3) ? (e3 = cn2(), sn2 = on2 = an2 = null, Kn = false, e3) : null;
+      if (Kn) return e3 === `compositionend` || !Rn2 && Wn(e3, t3) ? (e3 = cn2(), sn2 = on2 = an2 = null, Kn = false, e3) : null;
       switch (e3) {
         case `paste`:
           return null;
@@ -7022,7 +7022,7 @@ Error generating stack: ` + e4.message + `
               Er(s4, n3, i4);
           }
           var b3;
-          if (Rn) b: {
+          if (Rn2) b: {
             switch (e3) {
               case `compositionstart`:
                 var x3 = `onCompositionStart`;
@@ -10075,6 +10075,12 @@ Error generating stack: ` + e4.message + `
         delivered: false
       } : e4)
     })),
+    restoreAll: () => e2((e3) => ({
+      waypoints: e3.waypoints.map((e4) => e4.delivered ? {
+        ...e4,
+        delivered: false
+      } : e4)
+    })),
     setTargetK: (t3) => e2({
       targetK: t3
     }),
@@ -11007,81 +11013,101 @@ Error generating stack: ` + e4.message + `
     };
   }
   var It = (e2, t2) => !!e2 && e2.lat === t2.lat && e2.lng === t2.lng;
-  function Lt() {
-    let { waypoints: e2, startLocation: t2, endLocation: n2 } = B(Ft((e3) => ({
-      waypoints: e3.waypoints,
-      startLocation: e3.startLocation,
-      endLocation: e3.endLocation
-    }))), r2 = B((e3) => e3.removeWaypoint), i2 = B((e3) => e3.markDelivered), a2 = B((e3) => e3.setStart), o2 = B((e3) => e3.setEnd), s2 = (0, _.useMemo)(() => e2.filter((e3) => !e3.delivered), [
-      e2
-    ]);
-    return s2.length === 0 ? (0, V.jsx)(`p`, {
-      className: `text-xs text-slate-400`,
-      children: `No active stops. Upload a CSV/JSON file above.`
-    }) : (0, V.jsx)(`ul`, {
-      className: `max-h-72 divide-y divide-slate-100 overflow-y-auto rounded-md border border-slate-200`,
-      children: s2.map((e3, s3) => {
-        let c2 = It(t2, e3), l2 = It(n2, e3);
-        return (0, V.jsxs)(`li`, {
-          className: `flex items-center gap-1.5 px-2 py-2 text-sm`,
+  function Lt({ onClick: e2, danger: t2, children: n2 }) {
+    return (0, V.jsx)(`button`, {
+      onClick: e2,
+      className: `rounded-md border px-2 py-1 text-xs font-medium transition-colors ${t2 ? `border-red-200 text-red-600 hover:bg-red-50` : `border-slate-300 text-slate-600 hover:bg-slate-100`}`,
+      children: n2
+    });
+  }
+  function Rt({ stop: e2, index: t2 }) {
+    let [n2, r2] = (0, _.useState)(false), i2 = B((e3) => e3.startLocation), a2 = B((e3) => e3.endLocation), o2 = B((e3) => e3.setStart), s2 = B((e3) => e3.setEnd), c2 = B((e3) => e3.markDelivered), l2 = B((e3) => e3.removeWaypoint), u2 = It(i2, e2), d2 = It(a2, e2), f2 = {
+      lat: e2.lat,
+      lng: e2.lng
+    }, p2 = () => r2(false);
+    return (0, V.jsxs)(`li`, {
+      className: `text-sm`,
+      children: [
+        (0, V.jsxs)(`div`, {
+          className: `flex items-center gap-2 px-2 py-2`,
           children: [
-            (0, V.jsx)(`button`, {
-              onClick: () => i2(e3.id),
-              title: `Mark delivered`,
-              className: `shrink-0 rounded-full border border-slate-300 px-1.5 text-xs text-slate-400 hover:border-emerald-500 hover:text-emerald-600`,
-              children: `\u2713`
-            }),
             (0, V.jsxs)(`span`, {
               className: `min-w-0 flex-1 truncate text-slate-600`,
               children: [
                 (0, V.jsxs)(`span`, {
                   className: `mr-1 text-slate-400`,
                   children: [
-                    s3 + 1,
+                    t2 + 1,
                     `.`
                   ]
                 }),
-                Ct(e3)
+                Ct(e2)
               ]
             }),
-            c2 && (0, V.jsx)(`span`, {
-              className: `rounded bg-emerald-100 px-1 py-0.5 text-[10px] font-semibold text-emerald-700`,
+            u2 && (0, V.jsx)(`span`, {
+              className: `rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700`,
               children: `START`
             }),
-            l2 && (0, V.jsx)(`span`, {
-              className: `rounded bg-rose-100 px-1 py-0.5 text-[10px] font-semibold text-rose-700`,
+            d2 && (0, V.jsx)(`span`, {
+              className: `rounded bg-rose-100 px-1.5 py-0.5 text-[10px] font-semibold text-rose-700`,
               children: `END`
             }),
-            !c2 && (0, V.jsx)(`button`, {
-              onClick: () => a2({
-                lat: e3.lat,
-                lng: e3.lng
-              }),
-              title: `Set as start`,
-              className: `text-[11px] text-slate-400 hover:text-emerald-600`,
-              children: `start`
-            }),
-            !l2 && (0, V.jsx)(`button`, {
-              onClick: () => o2({
-                lat: e3.lat,
-                lng: e3.lng
-              }),
-              title: `Set as end`,
-              className: `text-[11px] text-slate-400 hover:text-rose-600`,
-              children: `end`
-            }),
             (0, V.jsx)(`button`, {
-              onClick: () => r2(e3.id),
-              "aria-label": `Remove stop`,
-              className: `shrink-0 text-slate-300 hover:text-red-500`,
-              children: `\u2715`
+              onClick: () => r2((e3) => !e3),
+              "aria-label": `Stop actions`,
+              "aria-expanded": n2,
+              className: `shrink-0 rounded px-1.5 text-base leading-none ${n2 ? `bg-slate-200 text-slate-700` : `text-slate-400 hover:bg-slate-100`}`,
+              children: `\u22EE`
             })
           ]
-        }, e3.id);
-      })
+        }),
+        n2 && (0, V.jsxs)(`div`, {
+          className: `flex flex-wrap gap-1.5 border-t border-slate-100 bg-slate-50 px-2 py-2`,
+          children: [
+            u2 ? (0, V.jsx)(Lt, {
+              onClick: () => (o2(null), p2()),
+              children: `Unset start`
+            }) : (0, V.jsx)(Lt, {
+              onClick: () => (o2(f2), p2()),
+              children: `Set as start`
+            }),
+            d2 ? (0, V.jsx)(Lt, {
+              onClick: () => (s2(null), p2()),
+              children: `Unset end`
+            }) : (0, V.jsx)(Lt, {
+              onClick: () => (s2(f2), p2()),
+              children: `Set as end`
+            }),
+            (0, V.jsx)(Lt, {
+              onClick: () => (c2(e2.id), p2()),
+              children: `\u2713 Mark delivered`
+            }),
+            (0, V.jsx)(Lt, {
+              danger: true,
+              onClick: () => l2(e2.id),
+              children: `Remove`
+            })
+          ]
+        })
+      ]
     });
   }
-  function Rt() {
+  function zt() {
+    let e2 = B(Ft((e3) => e3.waypoints)), t2 = (0, _.useMemo)(() => e2.filter((e3) => !e3.delivered), [
+      e2
+    ]);
+    return t2.length === 0 ? (0, V.jsx)(`p`, {
+      className: `text-xs text-slate-400`,
+      children: `No active stops. Upload a CSV/JSON file above.`
+    }) : (0, V.jsx)(`ul`, {
+      className: `max-h-72 divide-y divide-slate-100 overflow-y-auto rounded-md border border-slate-200`,
+      children: t2.map((e3, t3) => (0, V.jsx)(Rt, {
+        stop: e3,
+        index: t3
+      }, e3.id))
+    });
+  }
+  function Bt() {
     let e2 = B((e3) => e3.waypoints.filter((e4) => !e4.delivered).length), t2 = B((e3) => e3.clearWaypoints);
     return (0, V.jsxs)(U, {
       title: `Stops`,
@@ -11103,38 +11129,54 @@ Error generating stack: ` + e4.message + `
             })
           ]
         }),
-        (0, V.jsx)(Lt, {})
+        (0, V.jsx)(zt, {})
       ]
     });
   }
-  function zt() {
-    let e2 = B((e3) => e3.waypoints), t2 = B((e3) => e3.restoreStop), n2 = (0, _.useMemo)(() => e2.filter((e3) => e3.delivered), [
+  function Vt() {
+    let e2 = B((e3) => e3.waypoints), t2 = B((e3) => e3.restoreStop), n2 = B((e3) => e3.restoreAll), r2 = (0, _.useMemo)(() => e2.filter((e3) => e3.delivered), [
       e2
     ]);
-    return n2.length === 0 ? null : (0, V.jsx)(U, {
+    return r2.length === 0 ? null : (0, V.jsxs)(U, {
       title: `Delivered`,
-      badge: n2.length,
-      children: (0, V.jsx)(`ul`, {
-        className: `divide-y divide-slate-100 rounded-md border border-slate-200`,
-        children: n2.map((e3) => (0, V.jsxs)(`li`, {
-          className: `flex items-center gap-2 px-3 py-2 text-sm`,
+      badge: r2.length,
+      children: [
+        (0, V.jsxs)(`div`, {
+          className: `flex items-center justify-between`,
           children: [
             (0, V.jsx)(`span`, {
-              className: `min-w-0 flex-1 truncate text-slate-400 line-through`,
-              children: Ct(e3)
+              className: `text-xs text-slate-400`,
+              children: `Done stops \u2014 excluded from routing.`
             }),
             (0, V.jsx)(`button`, {
-              onClick: () => t2(e3.id),
-              title: `Put back on the active list`,
-              className: `shrink-0 rounded-md border border-slate-300 px-2 py-0.5 text-xs text-slate-600 hover:border-blue-400 hover:text-blue-600`,
-              children: `\u21A9 Restore`
+              onClick: n2,
+              className: `text-xs font-medium text-blue-600 hover:text-blue-700`,
+              children: `\u21A9 Restore all`
             })
           ]
-        }, e3.id))
-      })
+        }),
+        (0, V.jsx)(`ul`, {
+          className: `divide-y divide-slate-100 rounded-md border border-slate-200`,
+          children: r2.map((e3) => (0, V.jsxs)(`li`, {
+            className: `flex items-center gap-2 px-3 py-2 text-sm`,
+            children: [
+              (0, V.jsx)(`span`, {
+                className: `min-w-0 flex-1 truncate text-slate-400 line-through`,
+                children: Ct(e3)
+              }),
+              (0, V.jsx)(`button`, {
+                onClick: () => t2(e3.id),
+                title: `Put back on the active list`,
+                className: `shrink-0 rounded-md border border-slate-300 px-2 py-0.5 text-xs text-slate-600 hover:border-blue-400 hover:text-blue-600`,
+                children: `\u21A9 Restore`
+              })
+            ]
+          }, e3.id))
+        })
+      ]
     });
   }
-  function Bt({ field: e2, label: t2, accentClass: n2 = `bg-blue-600` }) {
+  function Ht({ field: e2, label: t2, accentClass: n2 = `bg-blue-600` }) {
     let r2 = B((t3) => e2 === `start` ? t3.startLocation : t3.endLocation), i2 = B((t3) => e2 === `start` ? t3.setStart : t3.setEnd), [a2, o2] = (0, _.useState)(``), [s2, c2] = (0, _.useState)(``), [l2, u2] = (0, _.useState)(null);
     function d2(e3) {
       e3.preventDefault();
@@ -11208,7 +11250,7 @@ Error generating stack: ` + e4.message + `
       ]
     });
   }
-  function Vt() {
+  function Ut() {
     let e2 = B((e3) => e3.targetK), t2 = B((e3) => e3.waypoints.filter((e4) => !e4.delivered).length), n2 = B((e3) => e3.setTargetK), r2 = e2 !== null && t2 > 0 && e2 > t2;
     function i2(e3) {
       if (e3 === ``) {
@@ -11244,7 +11286,7 @@ Error generating stack: ` + e4.message + `
       ]
     });
   }
-  function Ht() {
+  function Wt() {
     let e2 = B((e3) => e3.objective), t2 = B((e3) => e3.setObjective);
     return (0, V.jsxs)(`div`, {
       className: `space-y-1`,
@@ -11273,7 +11315,7 @@ Error generating stack: ` + e4.message + `
       ]
     });
   }
-  function Ut() {
+  function Gt() {
     return (0, V.jsxs)(U, {
       title: `Route options`,
       children: [
@@ -11281,22 +11323,22 @@ Error generating stack: ` + e4.message + `
           className: `text-xs text-slate-400`,
           children: `Start & end are optional \u2014 leave blank for an open route, type coordinates, or pick a stop from the list.`
         }),
-        (0, V.jsx)(Bt, {
+        (0, V.jsx)(Ht, {
           field: `start`,
           label: `Start`,
           accentClass: `bg-emerald-600`
         }),
-        (0, V.jsx)(Bt, {
+        (0, V.jsx)(Ht, {
           field: `end`,
           label: `End`,
           accentClass: `bg-rose-600`
         }),
-        (0, V.jsx)(Vt, {}),
-        (0, V.jsx)(Ht, {})
+        (0, V.jsx)(Ut, {}),
+        (0, V.jsx)(Wt, {})
       ]
     });
   }
-  function Wt() {
+  function G() {
     let e2 = B((e3) => e3.isCalculating), t2 = B((e3) => e3.calcStatus), n2 = B((e3) => e3.routeError), r2 = B((e3) => e3.solverReady), i2 = B((e3) => e3.waypoints.filter((e4) => !e4.delivered).length + +!!e3.startLocation + +!!e3.endLocation), a2 = B((e3) => e3.calculateRoute), o2 = i2 >= 2;
     return (0, V.jsxs)(`section`, {
       className: `space-y-2`,
@@ -11321,14 +11363,14 @@ Error generating stack: ` + e4.message + `
       ]
     });
   }
-  function Gt(e2) {
+  function Kt(e2) {
     return e2 >= 1e3 ? `${(e2 / 1e3).toFixed(1)} km` : `${Math.round(e2)} m`;
   }
-  function G(e2) {
+  function K(e2) {
     let t2 = Math.round(e2 / 60);
     return t2 < 60 ? `${t2} min` : `${Math.floor(t2 / 60)} h ${t2 % 60} min`;
   }
-  function Kt({ route: e2 }) {
+  function qt({ route: e2 }) {
     return (0, V.jsxs)(`div`, {
       className: `space-y-2 rounded-md border border-blue-200 bg-blue-50 p-3`,
       children: [
@@ -11345,7 +11387,7 @@ Error generating stack: ` + e4.message + `
                   className: `font-semibold text-slate-800`,
                   children: [
                     e2.estimated ? `~` : ``,
-                    Gt(e2.distanceMeters)
+                    Kt(e2.distanceMeters)
                   ]
                 })
               ]
@@ -11360,7 +11402,7 @@ Error generating stack: ` + e4.message + `
                   className: `font-semibold text-slate-800`,
                   children: [
                     e2.estimated ? `~` : ``,
-                    G(e2.durationSeconds)
+                    K(e2.durationSeconds)
                   ]
                 })
               ]
@@ -11386,36 +11428,36 @@ Error generating stack: ` + e4.message + `
       ]
     });
   }
-  var K = `https://www.google.com/maps`;
-  function qt(e2) {
+  var Jt = `https://www.google.com/maps`;
+  function Yt(e2) {
     return `${e2.lat},${e2.lng}`;
   }
-  function Jt(e2) {
-    return `${K}/search/?${new URLSearchParams({
+  function Xt(e2) {
+    return `${Jt}/search/?${new URLSearchParams({
       api: `1`,
-      query: qt(e2)
+      query: Yt(e2)
     }).toString()}`;
   }
-  function Yt(e2) {
+  function Zt(e2) {
     if (e2.length < 2) return [];
     let t2 = [];
     for (let n2 = 0; n2 < e2.length - 1; n2 += 10) {
       let r2 = e2.slice(n2, n2 + 10 + 1), i2 = r2[0], a2 = r2[r2.length - 1], o2 = r2.slice(1, -1), s2 = new URLSearchParams({
         api: `1`,
-        origin: qt(i2),
-        destination: qt(a2),
+        origin: Yt(i2),
+        destination: Yt(a2),
         travelmode: `driving`
       });
-      o2.length > 0 && s2.set(`waypoints`, o2.map(qt).join(`|`)), t2.push({
-        url: `${K}/dir/?${s2.toString()}`,
+      o2.length > 0 && s2.set(`waypoints`, o2.map(Yt).join(`|`)), t2.push({
+        url: `${Jt}/dir/?${s2.toString()}`,
         fromIndex: n2,
         toIndex: n2 + r2.length - 1
       });
     }
     return t2;
   }
-  var Xt = (e2) => `${e2.lat},${e2.lng}`;
-  function Zt({ n: e2, color: t2 }) {
+  var Qt = (e2) => `${e2.lat},${e2.lng}`;
+  function $t({ n: e2, color: t2 }) {
     return (0, V.jsx)(`span`, {
       className: `flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white`,
       style: {
@@ -11424,8 +11466,8 @@ Error generating stack: ` + e4.message + `
       children: e2
     });
   }
-  function Qt({ route: e2 }) {
-    let t2 = e2.orderedWaypoints, n2 = Yt(t2), r2 = B((e3) => e3.waypoints), i2 = B((e3) => e3.markDeliveredByCoord), a2 = (0, _.useMemo)(() => new Set(r2.filter((e3) => e3.delivered).map(Xt)), [
+  function en({ route: e2 }) {
+    let t2 = e2.orderedWaypoints, n2 = Zt(t2), r2 = B((e3) => e3.waypoints), i2 = B((e3) => e3.markDeliveredByCoord), a2 = (0, _.useMemo)(() => new Set(r2.filter((e3) => e3.delivered).map(Qt)), [
       r2
     ]), o2 = `block rounded-md bg-emerald-600 px-3 py-2 text-center text-sm font-semibold text-white transition-colors hover:bg-emerald-700`;
     return (0, V.jsxs)(`div`, {
@@ -11474,7 +11516,7 @@ Error generating stack: ` + e4.message + `
         (0, V.jsx)(`ol`, {
           className: `divide-y divide-slate-100 overflow-hidden rounded-md border border-slate-200`,
           children: t2.map((e3, n3) => {
-            let r3 = n3 === 0, o3 = n3 === t2.length - 1, s2 = r3 ? `#059669` : o3 ? `#e11d48` : `#2563eb`, c2 = r3 ? `Start` : o3 ? `End` : `Stop ${n3 + 1}`, l2 = a2.has(Xt(e3));
+            let r3 = n3 === 0, o3 = n3 === t2.length - 1, s2 = r3 ? `#059669` : o3 ? `#e11d48` : `#2563eb`, c2 = r3 ? `Start` : o3 ? `End` : `Stop ${n3 + 1}`, l2 = a2.has(Qt(e3));
             return (0, V.jsxs)(`li`, {
               className: `flex items-center gap-2 px-2 py-2 text-sm`,
               children: [
@@ -11485,7 +11527,7 @@ Error generating stack: ` + e4.message + `
                   className: `flex h-5 w-5 shrink-0 items-center justify-center rounded-full border text-[11px] ${l2 ? `border-emerald-500 bg-emerald-500 text-white` : `border-slate-300 text-transparent hover:border-emerald-500 hover:text-emerald-500`}`,
                   children: `\u2713`
                 }),
-                (0, V.jsx)(Zt, {
+                (0, V.jsx)($t, {
                   n: n3 + 1,
                   color: l2 ? `#94a3b8` : s2
                 }),
@@ -11503,7 +11545,7 @@ Error generating stack: ` + e4.message + `
                   ]
                 }),
                 (0, V.jsx)(`a`, {
-                  href: Jt(e3),
+                  href: Xt(e3),
                   target: `_blank`,
                   rel: `noopener noreferrer`,
                   className: `shrink-0 rounded-md border border-slate-300 px-2 py-1 text-xs text-slate-600 hover:border-blue-400 hover:text-blue-600`,
@@ -11516,7 +11558,7 @@ Error generating stack: ` + e4.message + `
       ]
     });
   }
-  function $t() {
+  function tn() {
     let e2 = B((e3) => e3.optimizedRoute);
     return e2 ? (0, V.jsxs)(`section`, {
       className: `space-y-2`,
@@ -11533,16 +11575,16 @@ Error generating stack: ` + e4.message + `
             `.`
           ]
         }),
-        (0, V.jsx)(Kt, {
+        (0, V.jsx)(qt, {
           route: e2
         }),
-        (0, V.jsx)(Qt, {
+        (0, V.jsx)(en, {
           route: e2
         })
       ]
     }) : null;
   }
-  function en() {
+  function nn() {
     let e2 = B(Ft((e3) => e3.favorites)), t2 = B((e3) => !!(e3.startLocation || e3.endLocation || e3.waypoints.length > 0)), n2 = B((e3) => e3.saveFavorite), r2 = B((e3) => e3.loadFavorite), i2 = B((e3) => e3.deleteFavorite), [a2, o2] = (0, _.useState)(``);
     function s2() {
       n2(a2), o2(``);
@@ -11605,7 +11647,7 @@ Error generating stack: ` + e4.message + `
       ]
     });
   }
-  function tn(e2, t2) {
+  function rn(e2, t2) {
     let n2 = (0, _.useRef)(t2);
     (0, _.useEffect)(function() {
       t2 !== n2.current && e2.attributionControl != null && (n2.current != null && e2.attributionControl.removeAttribution(n2.current), t2 != null && e2.attributionControl.addAttribution(t2)), n2.current = t2;
@@ -11614,37 +11656,37 @@ Error generating stack: ` + e4.message + `
       t2
     ]);
   }
-  function nn(e2) {
+  function an(e2) {
     return Object.freeze({
       __version: 1,
       map: e2
     });
   }
-  function rn(e2, t2) {
+  function on(e2, t2) {
     return Object.freeze({
       ...e2,
       ...t2
     });
   }
-  var an = (0, _.createContext)(null);
-  function on() {
-    let e2 = (0, _.use)(an);
+  var sn = (0, _.createContext)(null);
+  function cn() {
+    let e2 = (0, _.use)(sn);
     if (e2 == null) throw Error(`No context provided: useLeafletContext() can only be used in a descendant of <MapContainer>`);
     return e2;
   }
-  var sn = m();
-  function cn(e2) {
+  var ln = m();
+  function q(e2) {
     function t2(t3, n2) {
       let { instance: r2, context: i2 } = e2(t3).current;
       (0, _.useImperativeHandle)(n2, () => r2);
       let { children: a2 } = t3;
-      return a2 == null ? null : _.createElement(an, {
+      return a2 == null ? null : _.createElement(sn, {
         value: i2
       }, a2);
     }
     return (0, _.forwardRef)(t2);
   }
-  function ln(e2) {
+  function un(e2) {
     function t2(t3, n2) {
       let [r2, i2] = (0, _.useState)(false), { instance: a2 } = e2(t3, i2).current;
       (0, _.useImperativeHandle)(n2, () => a2), (0, _.useEffect)(function() {
@@ -11655,18 +11697,18 @@ Error generating stack: ` + e4.message + `
         t3.children
       ]);
       let o2 = a2._contentNode;
-      return o2 ? (0, sn.createPortal)(t3.children, o2) : null;
+      return o2 ? (0, ln.createPortal)(t3.children, o2) : null;
     }
     return (0, _.forwardRef)(t2);
   }
-  function q(e2) {
+  function dn(e2) {
     function t2(t3, n2) {
       let { instance: r2 } = e2(t3).current;
       return (0, _.useImperativeHandle)(n2, () => r2), null;
     }
     return (0, _.forwardRef)(t2);
   }
-  function un(e2, t2) {
+  function fn(e2, t2) {
     let n2 = (0, _.useRef)(void 0);
     (0, _.useEffect)(function() {
       return t2 != null && e2.instance.on(t2), n2.current = t2, function() {
@@ -11677,20 +11719,20 @@ Error generating stack: ` + e4.message + `
       t2
     ]);
   }
-  function dn(e2, t2) {
+  function pn(e2, t2) {
     let n2 = e2.pane ?? t2.pane;
     return n2 ? {
       ...e2,
       pane: n2
     } : e2;
   }
-  function fn(e2, t2) {
+  function mn(e2, t2) {
     return function(n2, r2) {
-      let i2 = on(), a2 = e2(dn(n2, i2), i2);
-      return tn(i2.map, n2.attribution), un(a2.current, n2.eventHandlers), t2(a2.current, i2, n2, r2), a2;
+      let i2 = cn(), a2 = e2(pn(n2, i2), i2);
+      return rn(i2.map, n2.attribution), fn(a2.current, n2.eventHandlers), t2(a2.current, i2, n2, r2), a2;
     };
   }
-  var pn = o(((e2, t2) => {
+  var hn = o(((e2, t2) => {
     (function(n2, r2) {
       typeof e2 == `object` && t2 !== void 0 ? r2(e2) : typeof define == `function` && define.amd ? define([
         `exports`
@@ -13769,9 +13811,9 @@ Error generating stack: ` + e4.message + `
           2,
           8
         ], a3, o3, s3, c3, l3, u3, d3, f3;
-        for (a3 = 0, u3 = e4.length; a3 < u3; a3++) e4[a3]._code = Ln(e4[a3], t4);
+        for (a3 = 0, u3 = e4.length; a3 < u3; a3++) e4[a3]._code = Ln2(e4[a3], t4);
         for (s3 = 0; s3 < 4; s3++) {
-          for (d3 = i3[s3], r3 = [], a3 = 0, u3 = e4.length, o3 = u3 - 1; a3 < u3; o3 = a3++) c3 = e4[a3], l3 = e4[o3], c3._code & d3 ? l3._code & d3 || (f3 = In2(l3, c3, d3, t4, n3), f3._code = Ln(f3, t4), r3.push(f3)) : (l3._code & d3 && (f3 = In2(l3, c3, d3, t4, n3), f3._code = Ln(f3, t4), r3.push(f3)), r3.push(c3));
+          for (d3 = i3[s3], r3 = [], a3 = 0, u3 = e4.length, o3 = u3 - 1; a3 < u3; o3 = a3++) c3 = e4[a3], l3 = e4[o3], c3._code & d3 ? l3._code & d3 || (f3 = In2(l3, c3, d3, t4, n3), f3._code = Ln2(f3, t4), r3.push(f3)) : (l3._code & d3 && (f3 = In2(l3, c3, d3, t4, n3), f3._code = Ln2(f3, t4), r3.push(f3)), r3.push(c3));
           e4 = r3;
         }
         return e4;
@@ -13846,30 +13888,30 @@ Error generating stack: ` + e4.message + `
       function Nn2(e4, t4) {
         for (var n3 = [
           e4[0]
-        ], r3 = 1, i3 = 0, a3 = e4.length; r3 < a3; r3++) Rn(e4[r3], e4[i3]) > t4 && (n3.push(e4[r3]), i3 = r3);
+        ], r3 = 1, i3 = 0, a3 = e4.length; r3 < a3; r3++) Rn2(e4[r3], e4[i3]) > t4 && (n3.push(e4[r3]), i3 = r3);
         return i3 < a3 - 1 && n3.push(e4[a3 - 1]), n3;
       }
       var Pn2;
       function Fn2(e4, t4, n3, r3, i3) {
-        var a3 = r3 ? Pn2 : Ln(e4, n3), o3 = Ln(t4, n3), s3, c3, l3;
+        var a3 = r3 ? Pn2 : Ln2(e4, n3), o3 = Ln2(t4, n3), s3, c3, l3;
         for (Pn2 = o3; ; ) {
           if (!(a3 | o3)) return [
             e4,
             t4
           ];
           if (a3 & o3) return false;
-          s3 = a3 || o3, c3 = In2(e4, t4, s3, n3, i3), l3 = Ln(c3, n3), s3 === a3 ? (e4 = c3, a3 = l3) : (t4 = c3, o3 = l3);
+          s3 = a3 || o3, c3 = In2(e4, t4, s3, n3, i3), l3 = Ln2(c3, n3), s3 === a3 ? (e4 = c3, a3 = l3) : (t4 = c3, o3 = l3);
         }
       }
       function In2(e4, t4, n3, r3, i3) {
         var a3 = t4.x - e4.x, o3 = t4.y - e4.y, s3 = r3.min, c3 = r3.max, l3, u3;
         return n3 & 8 ? (l3 = e4.x + a3 * (c3.y - e4.y) / o3, u3 = c3.y) : n3 & 4 ? (l3 = e4.x + a3 * (s3.y - e4.y) / o3, u3 = s3.y) : n3 & 2 ? (l3 = c3.x, u3 = e4.y + o3 * (c3.x - e4.x) / a3) : n3 & 1 && (l3 = s3.x, u3 = e4.y + o3 * (s3.x - e4.x) / a3), new O2(l3, u3, i3);
       }
-      function Ln(e4, t4) {
+      function Ln2(e4, t4) {
         var n3 = 0;
         return e4.x < t4.min.x ? n3 |= 1 : e4.x > t4.max.x && (n3 |= 2), e4.y < t4.min.y ? n3 |= 4 : e4.y > t4.max.y && (n3 |= 8), n3;
       }
-      function Rn(e4, t4) {
+      function Rn2(e4, t4) {
         var n3 = t4.x - e4.x, r3 = t4.y - e4.y;
         return n3 * n3 + r3 * r3;
       }
@@ -13922,7 +13964,7 @@ Error generating stack: ` + e4.message + `
         closestPointOnSegment: An2,
         clipSegment: Fn2,
         _getEdgeIntersection: In2,
-        _getBitCode: Ln,
+        _getBitCode: Ln2,
         _sqClosestPointOnSegment: zn,
         isFlat: Bn,
         _flat: Vn,
@@ -16646,14 +16688,14 @@ Error generating stack: ` + e4.message + `
       }, window.L = e3;
     }));
   }));
-  function mn(e2, t2, n2) {
+  function gn(e2, t2, n2) {
     return Object.freeze({
       instance: e2,
       context: t2,
       container: n2
     });
   }
-  function hn(e2, t2) {
+  function _n(e2, t2) {
     return t2 == null ? function(t3, n2) {
       let r2 = (0, _.useRef)(void 0);
       return r2.current ||= e2(t3, n2), r2;
@@ -16670,7 +16712,7 @@ Error generating stack: ` + e4.message + `
       ]), i2;
     };
   }
-  function gn(e2, t2) {
+  function vn(e2, t2) {
     (0, _.useEffect)(function() {
       return (t2.layerContainer ?? t2.map).addLayer(e2.instance), function() {
         t2.layerContainer?.removeLayer(e2.instance), t2.map.removeLayer(e2.instance);
@@ -16680,13 +16722,13 @@ Error generating stack: ` + e4.message + `
       e2
     ]);
   }
-  function _n(e2) {
+  function yn(e2) {
     return function(t2) {
-      let n2 = on(), r2 = e2(dn(t2, n2), n2);
-      return tn(n2.map, t2.attribution), un(r2.current, t2.eventHandlers), gn(r2.current, n2), r2;
+      let n2 = cn(), r2 = e2(pn(t2, n2), n2);
+      return rn(n2.map, t2.attribution), fn(r2.current, t2.eventHandlers), vn(r2.current, n2), r2;
     };
   }
-  function vn(e2, t2) {
+  function bn(e2, t2) {
     let n2 = (0, _.useRef)(void 0);
     (0, _.useEffect)(function() {
       if (t2.pathOptions !== n2.current) {
@@ -16698,33 +16740,33 @@ Error generating stack: ` + e4.message + `
       t2
     ]);
   }
-  function yn(e2) {
+  function xn(e2) {
     return function(t2) {
-      let n2 = on(), r2 = e2(dn(t2, n2), n2);
-      return un(r2.current, t2.eventHandlers), gn(r2.current, n2), vn(r2.current, t2), r2;
+      let n2 = cn(), r2 = e2(pn(t2, n2), n2);
+      return fn(r2.current, t2.eventHandlers), vn(r2.current, n2), bn(r2.current, t2), r2;
     };
   }
-  function bn(e2, t2) {
-    return cn(_n(hn(e2, t2)));
-  }
-  function xn(e2, t2) {
-    return ln(fn(hn(e2), t2));
-  }
   function Sn(e2, t2) {
-    return cn(yn(hn(e2, t2)));
+    return q(yn(_n(e2, t2)));
   }
   function Cn(e2, t2) {
-    return q(_n(hn(e2, t2)));
+    return un(mn(_n(e2), t2));
   }
-  function wn(e2, t2, n2) {
+  function wn(e2, t2) {
+    return q(xn(_n(e2, t2)));
+  }
+  function Tn(e2, t2) {
+    return dn(yn(_n(e2, t2)));
+  }
+  function En(e2, t2, n2) {
     let { opacity: r2, zIndex: i2 } = t2;
     r2 != null && r2 !== n2.opacity && e2.setOpacity(r2), i2 != null && i2 !== n2.zIndex && e2.setZIndex(i2);
   }
-  function Tn() {
-    return on().map;
+  function Dn() {
+    return cn().map;
   }
-  var En = c(pn(), 1);
-  function Dn({ bounds: e2, boundsOptions: t2, center: n2, children: r2, className: i2, id: a2, placeholder: o2, style: s2, whenReady: c2, zoom: l2, ...u2 }, d2) {
+  var On = c(hn(), 1);
+  function kn({ bounds: e2, boundsOptions: t2, center: n2, children: r2, className: i2, id: a2, placeholder: o2, style: s2, whenReady: c2, zoom: l2, ...u2 }, d2) {
     let [f2] = (0, _.useState)({
       className: i2,
       id: a2,
@@ -16735,8 +16777,8 @@ Error generating stack: ` + e4.message + `
     ]);
     let g2 = (0, _.useCallback)((r3) => {
       if (r3 !== null && !h2.current) {
-        let i3 = new En.Map(r3, u2);
-        h2.current = i3, n2 != null && l2 != null ? i3.setView(n2, l2) : e2 != null && i3.fitBounds(e2, t2), c2 != null && i3.whenReady(c2), m2(nn(i3));
+        let i3 = new On.Map(r3, u2);
+        h2.current = i3, n2 != null && l2 != null ? i3.setView(n2, l2) : e2 != null && i3.fitBounds(e2, t2), c2 != null && i3.whenReady(c2), m2(an(i3));
       }
     }, []);
     (0, _.useEffect)(() => () => {
@@ -16744,7 +16786,7 @@ Error generating stack: ` + e4.message + `
     }, [
       p2
     ]);
-    let v2 = p2 ? _.createElement(an, {
+    let v2 = p2 ? _.createElement(sn, {
       value: p2
     }, r2) : o2 ?? null;
     return _.createElement(`div`, {
@@ -16752,22 +16794,22 @@ Error generating stack: ` + e4.message + `
       ref: g2
     }, v2);
   }
-  var On = (0, _.forwardRef)(Dn), kn = bn(function({ position: e2, ...t2 }, n2) {
-    let r2 = new En.Marker(e2, t2);
-    return mn(r2, rn(n2, {
+  var An = (0, _.forwardRef)(kn), jn = Sn(function({ position: e2, ...t2 }, n2) {
+    let r2 = new On.Marker(e2, t2);
+    return gn(r2, on(n2, {
       overlayContainer: r2
     }));
   }, function(e2, t2, n2) {
     t2.position !== n2.position && e2.setLatLng(t2.position), t2.icon != null && t2.icon !== n2.icon && e2.setIcon(t2.icon), t2.zIndexOffset != null && t2.zIndexOffset !== n2.zIndexOffset && e2.setZIndexOffset(t2.zIndexOffset), t2.opacity != null && t2.opacity !== n2.opacity && e2.setOpacity(t2.opacity), e2.dragging != null && t2.draggable !== n2.draggable && (t2.draggable === true ? e2.dragging.enable() : e2.dragging.disable());
-  }), An = Sn(function({ positions: e2, ...t2 }, n2) {
-    let r2 = new En.Polyline(e2, t2);
-    return mn(r2, rn(n2, {
+  }), Mn = wn(function({ positions: e2, ...t2 }, n2) {
+    let r2 = new On.Polyline(e2, t2);
+    return gn(r2, on(n2, {
       overlayContainer: r2
     }));
   }, function(e2, t2, n2) {
     t2.positions !== n2.positions && e2.setLatLngs(t2.positions);
-  }), jn = xn(function(e2, t2) {
-    return mn(new En.Popup(e2, t2.overlayContainer), t2);
+  }), Nn = Cn(function(e2, t2) {
+    return gn(new On.Popup(e2, t2.overlayContainer), t2);
   }, function(e2, t2, { position: n2 }, r2) {
     (0, _.useEffect)(function() {
       let { instance: i2 } = e2;
@@ -16792,15 +16834,15 @@ Error generating stack: ` + e4.message + `
       r2,
       n2
     ]);
-  }), Mn = Cn(function({ url: e2, ...t2 }, n2) {
-    return mn(new En.TileLayer(e2, dn(t2, n2)), n2);
+  }), Pn = Tn(function({ url: e2, ...t2 }, n2) {
+    return gn(new On.TileLayer(e2, pn(t2, n2)), n2);
   }, function(e2, t2, n2) {
-    wn(e2, t2, n2);
+    En(e2, t2, n2);
     let { url: r2 } = t2;
     r2 != null && r2 !== n2.url && e2.setUrl(r2);
   });
-  function Nn(e2, t2) {
-    return En.default.divIcon({
+  function Fn(e2, t2) {
+    return On.default.divIcon({
       className: ``,
       html: `<div style="
       width:26px;height:26px;border-radius:50%;
@@ -16822,8 +16864,8 @@ Error generating stack: ` + e4.message + `
       ]
     });
   }
-  function Pn({ points: e2, fitKey: t2 }) {
-    let n2 = Tn();
+  function In({ points: e2, fitKey: t2 }) {
+    let n2 = Dn();
     return (0, _.useEffect)(() => {
       if (e2.length === 0) return;
       if (e2.length === 1) {
@@ -16833,7 +16875,7 @@ Error generating stack: ` + e4.message + `
         ], 13);
         return;
       }
-      let t3 = En.default.latLngBounds(e2.map((e3) => [
+      let t3 = On.default.latLngBounds(e2.map((e3) => [
         e3.lat,
         e3.lng
       ]));
@@ -16848,7 +16890,7 @@ Error generating stack: ` + e4.message + `
       t2
     ]), null;
   }
-  function Fn() {
+  function Ln() {
     let { startLocation: e2, endLocation: t2, waypoints: n2, optimizedRoute: r2 } = B(Ft((e3) => ({
       startLocation: e3.startLocation,
       endLocation: e3.endLocation,
@@ -16894,7 +16936,7 @@ Error generating stack: ` + e4.message + `
     ]), o2 = (0, _.useMemo)(() => i2.map((e3) => e3.point), [
       i2
     ]), s2 = o2.map((e3) => `${e3.lat},${e3.lng}`).join(`|`);
-    return (0, V.jsxs)(On, {
+    return (0, V.jsxs)(An, {
       center: [
         20,
         0
@@ -16903,17 +16945,17 @@ Error generating stack: ` + e4.message + `
       className: `h-full w-full`,
       scrollWheelZoom: true,
       children: [
-        (0, V.jsx)(Mn, {
+        (0, V.jsx)(Pn, {
           url: `https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png`,
           attribution: `\xA9 <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors`
         }),
-        i2.map((e3, t3) => (0, V.jsx)(kn, {
+        i2.map((e3, t3) => (0, V.jsx)(jn, {
           position: [
             e3.point.lat,
             e3.point.lng
           ],
-          icon: Nn(e3.color, e3.label),
-          children: (0, V.jsxs)(jn, {
+          icon: Fn(e3.color, e3.label),
+          children: (0, V.jsxs)(Nn, {
             children: [
               (0, V.jsx)(`strong`, {
                 children: e3.role
@@ -16923,7 +16965,7 @@ Error generating stack: ` + e4.message + `
             ]
           })
         }, `${e3.point.lat},${e3.point.lng},${t3}`)),
-        a2.length > 0 && (0, V.jsx)(An, {
+        a2.length > 0 && (0, V.jsx)(Mn, {
           positions: a2,
           pathOptions: {
             color: `#2563eb`,
@@ -16931,14 +16973,14 @@ Error generating stack: ` + e4.message + `
             opacity: 0.8
           }
         }),
-        (0, V.jsx)(Pn, {
+        (0, V.jsx)(In, {
           points: o2,
           fitKey: s2
         })
       ]
     });
   }
-  function In() {
+  function Rn() {
     let e2 = B((e3) => e3.warmUp);
     return (0, _.useEffect)(() => {
       let t2 = setTimeout(() => e2(), 3e3);
@@ -16952,22 +16994,22 @@ Error generating stack: ` + e4.message + `
           className: `flex w-96 shrink-0 flex-col gap-3 overflow-y-auto border-r border-slate-200 bg-white p-4`,
           children: [
             (0, V.jsx)(H, {}),
-            (0, V.jsx)(Rt, {}),
-            (0, V.jsx)(zt, {}),
-            (0, V.jsx)(Ut, {}),
-            (0, V.jsx)(Wt, {}),
-            (0, V.jsx)($t, {}),
-            (0, V.jsx)(en, {})
+            (0, V.jsx)(Bt, {}),
+            (0, V.jsx)(Vt, {}),
+            (0, V.jsx)(Gt, {}),
+            (0, V.jsx)(G, {}),
+            (0, V.jsx)(tn, {}),
+            (0, V.jsx)(nn, {})
           ]
         }),
         (0, V.jsx)(`main`, {
           className: `relative flex-1`,
-          children: (0, V.jsx)(Fn, {})
+          children: (0, V.jsx)(Ln, {})
         })
       ]
     });
   }
   (0, v.createRoot)(document.getElementById(`root`)).render((0, V.jsx)(_.StrictMode, {
-    children: (0, V.jsx)(In, {})
+    children: (0, V.jsx)(Rn, {})
   }));
 })();
