@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
-import type { LatLng, OptimizedRoute, Favorite } from '../types'
+import type { LatLng, OptimizedRoute, Favorite, Stop } from '../types'
 import type { Objective } from '../lib/routingService'
 import { planSelectiveRoute } from '../lib/planRoute'
 import { warmUpSolver } from '../lib/solver'
@@ -9,7 +9,7 @@ interface RouteState {
   // --- Persisted (the user's work) ---
   startLocation: LatLng | null
   endLocation: LatLng | null
-  waypoints: LatLng[]
+  waypoints: Stop[]
   targetK: number | null
   objective: Objective
   optimizedRoute: OptimizedRoute | null
@@ -26,8 +26,11 @@ interface RouteState {
   setStart: (value: LatLng | null) => void
   setEnd: (value: LatLng | null) => void
   addWaypoints: (points: LatLng[]) => void
-  removeWaypoint: (index: number) => void
+  removeWaypoint: (id: string) => void
   clearWaypoints: () => void
+  markDelivered: (id: string) => void
+  markDeliveredByCoord: (lat: number, lng: number) => void
+  restoreStop: (id: string) => void
   setTargetK: (k: number | null) => void
   setObjective: (objective: Objective) => void
   calculateRoute: () => Promise<void>
@@ -42,6 +45,9 @@ const newId = () =>
   typeof crypto !== 'undefined' && crypto.randomUUID
     ? crypto.randomUUID()
     : String(Date.now()) + Math.random().toString(16).slice(2)
+
+const toStops = (points: LatLng[]): Stop[] =>
+  points.map((p) => ({ id: newId(), lat: p.lat, lng: p.lng, delivered: false }))
 
 export const useRouteStore = create<RouteState>()(
   persist(
@@ -63,10 +69,28 @@ export const useRouteStore = create<RouteState>()(
       setStart: (value) => set({ startLocation: value }),
       setEnd: (value) => set({ endLocation: value }),
       addWaypoints: (points) =>
-        set((s) => ({ waypoints: [...s.waypoints, ...points] })),
-      removeWaypoint: (index) =>
-        set((s) => ({ waypoints: s.waypoints.filter((_, i) => i !== index) })),
+        set((s) => ({ waypoints: [...s.waypoints, ...toStops(points)] })),
+      removeWaypoint: (id) =>
+        set((s) => ({ waypoints: s.waypoints.filter((w) => w.id !== id) })),
       clearWaypoints: () => set({ waypoints: [] }),
+      markDelivered: (id) =>
+        set((s) => ({
+          waypoints: s.waypoints.map((w) =>
+            w.id === id ? { ...w, delivered: true } : w,
+          ),
+        })),
+      markDeliveredByCoord: (lat, lng) =>
+        set((s) => ({
+          waypoints: s.waypoints.map((w) =>
+            w.lat === lat && w.lng === lng ? { ...w, delivered: true } : w,
+          ),
+        })),
+      restoreStop: (id) =>
+        set((s) => ({
+          waypoints: s.waypoints.map((w) =>
+            w.id === id ? { ...w, delivered: false } : w,
+          ),
+        })),
       setTargetK: (k) => set({ targetK: k }),
       setObjective: (objective) => set({ objective }),
 
@@ -101,7 +125,8 @@ export const useRouteStore = create<RouteState>()(
           const route = await planSelectiveRoute({
             startLocation,
             endLocation,
-            waypoints,
+            // Delivered stops are done — never route to them.
+            waypoints: waypoints.filter((w) => !w.delivered),
             targetK,
             objective,
             onStatus: (msg) => set({ calcStatus: msg }),
@@ -123,7 +148,8 @@ export const useRouteStore = create<RouteState>()(
               name: name.trim() || `Route ${s.favorites.length + 1}`,
               startLocation: s.startLocation,
               endLocation: s.endLocation,
-              waypoints: s.waypoints,
+              // Store plain coordinates; loading creates a fresh (all-active) list.
+              waypoints: s.waypoints.map((w) => ({ lat: w.lat, lng: w.lng })),
             },
           ],
         })),
@@ -134,7 +160,7 @@ export const useRouteStore = create<RouteState>()(
           return {
             startLocation: fav.startLocation,
             endLocation: fav.endLocation,
-            waypoints: fav.waypoints,
+            waypoints: toStops(fav.waypoints),
             optimizedRoute: null,
             routeError: null,
           }
@@ -144,7 +170,19 @@ export const useRouteStore = create<RouteState>()(
     }),
     {
       name: 'route-optimiser:v2',
-      // Persist the user's work + favorites — never transient UI status.
+      version: 1,
+      // Migrate pre-Stop sessions: waypoints used to be plain {lat,lng}[].
+      migrate: (persisted, version) => {
+        const s = persisted as { waypoints?: Array<LatLng & Partial<Stop>> }
+        if (version < 1 && Array.isArray(s.waypoints)) {
+          s.waypoints = s.waypoints.map((w) =>
+            'id' in w && 'delivered' in w
+              ? w
+              : { id: newId(), lat: w.lat, lng: w.lng, delivered: false },
+          )
+        }
+        return persisted as RouteState
+      },
       partialize: (s) => ({
         startLocation: s.startLocation,
         endLocation: s.endLocation,

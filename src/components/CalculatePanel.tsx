@@ -11,9 +11,12 @@ export function CalculatePanel() {
   const routeError = useRouteStore((s) => s.routeError)
   const solverReady = useRouteStore((s) => s.solverReady)
   // A route needs at least 2 distinct points; start/end are optional now.
+  // Delivered stops don't count — they're done.
   const pointCount = useRouteStore(
     (s) =>
-      s.waypoints.length + (s.startLocation ? 1 : 0) + (s.endLocation ? 1 : 0),
+      s.waypoints.filter((w) => !w.delivered).length +
+      (s.startLocation ? 1 : 0) +
+      (s.endLocation ? 1 : 0),
   )
   const calculateRoute = useRouteStore((s) => s.calculateRoute)
 

@@ -12,6 +12,12 @@ export interface ParseResult {
   errors: string[]
 }
 
+/** A candidate stop: a coordinate with a stable id and a delivered/done flag. */
+export interface Stop extends LatLng {
+  id: string
+  delivered: boolean
+}
+
 /** A saved, named scenario the user can reload later (kept in local storage). */
 export interface Favorite {
   id: string

@@ -76,9 +76,11 @@ export function MapComponent() {
     const list: { point: LatLng; label: string; color: string; role: string }[] = []
     if (startLocation)
       list.push({ point: startLocation, label: 'S', color: '#059669', role: 'Start' })
-    waypoints.forEach((point, i) =>
-      list.push({ point, label: String(i + 1), color: '#2563eb', role: `Waypoint ${i + 1}` }),
-    )
+    waypoints
+      .filter((w) => !w.delivered)
+      .forEach((point, i) =>
+        list.push({ point, label: String(i + 1), color: '#2563eb', role: `Waypoint ${i + 1}` }),
+      )
     if (endLocation)
       list.push({ point: endLocation, label: 'E', color: '#e11d48', role: 'End' })
     return list

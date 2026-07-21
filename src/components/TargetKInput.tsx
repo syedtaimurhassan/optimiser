@@ -7,7 +7,7 @@ import { useRouteStore } from '../store/routeStore'
  */
 export function TargetKInput() {
   const value = useRouteStore((s) => s.targetK)
-  const max = useRouteStore((s) => s.waypoints.length)
+  const max = useRouteStore((s) => s.waypoints.filter((w) => !w.delivered).length)
   const setTargetK = useRouteStore((s) => s.setTargetK)
 
   const tooMany = value !== null && max > 0 && value > max

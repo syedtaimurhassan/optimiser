@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { useRouteStore } from '../store/routeStore'
+import { CollapsibleSection } from './CollapsibleSection'
 
 /** Save the current start/end/waypoints as a named favorite, and reload them
  *  later. Favorites live in local storage (persisted with the store). */
@@ -21,9 +22,7 @@ export function FavoritesPanel() {
   }
 
   return (
-    <section className="space-y-2">
-      <h2 className="text-sm font-semibold text-slate-700">Favorites</h2>
-
+    <CollapsibleSection title="Favorites" badge={favorites.length || undefined}>
       <div className="flex gap-2">
         <input
           value={name}
@@ -73,6 +72,6 @@ export function FavoritesPanel() {
           ))}
         </ul>
       )}
-    </section>
+    </CollapsibleSection>
   )
 }

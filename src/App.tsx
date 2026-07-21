@@ -1,10 +1,8 @@
 import { useEffect } from 'react'
 import { HeaderPanel } from './components/HeaderPanel'
-import { CoordinateForm } from './components/CoordinateForm'
-import { FileUploader } from './components/FileUploader'
-import { WaypointsPanel } from './components/WaypointsPanel'
-import { TargetKInput } from './components/TargetKInput'
-import { ObjectiveToggle } from './components/ObjectiveToggle'
+import { StopsPanel } from './components/StopsPanel'
+import { DeliveredPanel } from './components/DeliveredPanel'
+import { RouteSetupPanel } from './components/RouteSetupPanel'
 import { CalculatePanel } from './components/CalculatePanel'
 import { ResultsPanel } from './components/ResultsPanel'
 import { FavoritesPanel } from './components/FavoritesPanel'
@@ -19,8 +17,6 @@ import { useRouteStore } from './store/routeStore'
 function App() {
   const warmUp = useRouteStore((s) => s.warmUp)
 
-  // Preload the OR-Tools WASM shortly after load, once the coi service worker
-  // has had time to make the page cross-origin isolated.
   useEffect(() => {
     const id = setTimeout(() => warmUp(), 3000)
     return () => clearTimeout(id)
@@ -28,32 +24,12 @@ function App() {
 
   return (
     <div className="flex h-screen overflow-hidden bg-slate-100">
-      {/* ---------------- Sidebar: inputs + lists ---------------- */}
-      <aside className="flex w-96 shrink-0 flex-col gap-5 overflow-y-auto border-r border-slate-200 bg-white p-5">
+      {/* ---------------- Sidebar: collapsible sections ---------------- */}
+      <aside className="flex w-96 shrink-0 flex-col gap-3 overflow-y-auto border-r border-slate-200 bg-white p-4">
         <HeaderPanel />
-
-        <section className="space-y-2">
-          <h2 className="text-sm font-semibold text-slate-700">Upload waypoints</h2>
-          <FileUploader />
-        </section>
-
-        <WaypointsPanel />
-
-        <section className="space-y-4">
-          <p className="text-xs text-slate-400">
-            Start &amp; end are optional — leave blank for an open route, type
-            coordinates, or pick a stop from the list.
-          </p>
-          <CoordinateForm field="start" label="Start" accentClass="bg-emerald-600" />
-          <CoordinateForm field="end" label="End" accentClass="bg-rose-600" />
-        </section>
-
-        <section className="space-y-2">
-          <TargetKInput />
-        </section>
-
-        <ObjectiveToggle />
-
+        <StopsPanel />
+        <DeliveredPanel />
+        <RouteSetupPanel />
         <CalculatePanel />
         <ResultsPanel />
         <FavoritesPanel />

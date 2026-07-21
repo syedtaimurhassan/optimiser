@@ -1,5 +1,7 @@
+import { useMemo } from 'react'
 import type { OptimizedRoute } from '../types'
 import { formatLatLng } from '../lib/coordinates'
+import { useRouteStore } from '../store/routeStore'
 import {
   googleMapsSearchUrl,
   googleMapsDirectionsBatches,
@@ -8,6 +10,8 @@ import {
 interface Props {
   route: OptimizedRoute
 }
+
+const key = (p: { lat: number; lng: number }) => `${p.lat},${p.lng}`
 
 /** Small colored index badge matching the map markers (green/blue/red). */
 function StopBadge({ n, color }: { n: number; color: string }) {
@@ -25,6 +29,14 @@ function StopBadge({ n, color }: { n: number; color: string }) {
 export function Itinerary({ route }: Props) {
   const stops = route.orderedWaypoints
   const batches = googleMapsDirectionsBatches(stops)
+
+  // Live "delivered" state so ticking off a stop strikes it through immediately.
+  const waypoints = useRouteStore((s) => s.waypoints)
+  const markDone = useRouteStore((s) => s.markDeliveredByCoord)
+  const deliveredKeys = useMemo(
+    () => new Set(waypoints.filter((w) => w.delivered).map(key)),
+    [waypoints],
+  )
 
   const linkBtn =
     'block rounded-md bg-emerald-600 px-3 py-2 text-center text-sm font-semibold text-white transition-colors hover:bg-emerald-700'
@@ -72,14 +84,31 @@ export function Itinerary({ route }: Props) {
           const color = isStart ? '#059669' : isEnd ? '#e11d48' : '#2563eb'
           const label = isStart ? 'Start' : isEnd ? 'End' : `Stop ${i + 1}`
 
+          const done = deliveredKeys.has(key(p))
           return (
             <li
               key={`${p.lat},${p.lng},${i}`}
               className="flex items-center gap-2 px-2 py-2 text-sm"
             >
-              <StopBadge n={i + 1} color={color} />
+              <button
+                onClick={() => markDone(p.lat, p.lng)}
+                disabled={done}
+                title={done ? 'Delivered' : 'Mark delivered'}
+                className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border text-[11px] ${
+                  done
+                    ? 'border-emerald-500 bg-emerald-500 text-white'
+                    : 'border-slate-300 text-transparent hover:border-emerald-500 hover:text-emerald-500'
+                }`}
+              >
+                ✓
+              </button>
+              <StopBadge n={i + 1} color={done ? '#94a3b8' : color} />
               <span className="min-w-0 flex-1">
-                <span className="font-medium text-slate-700">{label}</span>
+                <span
+                  className={`font-medium ${done ? 'text-slate-400 line-through' : 'text-slate-700'}`}
+                >
+                  {label}
+                </span>
                 <span className="block truncate text-xs text-slate-500">
                   {formatLatLng(p)}
                 </span>
