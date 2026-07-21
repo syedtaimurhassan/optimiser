@@ -11513,52 +11513,53 @@ Error generating stack: ` + e4.message + `
       };
     }, [
       t2
-    ]), c2 = (0, _.useMemo)(() => e2.orderedWaypoints.filter((e3) => {
-      let t3 = $t(e3);
-      return o2.has(t3) ? !a2.has(t3) : en(n2, e3) || en(r2, e3);
-    }), [
+    ]), c2 = e2.orderedWaypoints.length, l2 = (0, _.useMemo)(() => e2.orderedWaypoints.map((e3, t3) => ({
+      p: e3,
+      seq: t3 + 1,
+      isStop: o2.has($t(e3))
+    })).filter(({ p: e3, isStop: t3 }) => t3 ? !a2.has($t(e3)) : en(n2, e3) || en(r2, e3)), [
       e2,
       o2,
       a2,
       n2,
       r2
-    ]), l2 = c2.filter((e3) => o2.has($t(e3))).length, u2 = c2.length >= 2 ? Qt(c2) : [], d2 = `block rounded-md bg-emerald-600 px-3 py-2 text-center text-sm font-semibold text-white transition-colors hover:bg-emerald-700`;
-    return e2.candidatesTotal > 0 && l2 === 0 ? (0, U.jsx)(`div`, {
+    ]), u2 = l2.filter((e3) => e3.isStop).length, d2 = l2.length >= 2 ? Qt(l2.map((e3) => e3.p)) : [], f2 = `block rounded-md bg-emerald-600 px-3 py-2 text-center text-sm font-semibold text-white transition-colors hover:bg-emerald-700`;
+    return e2.candidatesTotal > 0 && u2 === 0 ? (0, U.jsx)(`div`, {
       className: `rounded-md border border-emerald-200 bg-emerald-50 p-3 text-center text-sm font-medium text-emerald-700`,
       children: `\u2713 All stops delivered. Restore any from the Delivered section to bring them back.`
     }) : (0, U.jsxs)(`div`, {
       className: `space-y-3`,
       children: [
-        u2.length > 0 && (0, U.jsx)(`div`, {
+        d2.length > 0 && (0, U.jsx)(`div`, {
           className: `space-y-1.5`,
-          children: u2.length === 1 ? (0, U.jsx)(`a`, {
-            href: u2[0].url,
+          children: d2.length === 1 ? (0, U.jsx)(`a`, {
+            href: d2[0].url,
             target: `_blank`,
             rel: `noopener noreferrer`,
-            className: d2,
+            className: f2,
             children: `Navigate Remaining Route in Google Maps`
           }) : (0, U.jsxs)(U.Fragment, {
             children: [
               (0, U.jsxs)(`p`, {
                 className: `text-xs text-amber-600`,
                 children: [
-                  c2.length,
+                  l2.length,
                   ` stops exceed Google Maps\u2019 limit \u2014 split into`,
                   ` `,
-                  u2.length,
+                  d2.length,
                   ` legs (in order):`
                 ]
               }),
-              u2.map((e3, t3) => (0, U.jsxs)(`a`, {
+              d2.map((e3, t3) => (0, U.jsxs)(`a`, {
                 href: e3.url,
                 target: `_blank`,
                 rel: `noopener noreferrer`,
-                className: d2,
+                className: f2,
                 children: [
                   `Navigate Leg `,
                   t3 + 1,
                   ` of `,
-                  u2.length
+                  d2.length
                 ]
               }, t3))
             ]
@@ -11566,8 +11567,8 @@ Error generating stack: ` + e4.message + `
         }),
         (0, U.jsx)(`ol`, {
           className: `divide-y divide-slate-100 overflow-hidden rounded-md border border-slate-200`,
-          children: c2.map((e3, t3) => {
-            let n3 = o2.has($t(e3)), r3 = t3 === 0, a3 = t3 === c2.length - 1, l3 = r3 ? `#059669` : a3 ? `#e11d48` : `#2563eb`, u3 = s2.get($t(e3)), d3 = r3 ? `Start` : a3 ? `End` : `Stop`;
+          children: l2.map(({ p: e3, seq: t3, isStop: n3 }) => {
+            let r3 = t3 === 1, a3 = t3 === c2, o3 = r3 ? `#059669` : a3 ? `#e11d48` : `#2563eb`, l3 = s2.get($t(e3));
             return (0, U.jsxs)(`li`, {
               className: `flex items-center gap-2 px-2 py-2 text-sm`,
               children: [
@@ -11582,8 +11583,8 @@ Error generating stack: ` + e4.message + `
                   children: `\u2691`
                 }),
                 (0, U.jsx)(tn, {
-                  label: String(t3 + 1),
-                  color: l3
+                  label: String(t3),
+                  color: o3
                 }),
                 (0, U.jsxs)(`span`, {
                   className: `min-w-0 flex-1`,
@@ -11591,12 +11592,12 @@ Error generating stack: ` + e4.message + `
                     (0, U.jsxs)(`span`, {
                       className: `font-medium text-slate-700`,
                       children: [
-                        d3,
-                        u3 !== void 0 && (0, U.jsxs)(`span`, {
+                        r3 ? `Start` : a3 ? `End` : `Stop`,
+                        l3 !== void 0 && (0, U.jsxs)(`span`, {
                           className: `ml-1.5 font-semibold text-slate-400`,
                           children: [
                             `#`,
-                            u3
+                            l3
                           ]
                         })
                       ]
