@@ -56,20 +56,28 @@ export function Itinerary({ route }: Props) {
     return { deliveredKeys: delivered, stopKeys: all, numByKey: nums }
   }, [waypoints])
 
-  // Remaining = ordered stops still to visit: drop delivered stops and any stop
-  // that was removed since; keep manual start/end anchors.
+  const total = route.orderedWaypoints.length
+
+  // Remaining = ordered stops still to visit, each keeping its ORIGINAL route
+  // position (`seq`) so numbers never renumber when a stop is delivered/removed.
+  // Delivered stops and stops removed since are dropped; manual anchors stay.
   const remaining = useMemo(
     () =>
-      route.orderedWaypoints.filter((p) => {
-        const k = key(p)
-        if (stopKeys.has(k)) return !deliveredKeys.has(k)
-        return sameCoord(startLocation, p) || sameCoord(endLocation, p)
-      }),
+      route.orderedWaypoints
+        .map((p, idx) => ({ p, seq: idx + 1, isStop: stopKeys.has(key(p)) }))
+        .filter(({ p, isStop }) =>
+          isStop
+            ? !deliveredKeys.has(key(p))
+            : sameCoord(startLocation, p) || sameCoord(endLocation, p),
+        ),
     [route, stopKeys, deliveredKeys, startLocation, endLocation],
   )
 
-  const deliverableRemaining = remaining.filter((p) => stopKeys.has(key(p))).length
-  const batches = remaining.length >= 2 ? googleMapsDirectionsBatches(remaining) : []
+  const deliverableRemaining = remaining.filter((e) => e.isStop).length
+  const batches =
+    remaining.length >= 2
+      ? googleMapsDirectionsBatches(remaining.map((e) => e.p))
+      : []
 
   const linkBtn =
     'block rounded-md bg-emerald-600 px-3 py-2 text-center text-sm font-semibold text-white transition-colors hover:bg-emerald-700'
@@ -111,13 +119,12 @@ export function Itinerary({ route }: Props) {
 
       {/* --- Remaining stops --- */}
       <ol className="divide-y divide-slate-100 overflow-hidden rounded-md border border-slate-200">
-        {remaining.map((p, i) => {
-          const isStop = stopKeys.has(key(p))
-          const isFirst = i === 0
-          const isLast = i === remaining.length - 1
+        {remaining.map(({ p, seq, isStop }) => {
+          const isFirst = seq === 1
+          const isLast = seq === total
           const color = isFirst ? '#059669' : isLast ? '#e11d48' : '#2563eb'
           const num = numByKey.get(key(p))
-          // Badge = visiting order (this list is sorted in the order you drive).
+          // Badge = the stop's ORIGINAL route position (stable — never renumbers).
           // The stable stop identity (#num) is shown beside the role.
           const role = isFirst ? 'Start' : isLast ? 'End' : 'Stop'
 
@@ -139,7 +146,7 @@ export function Itinerary({ route }: Props) {
                   ⚑
                 </span>
               )}
-              <StopBadge label={String(i + 1)} color={color} />
+              <StopBadge label={String(seq)} color={color} />
               <span className="min-w-0 flex-1">
                 <span className="font-medium text-slate-700">
                   {role}
