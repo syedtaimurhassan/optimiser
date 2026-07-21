@@ -117,8 +117,8 @@ export function Itinerary({ route }: Props) {
           const isLast = i === remaining.length - 1
           const color = isFirst ? '#059669' : isLast ? '#e11d48' : '#2563eb'
           const num = numByKey.get(key(p))
-          // Badge = the stop's stable number; anchors (manual start/end) show S/E.
-          const badge = num !== undefined ? `#${num}` : isFirst ? 'S' : 'E'
+          // Badge = visiting order (this list is sorted in the order you drive).
+          // The stable stop identity (#num) is shown beside the role.
           const role = isFirst ? 'Start' : isLast ? 'End' : 'Stop'
 
           return (
@@ -139,9 +139,16 @@ export function Itinerary({ route }: Props) {
                   ⚑
                 </span>
               )}
-              <StopBadge label={badge} color={color} />
+              <StopBadge label={String(i + 1)} color={color} />
               <span className="min-w-0 flex-1">
-                <span className="font-medium text-slate-700">{role}</span>
+                <span className="font-medium text-slate-700">
+                  {role}
+                  {num !== undefined && (
+                    <span className="ml-1.5 font-semibold text-slate-400">
+                      #{num}
+                    </span>
+                  )}
+                </span>
                 <span className="block truncate text-xs text-slate-500">
                   {formatLatLng(p)}
                 </span>
