@@ -56,8 +56,6 @@ export function Itinerary({ route }: Props) {
     return { deliveredKeys: delivered, stopKeys: all, numByKey: nums }
   }, [waypoints])
 
-  const total = route.orderedWaypoints.length
-
   // Remaining = ordered stops still to visit, each keeping its ORIGINAL route
   // position (`seq`) so numbers never renumber when a stop is delivered/removed.
   // Delivered stops and stops removed since are dropped; manual anchors stay.
@@ -119,14 +117,15 @@ export function Itinerary({ route }: Props) {
 
       {/* --- Remaining stops --- */}
       <ol className="divide-y divide-slate-100 overflow-hidden rounded-md border border-slate-200">
-        {remaining.map(({ p, seq, isStop }) => {
-          const isFirst = seq === 1
-          const isLast = seq === total
-          const color = isFirst ? '#059669' : isLast ? '#e11d48' : '#2563eb'
+        {remaining.map(({ p, seq, isStop }, ri) => {
+          // Badge number = stable original route position. Color/role reflect the
+          // CURRENT progress: the first remaining stop is your next target (green),
+          // the last remaining is the final one (red).
+          const isCurrent = ri === 0
+          const isLast = ri === remaining.length - 1
+          const color = isCurrent ? '#059669' : isLast ? '#e11d48' : '#2563eb'
           const num = numByKey.get(key(p))
-          // Badge = the stop's ORIGINAL route position (stable — never renumbers).
-          // The stable stop identity (#num) is shown beside the role.
-          const role = isFirst ? 'Start' : isLast ? 'End' : 'Stop'
+          const role = isCurrent ? 'Next' : isLast ? 'Last' : 'Stop'
 
           return (
             <li key={key(p)} className="flex items-center gap-2 px-2 py-2 text-sm">
