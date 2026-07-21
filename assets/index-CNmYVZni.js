@@ -16998,13 +16998,16 @@ Error generating stack: ` + e4.message + `
         isEnd: Rn(t2, n3)
       });
       if (r2) {
-        let t3 = r2.orderedWaypoints.filter((e3) => i3.has(Ln(e3)) || a3(e3)), n3 = t3.filter((e3) => {
-          let t4 = i3.get(Ln(e3));
-          return t4 ? !t4.delivered : a3(e3);
-        }).map(Ln), s4 = n3[0], c3 = n3[n3.length - 1];
-        return t3.map((t4) => {
-          let n4 = Ln(t4), r3 = i3.get(n4), a4 = r3 ? String(r3.num) : Rn(e2, t4) ? `S` : `E`, l3 = r3?.delivered ? `#cbd5e1` : n4 === s4 ? `#059669` : n4 === c3 ? `#e11d48` : `#2563eb`, u3 = r3?.delivered ? `Delivered` : n4 === s4 ? `Next` : n4 === c3 ? `Last` : `Stop`;
-          return o3(t4, a4, l3, u3);
+        let e3 = r2.orderedWaypoints.map((e4, t4) => ({
+          point: e4,
+          seq: t4 + 1
+        })).filter(({ point: e4 }) => i3.has(Ln(e4)) || a3(e4)), t3 = e3.filter(({ point: e4 }) => {
+          let t4 = i3.get(Ln(e4));
+          return t4 ? !t4.delivered : a3(e4);
+        }).map(({ point: e4 }) => Ln(e4)), n3 = t3[0], s4 = t3[t3.length - 1];
+        return e3.map(({ point: e4, seq: t4 }) => {
+          let r3 = Ln(e4), a4 = i3.get(r3), c3 = a4?.delivered ? `#cbd5e1` : r3 === n3 ? `#059669` : r3 === s4 ? `#e11d48` : `#2563eb`, l3 = a4?.delivered ? `Delivered` : r3 === n3 ? `Next` : r3 === s4 ? `Last` : `Stop`;
+          return o3(e4, String(t4), c3, l3);
         });
       }
       let s3 = [];
