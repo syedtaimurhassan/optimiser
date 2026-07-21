@@ -8,6 +8,7 @@ import { formatLatLng } from '../lib/coordinates'
 export function DeliveredPanel() {
   const waypoints = useRouteStore((s) => s.waypoints)
   const restoreStop = useRouteStore((s) => s.restoreStop)
+  const restoreAll = useRouteStore((s) => s.restoreAll)
 
   const delivered = useMemo(
     () => waypoints.filter((w) => w.delivered),
@@ -17,6 +18,17 @@ export function DeliveredPanel() {
 
   return (
     <CollapsibleSection title="Delivered" badge={delivered.length}>
+      <div className="flex items-center justify-between">
+        <span className="text-xs text-slate-400">
+          Done stops — excluded from routing.
+        </span>
+        <button
+          onClick={restoreAll}
+          className="text-xs font-medium text-blue-600 hover:text-blue-700"
+        >
+          ↩ Restore all
+        </button>
+      </div>
       <ul className="divide-y divide-slate-100 rounded-md border border-slate-200">
         {delivered.map((wp) => (
           <li key={wp.id} className="flex items-center gap-2 px-3 py-2 text-sm">

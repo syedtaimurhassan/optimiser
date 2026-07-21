@@ -31,6 +31,7 @@ interface RouteState {
   markDelivered: (id: string) => void
   markDeliveredByCoord: (lat: number, lng: number) => void
   restoreStop: (id: string) => void
+  restoreAll: () => void
   setTargetK: (k: number | null) => void
   setObjective: (objective: Objective) => void
   calculateRoute: () => Promise<void>
@@ -89,6 +90,12 @@ export const useRouteStore = create<RouteState>()(
         set((s) => ({
           waypoints: s.waypoints.map((w) =>
             w.id === id ? { ...w, delivered: false } : w,
+          ),
+        })),
+      restoreAll: () =>
+        set((s) => ({
+          waypoints: s.waypoints.map((w) =>
+            w.delivered ? { ...w, delivered: false } : w,
           ),
         })),
       setTargetK: (k) => set({ targetK: k }),
