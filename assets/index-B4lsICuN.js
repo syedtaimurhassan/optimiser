@@ -11567,7 +11567,7 @@ Error generating stack: ` + e4.message + `
         (0, U.jsx)(`ol`, {
           className: `divide-y divide-slate-100 overflow-hidden rounded-md border border-slate-200`,
           children: c2.map((e3, t3) => {
-            let n3 = o2.has($t(e3)), r3 = t3 === 0, a3 = t3 === c2.length - 1, l3 = r3 ? `#059669` : a3 ? `#e11d48` : `#2563eb`, u3 = s2.get($t(e3)), d3 = u3 === void 0 ? r3 ? `S` : `E` : `#${u3}`;
+            let n3 = o2.has($t(e3)), r3 = t3 === 0, a3 = t3 === c2.length - 1, l3 = r3 ? `#059669` : a3 ? `#e11d48` : `#2563eb`, u3 = s2.get($t(e3)), d3 = r3 ? `Start` : a3 ? `End` : `Stop`;
             return (0, U.jsxs)(`li`, {
               className: `flex items-center gap-2 px-2 py-2 text-sm`,
               children: [
@@ -11582,15 +11582,24 @@ Error generating stack: ` + e4.message + `
                   children: `\u2691`
                 }),
                 (0, U.jsx)(tn, {
-                  label: d3,
+                  label: String(t3 + 1),
                   color: l3
                 }),
                 (0, U.jsxs)(`span`, {
                   className: `min-w-0 flex-1`,
                   children: [
-                    (0, U.jsx)(`span`, {
+                    (0, U.jsxs)(`span`, {
                       className: `font-medium text-slate-700`,
-                      children: r3 ? `Start` : a3 ? `End` : `Stop`
+                      children: [
+                        d3,
+                        u3 !== void 0 && (0, U.jsxs)(`span`, {
+                          className: `ml-1.5 font-semibold text-slate-400`,
+                          children: [
+                            `#`,
+                            u3
+                          ]
+                        })
+                      ]
                     }),
                     (0, U.jsx)(`span`, {
                       className: `block truncate text-xs text-slate-500`,
