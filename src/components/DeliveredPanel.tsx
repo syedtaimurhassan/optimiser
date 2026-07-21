@@ -32,8 +32,9 @@ export function DeliveredPanel() {
       <ul className="divide-y divide-slate-100 rounded-md border border-slate-200">
         {delivered.map((wp) => (
           <li key={wp.id} className="flex items-center gap-2 px-3 py-2 text-sm">
-            <span className="min-w-0 flex-1 truncate text-slate-400 line-through">
-              {formatLatLng(wp)}
+            <span className="min-w-0 flex-1 truncate text-slate-400">
+              <span className="mr-1.5 font-semibold">#{wp.num}</span>
+              <span className="line-through">{formatLatLng(wp)}</span>
             </span>
             <button
               onClick={() => restoreStop(wp.id)}

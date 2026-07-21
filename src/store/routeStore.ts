@@ -47,8 +47,18 @@ const newId = () =>
     ? crypto.randomUUID()
     : String(Date.now()) + Math.random().toString(16).slice(2)
 
+/** Fresh stops numbered 1..N (used when loading a favorite / migrating). */
 const toStops = (points: LatLng[]): Stop[] =>
-  points.map((p) => ({ id: newId(), lat: p.lat, lng: p.lng, delivered: false }))
+  points.map((p, i) => ({
+    id: newId(),
+    num: i + 1,
+    lat: p.lat,
+    lng: p.lng,
+    delivered: false,
+  }))
+
+const sameCoord = (a: LatLng | null, lat: number, lng: number) =>
+  !!a && a.lat === lat && a.lng === lng
 
 export const useRouteStore = create<RouteState>()(
   persist(
@@ -70,9 +80,35 @@ export const useRouteStore = create<RouteState>()(
       setStart: (value) => set({ startLocation: value }),
       setEnd: (value) => set({ endLocation: value }),
       addWaypoints: (points) =>
-        set((s) => ({ waypoints: [...s.waypoints, ...toStops(points)] })),
+        set((s) => {
+          // Continue numbering from the highest so far — numbers are stable
+          // identities and are never reused/shifted when stops are removed.
+          const base = s.waypoints.reduce((m, w) => Math.max(m, w.num), 0)
+          const added: Stop[] = points.map((p, i) => ({
+            id: newId(),
+            num: base + i + 1,
+            lat: p.lat,
+            lng: p.lng,
+            delivered: false,
+          }))
+          return { waypoints: [...s.waypoints, ...added] }
+        }),
       removeWaypoint: (id) =>
-        set((s) => ({ waypoints: s.waypoints.filter((w) => w.id !== id) })),
+        set((s) => {
+          const stop = s.waypoints.find((w) => w.id === id)
+          return {
+            waypoints: s.waypoints.filter((w) => w.id !== id),
+            // Removing a stop that was the start/end also releases that anchor.
+            startLocation:
+              stop && sameCoord(s.startLocation, stop.lat, stop.lng)
+                ? null
+                : s.startLocation,
+            endLocation:
+              stop && sameCoord(s.endLocation, stop.lat, stop.lng)
+                ? null
+                : s.endLocation,
+          }
+        }),
       clearWaypoints: () => set({ waypoints: [] }),
       markDelivered: (id) =>
         set((s) => ({
@@ -183,16 +219,19 @@ export const useRouteStore = create<RouteState>()(
     }),
     {
       name: 'route-optimiser:v2',
-      version: 1,
-      // Migrate pre-Stop sessions: waypoints used to be plain {lat,lng}[].
+      version: 2,
+      // Migrate old sessions: waypoints used to be plain {lat,lng}[], then Stops
+      // without a stable `num`.
       migrate: (persisted, version) => {
         const s = persisted as { waypoints?: Array<LatLng & Partial<Stop>> }
-        if (version < 1 && Array.isArray(s.waypoints)) {
-          s.waypoints = s.waypoints.map((w) =>
-            'id' in w && 'delivered' in w
-              ? w
-              : { id: newId(), lat: w.lat, lng: w.lng, delivered: false },
-          )
+        if (version < 2 && Array.isArray(s.waypoints)) {
+          s.waypoints = s.waypoints.map((w, i) => ({
+            id: w.id ?? newId(),
+            num: w.num ?? i + 1,
+            lat: w.lat,
+            lng: w.lng,
+            delivered: w.delivered ?? false,
+          }))
         }
         return persisted as RouteState
       },

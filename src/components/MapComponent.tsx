@@ -63,17 +63,21 @@ export function MapComponent() {
   //    numbered by visiting order — works whether or not start/end were fixed.
   //  - without a route: the preview — start (green), end (red), candidates (blue).
   const markers = useMemo(() => {
+    const ckey = (p: LatLng) => `${p.lat},${p.lng}`
     const deliveredKeys = new Set(
-      waypoints.filter((w) => w.delivered).map((w) => `${w.lat},${w.lng}`),
+      waypoints.filter((w) => w.delivered).map(ckey),
     )
+    // Stable stop number by coordinate — labels match the itinerary's #num.
+    const numByKey = new Map(waypoints.map((w) => [ckey(w), w.num]))
     if (optimizedRoute) {
       const seq = optimizedRoute.orderedWaypoints
       const last = seq.length - 1
       return seq.map((point, i) => {
-        const done = deliveredKeys.has(`${point.lat},${point.lng}`)
+        const done = deliveredKeys.has(ckey(point))
+        const num = numByKey.get(ckey(point))
         return {
           point,
-          label: String(i + 1),
+          label: num !== undefined ? String(num) : i === 0 ? 'S' : 'E',
           // Delivered stops fade to grey; the rest keep start/stop/end colors.
           color: done
             ? '#cbd5e1'
@@ -83,12 +87,12 @@ export function MapComponent() {
                 ? '#e11d48'
                 : '#2563eb',
           role: done
-            ? 'Delivered'
+            ? `Delivered #${num ?? ''}`
             : i === 0
               ? 'Start'
               : i === last
                 ? 'End'
-                : `Stop ${i + 1}`,
+                : `Stop #${num ?? ''}`,
         }
       })
     }
@@ -97,8 +101,13 @@ export function MapComponent() {
       list.push({ point: startLocation, label: 'S', color: '#059669', role: 'Start' })
     waypoints
       .filter((w) => !w.delivered)
-      .forEach((point, i) =>
-        list.push({ point, label: String(i + 1), color: '#2563eb', role: `Waypoint ${i + 1}` }),
+      .forEach((point) =>
+        list.push({
+          point,
+          label: String(point.num),
+          color: '#2563eb',
+          role: `Stop #${point.num}`,
+        }),
       )
     if (endLocation)
       list.push({ point: endLocation, label: 'E', color: '#e11d48', role: 'End' })

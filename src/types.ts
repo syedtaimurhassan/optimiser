@@ -12,9 +12,11 @@ export interface ParseResult {
   errors: string[]
 }
 
-/** A candidate stop: a coordinate with a stable id and a delivered/done flag. */
+/** A candidate stop: a coordinate with a stable id, a stable display number
+ *  (identity — never shifts when other stops are removed), and a done flag. */
 export interface Stop extends LatLng {
   id: string
+  num: number
   delivered: boolean
 }
 

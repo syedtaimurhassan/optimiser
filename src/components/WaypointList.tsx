@@ -31,7 +31,7 @@ function MenuItem({
   )
 }
 
-function StopRow({ stop, index }: { stop: Stop; index: number }) {
+function StopRow({ stop }: { stop: Stop }) {
   const [open, setOpen] = useState(false)
   const startLocation = useRouteStore((s) => s.startLocation)
   const endLocation = useRouteStore((s) => s.endLocation)
@@ -49,7 +49,7 @@ function StopRow({ stop, index }: { stop: Stop; index: number }) {
     <li className="text-sm">
       <div className="flex items-center gap-2 px-2 py-2">
         <span className="min-w-0 flex-1 truncate text-slate-600">
-          <span className="mr-1 text-slate-400">{index + 1}.</span>
+          <span className="mr-1.5 font-semibold text-slate-400">#{stop.num}</span>
           {formatLatLng(stop)}
         </span>
         {isStart && (
@@ -114,8 +114,8 @@ export function WaypointList() {
 
   return (
     <ul className="max-h-72 divide-y divide-slate-100 overflow-y-auto rounded-md border border-slate-200">
-      {active.map((wp, i) => (
-        <StopRow key={wp.id} stop={wp} index={i} />
+      {active.map((wp) => (
+        <StopRow key={wp.id} stop={wp} />
       ))}
     </ul>
   )

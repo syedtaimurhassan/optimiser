@@ -16,14 +16,14 @@ const key = (p: LatLng) => `${p.lat},${p.lng}`
 const sameCoord = (a: LatLng | null, b: LatLng) =>
   !!a && a.lat === b.lat && a.lng === b.lng
 
-/** Small colored index badge matching the map markers. */
-function StopBadge({ n, color }: { n: number; color: string }) {
+/** Small colored badge showing the stop's stable number (or S/E for anchors). */
+function StopBadge({ label, color }: { label: string; color: string }) {
   return (
     <span
-      className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white"
+      className="flex h-6 min-w-6 shrink-0 items-center justify-center rounded-full px-1 text-xs font-bold text-white"
       style={{ background: color }}
     >
-      {n}
+      {label}
     </span>
   )
 }
@@ -44,14 +44,16 @@ export function Itinerary({ route }: Props) {
   )
   const markDone = useRouteStore((s) => s.markDeliveredByCoord)
 
-  const { deliveredKeys, stopKeys } = useMemo(() => {
+  const { deliveredKeys, stopKeys, numByKey } = useMemo(() => {
     const delivered = new Set<string>()
     const all = new Set<string>()
+    const nums = new Map<string, number>()
     for (const w of waypoints) {
       all.add(key(w))
+      nums.set(key(w), w.num)
       if (w.delivered) delivered.add(key(w))
     }
-    return { deliveredKeys: delivered, stopKeys: all }
+    return { deliveredKeys: delivered, stopKeys: all, numByKey: nums }
   }, [waypoints])
 
   // Remaining = ordered stops still to visit: drop delivered stops and any stop
@@ -95,12 +97,11 @@ export function Itinerary({ route }: Props) {
             <>
               <p className="text-xs text-amber-600">
                 {remaining.length} stops exceed Google Maps’ limit — split into{' '}
-                {batches.length} legs:
+                {batches.length} legs (in order):
               </p>
               {batches.map((b, i) => (
                 <a key={i} href={b.url} target="_blank" rel="noopener noreferrer" className={linkBtn}>
-                  Navigate Part {i + 1} of {batches.length} (stops {b.fromIndex + 1}–
-                  {b.toIndex + 1})
+                  Navigate Leg {i + 1} of {batches.length}
                 </a>
               ))}
             </>
@@ -112,10 +113,13 @@ export function Itinerary({ route }: Props) {
       <ol className="divide-y divide-slate-100 overflow-hidden rounded-md border border-slate-200">
         {remaining.map((p, i) => {
           const isStop = stopKeys.has(key(p))
-          const isStart = sameCoord(startLocation, p)
-          const isEnd = sameCoord(endLocation, p)
-          const color = i === 0 ? '#059669' : i === remaining.length - 1 ? '#e11d48' : '#2563eb'
-          const label = isStart ? 'Start' : isEnd ? 'End' : `Stop ${i + 1}`
+          const isFirst = i === 0
+          const isLast = i === remaining.length - 1
+          const color = isFirst ? '#059669' : isLast ? '#e11d48' : '#2563eb'
+          const num = numByKey.get(key(p))
+          // Badge = the stop's stable number; anchors (manual start/end) show S/E.
+          const badge = num !== undefined ? `#${num}` : isFirst ? 'S' : 'E'
+          const role = isFirst ? 'Start' : isLast ? 'End' : 'Stop'
 
           return (
             <li key={key(p)} className="flex items-center gap-2 px-2 py-2 text-sm">
@@ -135,9 +139,9 @@ export function Itinerary({ route }: Props) {
                   ⚑
                 </span>
               )}
-              <StopBadge n={i + 1} color={color} />
+              <StopBadge label={badge} color={color} />
               <span className="min-w-0 flex-1">
-                <span className="font-medium text-slate-700">{label}</span>
+                <span className="font-medium text-slate-700">{role}</span>
                 <span className="block truncate text-xs text-slate-500">
                   {formatLatLng(p)}
                 </span>
