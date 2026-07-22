@@ -29,12 +29,12 @@ export function FavoritesPanel() {
           onChange={(e) => setName(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && hasWork && handleSave()}
           placeholder="Name this list…"
-          className="min-w-0 flex-1 rounded-md border border-slate-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none"
+          className="min-h-[44px] min-w-0 flex-1 rounded-md border border-slate-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none"
         />
         <button
           onClick={handleSave}
           disabled={!hasWork}
-          className="shrink-0 rounded-md bg-slate-700 px-3 py-1.5 text-sm font-medium text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-300"
+          className="inline-flex min-h-[44px] shrink-0 items-center rounded-md bg-slate-700 px-3 py-1.5 text-sm font-medium text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-300"
         >
           Save
         </button>
@@ -49,22 +49,24 @@ export function FavoritesPanel() {
           {favorites.map((f) => (
             <li
               key={f.id}
-              className="flex items-center gap-2 px-3 py-2 text-sm"
+              className="flex items-center gap-2 px-3 text-sm"
             >
               <button
                 onClick={() => loadFavorite(f.id)}
-                className="min-w-0 flex-1 truncate text-left text-slate-700 hover:text-blue-600"
+                className="flex min-h-[44px] min-w-0 flex-1 items-center truncate text-left text-slate-700 hover:text-blue-600"
                 title="Load this favorite"
               >
-                {f.name}
-                <span className="ml-2 text-xs text-slate-400">
-                  {f.waypoints.length} stop{f.waypoints.length === 1 ? '' : 's'}
+                <span className="truncate">
+                  {f.name}
+                  <span className="ml-2 text-xs text-slate-400">
+                    {f.waypoints.length} stop{f.waypoints.length === 1 ? '' : 's'}
+                  </span>
                 </span>
               </button>
               <button
                 onClick={() => deleteFavorite(f.id)}
                 aria-label={`Delete ${f.name}`}
-                className="shrink-0 text-slate-300 hover:text-red-500"
+                className="flex h-11 w-11 shrink-0 items-center justify-center text-slate-300 hover:text-red-500"
               >
                 ✕
               </button>

@@ -19,7 +19,7 @@ export function HeaderPanel() {
           {hasSession && (
             <button
               onClick={resetAll}
-              className="mt-1 text-xs text-slate-400 hover:text-red-500"
+              className="-mr-2 inline-flex min-h-[44px] items-center rounded px-2 text-xs text-slate-400 hover:text-red-500"
             >
               Start over
             </button>

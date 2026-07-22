@@ -14,6 +14,8 @@ interface RouteState {
   objective: Objective
   optimizedRoute: OptimizedRoute | null
   favorites: Favorite[]
+  /** Whether the user wants fixed endpoints or an open (optimizer-chosen) route. */
+  routeMode: 'fixed' | 'open'
 
   // --- Transient (never persisted) ---
   isCalculating: boolean
@@ -21,6 +23,10 @@ interface RouteState {
   routeError: string | null
   solverReady: boolean
   solverWarning: string | null
+  /** UI-only: which stop is hovered, to sync highlight between list ↔ map. */
+  hoveredStopId: string | null
+  /** UI-only: when set, the next map click places the start/end anchor. */
+  mapPlacementMode: 'start' | 'end' | null
 
   // --- Events (actions) ---
   setStart: (value: LatLng | null) => void
@@ -34,6 +40,9 @@ interface RouteState {
   restoreAll: () => void
   setTargetK: (k: number | null) => void
   setObjective: (objective: Objective) => void
+  setHoveredStopId: (id: string | null) => void
+  setRouteMode: (mode: 'fixed' | 'open') => void
+  setMapPlacementMode: (mode: 'start' | 'end' | null) => void
   calculateRoute: () => Promise<void>
   resetAll: () => void
   warmUp: () => void
@@ -70,12 +79,15 @@ export const useRouteStore = create<RouteState>()(
       objective: 'duration',
       optimizedRoute: null,
       favorites: [],
+      routeMode: 'fixed',
 
       isCalculating: false,
       calcStatus: null,
       routeError: null,
       solverReady: false,
       solverWarning: null,
+      hoveredStopId: null,
+      mapPlacementMode: null,
 
       setStart: (value) => set({ startLocation: value }),
       setEnd: (value) => set({ endLocation: value }),
@@ -142,6 +154,16 @@ export const useRouteStore = create<RouteState>()(
         })),
       setTargetK: (k) => set({ targetK: k }),
       setObjective: (objective) => set({ objective }),
+      setHoveredStopId: (id) => set({ hoveredStopId: id }),
+      // Switching to an open route releases the fixed anchors (and cancels any
+      // pending map placement); switching back just reveals the inputs again.
+      setRouteMode: (mode) =>
+        set(
+          mode === 'open'
+            ? { routeMode: 'open', startLocation: null, endLocation: null, mapPlacementMode: null }
+            : { routeMode: 'fixed' },
+        ),
+      setMapPlacementMode: (mode) => set({ mapPlacementMode: mode }),
 
       resetAll: () =>
         set({
@@ -243,6 +265,7 @@ export const useRouteStore = create<RouteState>()(
         objective: s.objective,
         optimizedRoute: s.optimizedRoute,
         favorites: s.favorites,
+        routeMode: s.routeMode,
       }),
     },
   ),

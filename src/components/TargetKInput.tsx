@@ -48,7 +48,7 @@ export function TargetKInput() {
         onChange={(e) => handleChange(e.target.value)}
         onBlur={handleBlur}
         placeholder={max === 0 ? 'Upload waypoints first' : `1 – ${max}`}
-        className="w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none disabled:cursor-not-allowed disabled:bg-slate-100"
+        className="min-h-[44px] w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none disabled:cursor-not-allowed disabled:bg-slate-100"
       />
       <p className={`text-xs ${tooMany || tooFew ? 'text-red-500' : 'text-slate-400'}`}>
         {max === 0

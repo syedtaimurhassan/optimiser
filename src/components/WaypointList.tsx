@@ -20,7 +20,7 @@ function MenuItem({
   return (
     <button
       onClick={onClick}
-      className={`rounded-md border px-2 py-1 text-xs font-medium transition-colors ${
+      className={`inline-flex min-h-[44px] items-center rounded-md border px-3 text-xs font-medium transition-colors ${
         danger
           ? 'border-red-200 text-red-600 hover:bg-red-50'
           : 'border-slate-300 text-slate-600 hover:bg-slate-100'
@@ -39,6 +39,9 @@ function StopRow({ stop }: { stop: Stop }) {
   const setEnd = useRouteStore((s) => s.setEnd)
   const markDelivered = useRouteStore((s) => s.markDelivered)
   const removeWaypoint = useRouteStore((s) => s.removeWaypoint)
+  // Only this row re-renders when its own hover state flips.
+  const isHovered = useRouteStore((s) => s.hoveredStopId === stop.id)
+  const setHoveredStopId = useRouteStore((s) => s.setHoveredStopId)
 
   const isStart = sameCoord(startLocation, stop)
   const isEnd = sameCoord(endLocation, stop)
@@ -46,7 +49,11 @@ function StopRow({ stop }: { stop: Stop }) {
   const close = () => setOpen(false)
 
   return (
-    <li className="text-sm">
+    <li
+      className={`text-sm transition-colors ${isHovered ? 'bg-blue-50' : ''}`}
+      onMouseEnter={() => setHoveredStopId(stop.id)}
+      onMouseLeave={() => setHoveredStopId(null)}
+    >
       <div className="flex items-center gap-2 px-2 py-2">
         <span className="min-w-0 flex-1 truncate text-slate-600">
           <span className="mr-1.5 font-semibold text-slate-400">#{stop.num}</span>
@@ -66,7 +73,7 @@ function StopRow({ stop }: { stop: Stop }) {
           onClick={() => setOpen((o) => !o)}
           aria-label="Stop actions"
           aria-expanded={open}
-          className={`shrink-0 rounded px-1.5 text-base leading-none ${
+          className={`flex h-11 w-11 shrink-0 items-center justify-center rounded text-lg leading-none ${
             open ? 'bg-slate-200 text-slate-700' : 'text-slate-400 hover:bg-slate-100'
           }`}
         >

@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import type { LatLng, OptimizedRoute } from '../types'
 import { formatLatLng } from '../lib/coordinates'
@@ -28,6 +28,88 @@ function StopBadge({ label, color }: { label: string; color: string }) {
   )
 }
 
+interface RowProps {
+  p: LatLng
+  seq: number
+  isStop: boolean
+  isCurrent: boolean
+  isLast: boolean
+  num: number | undefined
+  stopId: string | undefined
+}
+
+/** One itinerary row. Owns its hover-sync subscription (so only this row
+ *  re-renders on hover) and its own slide-out animation when delivered. */
+function ItineraryRow({ p, seq, isStop, isCurrent, isLast, num, stopId }: RowProps) {
+  const markDone = useRouteStore((s) => s.markDeliveredByCoord)
+  const setHoveredStopId = useRouteStore((s) => s.setHoveredStopId)
+  const isHovered = useRouteStore((s) => stopId != null && s.hoveredStopId === stopId)
+  const [leaving, setLeaving] = useState(false)
+
+  const color = isCurrent ? '#059669' : isLast ? '#e11d48' : '#2563eb'
+  const role = isCurrent ? 'Next' : isLast ? 'Last' : 'Stop'
+
+  // Animate the row out, then commit the delivery once it has slid away.
+  function deliver() {
+    if (leaving) return
+    setLeaving(true)
+    setHoveredStopId(null)
+    setTimeout(() => markDone(p.lat, p.lng), 280)
+  }
+
+  return (
+    <li
+      onMouseEnter={() => stopId && setHoveredStopId(stopId)}
+      onMouseLeave={() => stopId && setHoveredStopId(null)}
+      className={`flex items-center gap-2 overflow-hidden px-2 text-sm transition-all duration-300 ease-in-out ${
+        leaving
+          ? 'max-h-0 -translate-x-8 py-0 opacity-0'
+          : `max-h-24 py-2 ${isHovered ? 'bg-blue-50' : ''}`
+      }`}
+    >
+      {isStop ? (
+        <button
+          onClick={deliver}
+          title="Mark delivered"
+          aria-label={`Mark stop #${num} delivered`}
+          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-slate-400 hover:text-emerald-600"
+        >
+          <span className="flex h-5 w-5 items-center justify-center rounded-full border border-slate-300 text-[11px] text-transparent hover:border-emerald-500 hover:text-emerald-500">
+            ✓
+          </span>
+        </button>
+      ) : (
+        <span
+          title="Reference point (not a stop)"
+          className="flex h-11 w-11 shrink-0 items-center justify-center text-slate-300"
+        >
+          ⚑
+        </span>
+      )}
+      <StopBadge label={String(seq)} color={color} />
+      <span className="min-w-0 flex-1">
+        <span className="font-medium text-slate-700">
+          {role}
+          {num !== undefined && (
+            <span className="ml-1.5 font-semibold text-slate-400">#{num}</span>
+          )}
+        </span>
+        <span className="block truncate text-xs text-slate-500">
+          {formatLatLng(p)}
+        </span>
+      </span>
+      <a
+        href={googleMapsSearchUrl(p)}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="inline-flex min-h-[44px] shrink-0 items-center rounded-md border border-slate-300 px-3 text-xs text-slate-600 hover:border-blue-400 hover:text-blue-600"
+      >
+        Maps ↗
+      </a>
+    </li>
+  )
+}
+
 /**
  * Live itinerary: the remaining route, DERIVED from the computed order minus
  * whatever's been marked delivered (and minus stops removed since). Ticking a
@@ -42,18 +124,19 @@ export function Itinerary({ route }: Props) {
       endLocation: s.endLocation,
     })),
   )
-  const markDone = useRouteStore((s) => s.markDeliveredByCoord)
 
-  const { deliveredKeys, stopKeys, numByKey } = useMemo(() => {
+  const { deliveredKeys, stopKeys, numByKey, idByKey } = useMemo(() => {
     const delivered = new Set<string>()
     const all = new Set<string>()
     const nums = new Map<string, number>()
+    const ids = new Map<string, string>()
     for (const w of waypoints) {
       all.add(key(w))
       nums.set(key(w), w.num)
+      ids.set(key(w), w.id)
       if (w.delivered) delivered.add(key(w))
     }
-    return { deliveredKeys: delivered, stopKeys: all, numByKey: nums }
+    return { deliveredKeys: delivered, stopKeys: all, numByKey: nums, idByKey: ids }
   }, [waypoints])
 
   // Remaining = ordered stops still to visit, each keeping its ORIGINAL route
@@ -78,7 +161,7 @@ export function Itinerary({ route }: Props) {
       : []
 
   const linkBtn =
-    'block rounded-md bg-emerald-600 px-3 py-2 text-center text-sm font-semibold text-white transition-colors hover:bg-emerald-700'
+    'flex min-h-[44px] items-center justify-center rounded-md bg-emerald-600 px-3 py-2 text-center text-sm font-semibold text-white transition-colors hover:bg-emerald-700'
 
   // Everything the route had to collect is done.
   if (route.candidatesTotal > 0 && deliverableRemaining === 0) {
@@ -117,59 +200,21 @@ export function Itinerary({ route }: Props) {
 
       {/* --- Remaining stops --- */}
       <ol className="divide-y divide-slate-100 overflow-hidden rounded-md border border-slate-200">
-        {remaining.map(({ p, seq, isStop }, ri) => {
+        {remaining.map(({ p, seq, isStop }, ri) => (
           // Badge number = stable original route position. Color/role reflect the
           // CURRENT progress: the first remaining stop is your next target (green),
           // the last remaining is the final one (red).
-          const isCurrent = ri === 0
-          const isLast = ri === remaining.length - 1
-          const color = isCurrent ? '#059669' : isLast ? '#e11d48' : '#2563eb'
-          const num = numByKey.get(key(p))
-          const role = isCurrent ? 'Next' : isLast ? 'Last' : 'Stop'
-
-          return (
-            <li key={key(p)} className="flex items-center gap-2 px-2 py-2 text-sm">
-              {isStop ? (
-                <button
-                  onClick={() => markDone(p.lat, p.lng)}
-                  title="Mark delivered"
-                  className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-slate-300 text-[11px] text-transparent hover:border-emerald-500 hover:text-emerald-500"
-                >
-                  ✓
-                </button>
-              ) : (
-                <span
-                  title="Reference point (not a stop)"
-                  className="flex h-5 w-5 shrink-0 items-center justify-center text-slate-300"
-                >
-                  ⚑
-                </span>
-              )}
-              <StopBadge label={String(seq)} color={color} />
-              <span className="min-w-0 flex-1">
-                <span className="font-medium text-slate-700">
-                  {role}
-                  {num !== undefined && (
-                    <span className="ml-1.5 font-semibold text-slate-400">
-                      #{num}
-                    </span>
-                  )}
-                </span>
-                <span className="block truncate text-xs text-slate-500">
-                  {formatLatLng(p)}
-                </span>
-              </span>
-              <a
-                href={googleMapsSearchUrl(p)}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="shrink-0 rounded-md border border-slate-300 px-2 py-1 text-xs text-slate-600 hover:border-blue-400 hover:text-blue-600"
-              >
-                Maps ↗
-              </a>
-            </li>
-          )
-        })}
+          <ItineraryRow
+            key={key(p)}
+            p={p}
+            seq={seq}
+            isStop={isStop}
+            isCurrent={ri === 0}
+            isLast={ri === remaining.length - 1}
+            num={numByKey.get(key(p))}
+            stopId={isStop ? idByKey.get(key(p)) : undefined}
+          />
+        ))}
       </ol>
     </div>
   )

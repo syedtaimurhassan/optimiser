@@ -18,7 +18,7 @@ export function ObjectiveToggle() {
           <button
             key={o.key}
             onClick={() => setObjective(o.key)}
-            className={`flex-1 rounded px-3 py-1 text-sm font-medium transition-colors ${
+            className={`min-h-[44px] flex-1 rounded px-3 py-1 text-sm font-medium transition-colors ${
               objective === o.key
                 ? 'bg-blue-600 text-white'
                 : 'text-slate-600 hover:bg-slate-100'

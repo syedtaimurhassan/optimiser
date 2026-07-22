@@ -19,6 +19,8 @@ export function CoordinateForm({ field, label, accentClass = 'bg-blue-600' }: Pr
     field === 'start' ? s.startLocation : s.endLocation,
   )
   const setValue = useRouteStore((s) => (field === 'start' ? s.setStart : s.setEnd))
+  const isPlacing = useRouteStore((s) => s.mapPlacementMode === field)
+  const setMapPlacementMode = useRouteStore((s) => s.setMapPlacementMode)
 
   const [lat, setLat] = useState('')
   const [lng, setLng] = useState('')
@@ -50,7 +52,7 @@ export function CoordinateForm({ field, label, accentClass = 'bg-blue-600' }: Pr
           <button
             type="button"
             onClick={handleClear}
-            className="text-xs text-slate-400 hover:text-red-500"
+            className="inline-flex min-h-[44px] items-center rounded px-2 text-xs text-slate-400 hover:text-red-500"
           >
             clear
           </button>
@@ -63,23 +65,38 @@ export function CoordinateForm({ field, label, accentClass = 'bg-blue-600' }: Pr
           onChange={(e) => setLat(e.target.value)}
           placeholder="Latitude"
           inputMode="decimal"
-          className="w-1/2 rounded-md border border-slate-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none"
+          className="min-h-[44px] w-1/2 rounded-md border border-slate-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none"
         />
         <input
           value={lng}
           onChange={(e) => setLng(e.target.value)}
           placeholder="Longitude"
           inputMode="decimal"
-          className="w-1/2 rounded-md border border-slate-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none"
+          className="min-h-[44px] w-1/2 rounded-md border border-slate-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none"
         />
       </div>
 
-      <button
-        type="submit"
-        className={`w-full rounded-md ${accentClass} px-3 py-1.5 text-sm font-medium text-white transition-opacity hover:opacity-90`}
-      >
-        Set {label}
-      </button>
+      <div className="flex gap-2">
+        <button
+          type="submit"
+          className={`flex min-h-[44px] flex-1 items-center justify-center rounded-md ${accentClass} px-3 py-1.5 text-sm font-medium text-white transition-opacity hover:opacity-90`}
+        >
+          Set {label}
+        </button>
+        <button
+          type="button"
+          onClick={() => setMapPlacementMode(isPlacing ? null : field)}
+          aria-pressed={isPlacing}
+          title="Pick this point by clicking the map"
+          className={`inline-flex min-h-[44px] shrink-0 items-center gap-1 rounded-md border px-3 text-sm font-medium transition-colors ${
+            isPlacing
+              ? 'border-blue-500 bg-blue-50 text-blue-700'
+              : 'border-slate-300 text-slate-600 hover:bg-slate-100'
+          }`}
+        >
+          📍 {isPlacing ? 'Click map…' : 'Map'}
+        </button>
+      </div>
 
       {value && (
         <p className="text-xs text-slate-500">Set to {formatLatLng(value)}</p>

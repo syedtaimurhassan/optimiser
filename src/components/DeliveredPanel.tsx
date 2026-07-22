@@ -24,7 +24,7 @@ export function DeliveredPanel() {
         </span>
         <button
           onClick={restoreAll}
-          className="text-xs font-medium text-blue-600 hover:text-blue-700"
+          className="inline-flex min-h-[44px] items-center rounded px-2 text-xs font-medium text-blue-600 hover:bg-blue-50 hover:text-blue-700"
         >
           ↩ Restore all
         </button>
@@ -39,7 +39,7 @@ export function DeliveredPanel() {
             <button
               onClick={() => restoreStop(wp.id)}
               title="Put back on the active list"
-              className="shrink-0 rounded-md border border-slate-300 px-2 py-0.5 text-xs text-slate-600 hover:border-blue-400 hover:text-blue-600"
+              className="inline-flex min-h-[44px] shrink-0 items-center rounded-md border border-slate-300 px-3 text-xs text-slate-600 hover:border-blue-400 hover:text-blue-600"
             >
               ↩ Restore
             </button>

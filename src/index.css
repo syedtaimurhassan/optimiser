@@ -11,3 +11,58 @@ body,
 body {
   margin: 0;
 }
+
+/* Leaflet's default zoom buttons ship at 30px; bump to a 44px WCAG 2.5.5
+   touch target. (Attribution links are inline text and exempt.) */
+.leaflet-control-zoom a {
+  width: 44px !important;
+  height: 44px !important;
+  line-height: 44px !important;
+  font-size: 20px !important;
+}
+
+/* --- Map marker interactions (M2) --- */
+/* Base circular marker; smooth scale on hover-sync. */
+.ro-marker {
+  position: relative;
+  transition: transform 0.12s ease;
+}
+/* Hover highlight, mirrored from the list ↔ map via `hoveredStopId`. */
+.ro-marker.is-hovered {
+  transform: scale(1.3);
+  outline: 3px solid rgba(37, 99, 235, 0.65);
+  outline-offset: 2px;
+  z-index: 1000;
+}
+/* The next (current) stop pulses to draw the eye. */
+.ro-marker--next::after {
+  content: '';
+  position: absolute;
+  inset: -4px;
+  border-radius: 50%;
+  border: 2px solid #059669;
+  pointer-events: none;
+  animation: ro-pulse 1.4s ease-out infinite;
+}
+@keyframes ro-pulse {
+  0% {
+    transform: scale(0.85);
+    opacity: 0.9;
+  }
+  100% {
+    transform: scale(1.9);
+    opacity: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ro-marker--next::after {
+    animation: none;
+    opacity: 0.6;
+  }
+}
+
+/* "Set on map" placement mode: the whole map reads as a target. */
+.leaflet-container.ro-placing,
+.leaflet-container.ro-placing .leaflet-interactive {
+  cursor: crosshair !important;
+}
