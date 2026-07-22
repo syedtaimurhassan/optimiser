@@ -65,7 +65,12 @@ export async function planSelectiveRoute({
 
   const startNode = startLocation ? 0 : null
   const endNode = endLocation ? points.length - 1 : null
-  const k = targetK ?? candidates.length
+  // Clamp K to a sensible range: blank = visit all; otherwise 1..candidates
+  // (so K>N caps at N and K<1 becomes 1 — never a degenerate empty route).
+  const k =
+    targetK == null
+      ? candidates.length
+      : Math.min(Math.max(Math.floor(targetK), 1), candidates.length)
   // Fixed endpoints occupy slots in the ordered route but aren't candidate stops.
   const fixedCount = (startNode !== null ? 1 : 0) + (endNode !== null ? 1 : 0)
 

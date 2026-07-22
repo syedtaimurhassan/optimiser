@@ -1,6 +1,11 @@
 import Papa from 'papaparse'
 import type { LatLng, ParseResult } from '../types'
-import { toLatLng } from './coordinates'
+import { toLatLngResult, type CoordReason } from './coordinates'
+
+const reasonText = (reason: CoordReason, label: string, i: number) =>
+  reason === 'range'
+    ? `${label} ${i + 1}: coordinates out of range (lat ±90, lng ±180)`
+    : `${label} ${i + 1}: non-numeric or missing coordinates`
 
 /**
  * Accepted header aliases. The milestone requires `lat`/`lng`, but we tolerate
@@ -34,9 +39,9 @@ export function parseCsv(file: File): Promise<ParseResult> {
         const errors: string[] = []
 
         results.data.forEach((row, i) => {
-          const point = toLatLng(pick(row, LAT_KEYS), pick(row, LNG_KEYS))
-          if (point) waypoints.push(point)
-          else errors.push(`Row ${i + 1}: missing or invalid lat/lng`)
+          const r = toLatLngResult(pick(row, LAT_KEYS), pick(row, LNG_KEYS))
+          if (r.ok) waypoints.push(r.point)
+          else errors.push(reasonText(r.reason, 'Row', i))
         })
 
         if (waypoints.length === 0 && results.data.length > 0) {
@@ -71,15 +76,15 @@ export function parseJson(file: File): Promise<ParseResult> {
         }
 
         data.forEach((item, i) => {
-          const point =
+          const r =
             item && typeof item === 'object'
-              ? toLatLng(
+              ? toLatLngResult(
                   (item as Record<string, unknown>).lat,
                   (item as Record<string, unknown>).lng,
                 )
-              : null
-          if (point) waypoints.push(point)
-          else errors.push(`Item ${i + 1}: missing or invalid lat/lng`)
+              : ({ ok: false, reason: 'invalid' } as const)
+          if (r.ok) waypoints.push(r.point)
+          else errors.push(reasonText(r.reason, 'Item', i))
         })
       } catch (e) {
         errors.push(`Invalid JSON: ${(e as Error).message}`)
