@@ -24,8 +24,11 @@ export function CalculatingOverlay() {
           <path className="opacity-90" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.4 0 0 5.4 0 12h4z" />
         </svg>
         <div className="text-left">
-          <p className="text-sm font-semibold text-slate-800">Optimizing route…</p>
-          <p className="text-xs text-slate-500">{calcStatus ?? 'Working…'}</p>
+          <p className="text-sm font-semibold text-slate-800">{calcStatus ?? 'Optimizing route…'}</p>
+          <p className="text-xs text-slate-500">
+            Exploring route options to avoid a sub-optimal result — this can take
+            a few seconds.
+          </p>
         </div>
       </div>
     </div>

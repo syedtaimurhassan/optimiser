@@ -16,6 +16,8 @@ interface RouteState {
   favorites: Favorite[]
   /** Whether the user wants fixed endpoints or an open (optimizer-chosen) route. */
   routeMode: 'fixed' | 'open'
+  /** Search-effort tier → the solver's wall-clock ceiling. */
+  searchQuality: SearchQuality
 
   // --- Transient (never persisted) ---
   isCalculating: boolean
@@ -43,12 +45,22 @@ interface RouteState {
   setHoveredStopId: (id: string | null) => void
   setRouteMode: (mode: 'fixed' | 'open') => void
   setMapPlacementMode: (mode: 'start' | 'end' | null) => void
+  setSearchQuality: (quality: SearchQuality) => void
   calculateRoute: () => Promise<void>
   resetAll: () => void
   warmUp: () => void
   saveFavorite: (name: string) => void
   loadFavorite: (id: string) => void
   deleteFavorite: (id: string) => void
+}
+
+/** How long the multi-start solver is allowed to search (a ceiling, not a fixed
+ *  spend — it exits early once converged). */
+export type SearchQuality = 'fast' | 'deep' | 'maximum'
+export const SEARCH_BUDGET_MS: Record<SearchQuality, number> = {
+  fast: 1000,
+  deep: 3000,
+  maximum: 5000,
 }
 
 const newId = () =>
@@ -80,6 +92,7 @@ export const useRouteStore = create<RouteState>()(
       optimizedRoute: null,
       favorites: [],
       routeMode: 'fixed',
+      searchQuality: 'deep',
 
       isCalculating: false,
       calcStatus: null,
@@ -164,6 +177,7 @@ export const useRouteStore = create<RouteState>()(
             : { routeMode: 'fixed' },
         ),
       setMapPlacementMode: (mode) => set({ mapPlacementMode: mode }),
+      setSearchQuality: (quality) => set({ searchQuality: quality }),
 
       resetAll: () =>
         set({
@@ -190,7 +204,8 @@ export const useRouteStore = create<RouteState>()(
       },
 
       calculateRoute: async () => {
-        const { startLocation, endLocation, waypoints, targetK, objective } = get()
+        const { startLocation, endLocation, waypoints, targetK, objective, searchQuality } =
+          get()
         set({ isCalculating: true, routeError: null, calcStatus: null })
         try {
           const route = await planSelectiveRoute({
@@ -200,6 +215,7 @@ export const useRouteStore = create<RouteState>()(
             waypoints: waypoints.filter((w) => !w.delivered),
             targetK,
             objective,
+            timeBudgetMs: SEARCH_BUDGET_MS[searchQuality],
             onStatus: (msg) => set({ calcStatus: msg }),
           })
           set({ optimizedRoute: route, solverReady: true })
@@ -266,6 +282,7 @@ export const useRouteStore = create<RouteState>()(
         optimizedRoute: s.optimizedRoute,
         favorites: s.favorites,
         routeMode: s.routeMode,
+        searchQuality: s.searchQuality,
       }),
     },
   ),

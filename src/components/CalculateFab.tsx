@@ -50,7 +50,7 @@ export function CalculateFab() {
           />
         </svg>
       )}
-      {isCalculating ? 'Optimizing…' : 'Calculate'}
+      {isCalculating ? 'Deep search…' : 'Calculate'}
     </button>
   )
 }

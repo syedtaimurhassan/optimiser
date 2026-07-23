@@ -4,6 +4,7 @@ import { CoordinateForm } from './CoordinateForm'
 import { TargetKInput } from './TargetKInput'
 import { ObjectiveToggle } from './ObjectiveToggle'
 import { RouteModeToggle } from './RouteModeToggle'
+import { SearchQualityToggle } from './SearchQualityToggle'
 
 /** Collapsible "Route options" section: fixed/open mode, start/end, K, and the
  *  Time/Distance objective — the configuration, tucked away to reduce clutter. */
@@ -32,6 +33,7 @@ export function RouteSetupPanel() {
 
       <TargetKInput />
       <ObjectiveToggle />
+      <SearchQualityToggle />
     </CollapsibleSection>
   )
 }

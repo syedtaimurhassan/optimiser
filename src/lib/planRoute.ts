@@ -22,6 +22,8 @@ export interface PlanInput {
   targetK: number | null
   /** Minimize driving time or road distance. */
   objective: Objective
+  /** Wall-clock ceiling (ms) for the multi-start solver. */
+  timeBudgetMs?: number
   onStatus?: PlanStatus
 }
 
@@ -44,6 +46,7 @@ export async function planSelectiveRoute({
   waypoints,
   targetK,
   objective,
+  timeBudgetMs,
   onStatus,
 }: PlanInput): Promise<OptimizedRoute> {
   // Candidates = uploaded stops, minus any that coincide with a chosen endpoint.
@@ -82,9 +85,10 @@ export async function planSelectiveRoute({
     )
   })
 
-  // 2) Optimize (best K + order), in-browser via OR-Tools WASM.
-  onStatus?.('Optimizing route…')
-  const visited = await solveSelectiveTSP(matrix, { startNode, endNode, k })
+  // 2) Optimize (best K + order), in-browser via OR-Tools WASM. This runs a
+  //    time-boxed multi-start search, so it intentionally takes a few seconds.
+  onStatus?.('Optimizing route (Deep Search)…')
+  const visited = await solveSelectiveTSP(matrix, { startNode, endNode, k, timeBudgetMs })
   const orderedWaypoints = visited.map((i) => points[i])
 
   // Real cost along the chosen route (sum of matrix cells).
