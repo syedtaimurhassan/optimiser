@@ -1,0 +1,1182 @@
+{
+  "meta": {
+    "engine": "ortools",
+    "recordedAt": "2026-08-06T19:51:03.720Z",
+    "node": "v24.7.0",
+    "platform": "darwin/arm64",
+    "playwright": "1.61.1",
+    "chromium": "149.0.7827.55",
+    "reps": 3,
+    "quick": false,
+    "dist": "dist-bench",
+    "noCoiMode": false,
+    "crossOriginIsolated": true,
+    "matrixSource": "osrm",
+    "coldWarmUpMs": 104,
+    "skipPenalty": 10000000,
+    "note": "peakJsHeapBytes samples the JS heap only and EXCLUDES WASM linear memory; uaMemoryAfterBytes (when present) includes it."
+  },
+  "coiProbe": {
+    "blockedRequests": [
+      "/optimiser/coi-serviceworker.js"
+    ],
+    "crossOriginIsolated": false,
+    "sharedArrayBufferDefined": false,
+    "sharedMemoryConstructible": {
+      "ok": true,
+      "bufferCtor": "SharedArrayBuffer",
+      "growable": true,
+      "atomicsUsable": true,
+      "postMessageToWorker": false,
+      "postMessageError": "Failed to execute 'postMessage' on 'Worker': SharedArrayBuffer transfer requires self.crossOriginIsolated."
+    },
+    "unguardedInit": {
+      "ok": false,
+      "hung": true,
+      "error": "no settle within 30000ms",
+      "ms": 30003
+    },
+    "solve": {
+      "stage": "warmUp",
+      "ok": false,
+      "hung": true,
+      "error": "no settle within 30000ms"
+    },
+    "consoleErrors": [
+      "Failed to load resource: the server responded with a status of 404 (Not Found)",
+      "Failed to execute 'postMessage' on 'Worker': SharedArrayBuffer transfer requires self.crossOriginIsolated.",
+      "still waiting on run dependencies:",
+      "dependency: loading-workers",
+      "(end of list)",
+      "still waiting on run dependencies:",
+      "dependency: loading-workers",
+      "(end of list)",
+      "still waiting on run dependencies:",
+      "dependency: loading-workers",
+      "(end of list)",
+      "still waiting on run dependencies:",
+      "dependency: loading-workers",
+      "(end of list)",
+      "still waiting on run dependencies:",
+      "dependency: loading-workers",
+      "(end of list)"
+    ]
+  },
+  "endurance": {
+    "note": "Consecutive solves on ONE page (no reload), 3s budget, uniform n=25 k=23. Small instances are the harsh case: cheap attempts mean more model allocations per second. Failure is std::bad_alloc from unfreed native RoutingModels — or-tools-wasm skips _routing_delete_model in browser runtimes (canDeleteNativeRoutingModel() excludes them).",
+    "instance": "uniform-n25-k23-s7",
+    "budgetMs": 3000,
+    "solvesSurvived": 11,
+    "failedOn": {
+      "solve": 12,
+      "ok": false,
+      "error": "std::bad_alloc",
+      "ms": 131
+    },
+    "detail": [
+      {
+        "solve": 1,
+        "ok": true,
+        "ms": 1363
+      },
+      {
+        "solve": 2,
+        "ok": true,
+        "ms": 1396
+      },
+      {
+        "solve": 3,
+        "ok": true,
+        "ms": 1379
+      },
+      {
+        "solve": 4,
+        "ok": true,
+        "ms": 1380
+      },
+      {
+        "solve": 5,
+        "ok": true,
+        "ms": 1381
+      },
+      {
+        "solve": 6,
+        "ok": true,
+        "ms": 1388
+      },
+      {
+        "solve": 7,
+        "ok": true,
+        "ms": 1385
+      },
+      {
+        "solve": 8,
+        "ok": true,
+        "ms": 1362
+      },
+      {
+        "solve": 9,
+        "ok": true,
+        "ms": 1367
+      },
+      {
+        "solve": 10,
+        "ok": true,
+        "ms": 1384
+      },
+      {
+        "solve": 11,
+        "ok": true,
+        "ms": 1380
+      },
+      {
+        "solve": 12,
+        "ok": false,
+        "error": "std::bad_alloc",
+        "ms": 131
+      }
+    ]
+  },
+  "runs": [
+    {
+      "id": "sample-n107-k20-s1",
+      "family": "sample",
+      "n": 107,
+      "k": 20,
+      "tier": "deep",
+      "budgetMs": 3000,
+      "reps": 3,
+      "medianWallMs": 3027.8,
+      "medianObjective": 850001489,
+      "bestObjective": 850001489,
+      "worstObjective": 850001489,
+      "medianVisited": 22,
+      "allValid": true,
+      "peakJsHeapBytes": 60300000,
+      "errors": [],
+      "detail": [
+        {
+          "rep": 0,
+          "wallMs": 3076.3,
+          "objective": 850001489,
+          "visitedCount": 22,
+          "skipped": 85,
+          "valid": true,
+          "problems": [],
+          "peakJsHeapBytes": 60300000,
+          "uaMemoryAfterBytes": null
+        },
+        {
+          "rep": 1,
+          "wallMs": 3001.7,
+          "objective": 850001489,
+          "visitedCount": 22,
+          "skipped": 85,
+          "valid": true,
+          "problems": [],
+          "peakJsHeapBytes": 60300000,
+          "uaMemoryAfterBytes": null
+        },
+        {
+          "rep": 2,
+          "wallMs": 3027.8,
+          "objective": 850001489,
+          "visitedCount": 22,
+          "skipped": 85,
+          "valid": true,
+          "problems": [],
+          "peakJsHeapBytes": 60300000,
+          "uaMemoryAfterBytes": null
+        }
+      ]
+    },
+    {
+      "id": "sample-n107-k50-s1",
+      "family": "sample",
+      "n": 107,
+      "k": 50,
+      "tier": "deep",
+      "budgetMs": 3000,
+      "reps": 3,
+      "medianWallMs": 3105.6,
+      "medianObjective": 550004336,
+      "bestObjective": 550004336,
+      "worstObjective": 550004336,
+      "medianVisited": 52,
+      "allValid": true,
+      "peakJsHeapBytes": 60300000,
+      "errors": [],
+      "detail": [
+        {
+          "rep": 0,
+          "wallMs": 3105.6,
+          "objective": 550004336,
+          "visitedCount": 52,
+          "skipped": 55,
+          "valid": true,
+          "problems": [],
+          "peakJsHeapBytes": 60300000,
+          "uaMemoryAfterBytes": null
+        },
+        {
+          "rep": 1,
+          "wallMs": 3119.8,
+          "objective": 550004336,
+          "visitedCount": 52,
+          "skipped": 55,
+          "valid": true,
+          "problems": [],
+          "peakJsHeapBytes": 60300000,
+          "uaMemoryAfterBytes": null
+        },
+        {
+          "rep": 2,
+          "wallMs": 3052,
+          "objective": 550004336,
+          "visitedCount": 52,
+          "skipped": 55,
+          "valid": true,
+          "problems": [],
+          "peakJsHeapBytes": 60300000,
+          "uaMemoryAfterBytes": null
+        }
+      ]
+    },
+    {
+      "id": "sample-n107-k105-s1",
+      "family": "sample",
+      "n": 107,
+      "k": 105,
+      "tier": "deep",
+      "budgetMs": 3000,
+      "reps": 3,
+      "medianWallMs": 3088,
+      "medianObjective": 12574,
+      "bestObjective": 12574,
+      "worstObjective": 12574,
+      "medianVisited": 107,
+      "allValid": true,
+      "peakJsHeapBytes": 60300000,
+      "errors": [],
+      "detail": [
+        {
+          "rep": 0,
+          "wallMs": 3091.7,
+          "objective": 12574,
+          "visitedCount": 107,
+          "skipped": 0,
+          "valid": true,
+          "problems": [],
+          "peakJsHeapBytes": 60300000,
+          "uaMemoryAfterBytes": null
+        },
+        {
+          "rep": 1,
+          "wallMs": 3078,
+          "objective": 12574,
+          "visitedCount": 107,
+          "skipped": 0,
+          "valid": true,
+          "problems": [],
+          "peakJsHeapBytes": 60300000,
+          "uaMemoryAfterBytes": null
+        },
+        {
+          "rep": 2,
+          "wallMs": 3088,
+          "objective": 12574,
+          "visitedCount": 107,
+          "skipped": 0,
+          "valid": true,
+          "problems": [],
+          "peakJsHeapBytes": 60300000,
+          "uaMemoryAfterBytes": null
+        }
+      ]
+    },
+    {
+      "id": "uniform-n25-k23-s7",
+      "family": "uniform",
+      "n": 25,
+      "k": 23,
+      "tier": "deep",
+      "budgetMs": 3000,
+      "reps": 3,
+      "medianWallMs": 1374.7,
+      "medianObjective": 73530,
+      "bestObjective": 73530,
+      "worstObjective": 73530,
+      "medianVisited": 25,
+      "allValid": true,
+      "peakJsHeapBytes": 60300000,
+      "errors": [],
+      "detail": [
+        {
+          "rep": 0,
+          "wallMs": 1374.7,
+          "objective": 73530,
+          "visitedCount": 25,
+          "skipped": 0,
+          "valid": true,
+          "problems": [],
+          "peakJsHeapBytes": 60300000,
+          "uaMemoryAfterBytes": null
+        },
+        {
+          "rep": 1,
+          "wallMs": 1378.3,
+          "objective": 73530,
+          "visitedCount": 25,
+          "skipped": 0,
+          "valid": true,
+          "problems": [],
+          "peakJsHeapBytes": 60300000,
+          "uaMemoryAfterBytes": null
+        },
+        {
+          "rep": 2,
+          "wallMs": 1368.1,
+          "objective": 73530,
+          "visitedCount": 25,
+          "skipped": 0,
+          "valid": true,
+          "problems": [],
+          "peakJsHeapBytes": 60300000,
+          "uaMemoryAfterBytes": null
+        }
+      ]
+    },
+    {
+      "id": "uniform-n25-k11-s7",
+      "family": "uniform",
+      "n": 25,
+      "k": 11,
+      "tier": "deep",
+      "budgetMs": 3000,
+      "reps": 3,
+      "medianWallMs": 1063.9,
+      "medianObjective": 120025561,
+      "bestObjective": 120025561,
+      "worstObjective": 120025561,
+      "medianVisited": 13,
+      "allValid": true,
+      "peakJsHeapBytes": 60300000,
+      "errors": [],
+      "detail": [
+        {
+          "rep": 0,
+          "wallMs": 1063.9,
+          "objective": 120025561,
+          "visitedCount": 13,
+          "skipped": 12,
+          "valid": true,
+          "problems": [],
+          "peakJsHeapBytes": 60300000,
+          "uaMemoryAfterBytes": null
+        },
+        {
+          "rep": 1,
+          "wallMs": 1074.5,
+          "objective": 120025561,
+          "visitedCount": 13,
+          "skipped": 12,
+          "valid": true,
+          "problems": [],
+          "peakJsHeapBytes": 60300000,
+          "uaMemoryAfterBytes": null
+        },
+        {
+          "rep": 2,
+          "wallMs": 1052.1,
+          "objective": 120025561,
+          "visitedCount": 13,
+          "skipped": 12,
+          "valid": true,
+          "problems": [],
+          "peakJsHeapBytes": 60300000,
+          "uaMemoryAfterBytes": null
+        }
+      ]
+    },
+    {
+      "id": "clustered-n25-k23-s7",
+      "family": "clustered",
+      "n": 25,
+      "k": 23,
+      "tier": "deep",
+      "budgetMs": 3000,
+      "reps": 3,
+      "medianWallMs": 2395.9,
+      "medianObjective": 54702,
+      "bestObjective": 54702,
+      "worstObjective": 54702,
+      "medianVisited": 25,
+      "allValid": true,
+      "peakJsHeapBytes": 60300000,
+      "errors": [],
+      "detail": [
+        {
+          "rep": 0,
+          "wallMs": 2397.1,
+          "objective": 54702,
+          "visitedCount": 25,
+          "skipped": 0,
+          "valid": true,
+          "problems": [],
+          "peakJsHeapBytes": 60300000,
+          "uaMemoryAfterBytes": null
+        },
+        {
+          "rep": 1,
+          "wallMs": 2395.9,
+          "objective": 54702,
+          "visitedCount": 25,
+          "skipped": 0,
+          "valid": true,
+          "problems": [],
+          "peakJsHeapBytes": 60300000,
+          "uaMemoryAfterBytes": null
+        },
+        {
+          "rep": 2,
+          "wallMs": 2381.7,
+          "objective": 54702,
+          "visitedCount": 25,
+          "skipped": 0,
+          "valid": true,
+          "problems": [],
+          "peakJsHeapBytes": 60300000,
+          "uaMemoryAfterBytes": null
+        }
+      ]
+    },
+    {
+      "id": "clustered-n25-k11-s7",
+      "family": "clustered",
+      "n": 25,
+      "k": 11,
+      "tier": "deep",
+      "budgetMs": 3000,
+      "reps": 3,
+      "medianWallMs": 1114.3,
+      "medianObjective": 120022319,
+      "bestObjective": 120022319,
+      "worstObjective": 120022319,
+      "medianVisited": 13,
+      "allValid": true,
+      "peakJsHeapBytes": 60300000,
+      "errors": [],
+      "detail": [
+        {
+          "rep": 0,
+          "wallMs": 1117.2,
+          "objective": 120022319,
+          "visitedCount": 13,
+          "skipped": 12,
+          "valid": true,
+          "problems": [],
+          "peakJsHeapBytes": 60300000,
+          "uaMemoryAfterBytes": null
+        },
+        {
+          "rep": 1,
+          "wallMs": 1111.5,
+          "objective": 120022319,
+          "visitedCount": 13,
+          "skipped": 12,
+          "valid": true,
+          "problems": [],
+          "peakJsHeapBytes": 60300000,
+          "uaMemoryAfterBytes": null
+        },
+        {
+          "rep": 2,
+          "wallMs": 1114.3,
+          "objective": 120022319,
+          "visitedCount": 13,
+          "skipped": 12,
+          "valid": true,
+          "problems": [],
+          "peakJsHeapBytes": 60300000,
+          "uaMemoryAfterBytes": null
+        }
+      ]
+    },
+    {
+      "id": "decoy-n25-k9-s11",
+      "family": "decoy",
+      "n": 25,
+      "k": 9,
+      "tier": "deep",
+      "budgetMs": 3000,
+      "reps": 3,
+      "medianWallMs": 1015.6,
+      "medianObjective": 140019795,
+      "bestObjective": 140019795,
+      "worstObjective": 140019795,
+      "medianVisited": 11,
+      "allValid": true,
+      "peakJsHeapBytes": 60300000,
+      "errors": [],
+      "detail": [
+        {
+          "rep": 0,
+          "wallMs": 1015.4,
+          "objective": 140019795,
+          "visitedCount": 11,
+          "skipped": 14,
+          "valid": true,
+          "problems": [],
+          "peakJsHeapBytes": 60300000,
+          "uaMemoryAfterBytes": null
+        },
+        {
+          "rep": 1,
+          "wallMs": 1015.6,
+          "objective": 140019795,
+          "visitedCount": 11,
+          "skipped": 14,
+          "valid": true,
+          "problems": [],
+          "peakJsHeapBytes": 60300000,
+          "uaMemoryAfterBytes": null
+        },
+        {
+          "rep": 2,
+          "wallMs": 1107.8,
+          "objective": 140019795,
+          "visitedCount": 11,
+          "skipped": 14,
+          "valid": true,
+          "problems": [],
+          "peakJsHeapBytes": 60300000,
+          "uaMemoryAfterBytes": null
+        }
+      ]
+    },
+    {
+      "id": "uniform-n50-k48-s7",
+      "family": "uniform",
+      "n": 50,
+      "k": 48,
+      "tier": "deep",
+      "budgetMs": 3000,
+      "reps": 3,
+      "medianWallMs": 3029.2,
+      "medianObjective": 94433,
+      "bestObjective": 94433,
+      "worstObjective": 94433,
+      "medianVisited": 50,
+      "allValid": true,
+      "peakJsHeapBytes": 60300000,
+      "errors": [],
+      "detail": [
+        {
+          "rep": 0,
+          "wallMs": 3006.3,
+          "objective": 94433,
+          "visitedCount": 50,
+          "skipped": 0,
+          "valid": true,
+          "problems": [],
+          "peakJsHeapBytes": 60300000,
+          "uaMemoryAfterBytes": null
+        },
+        {
+          "rep": 1,
+          "wallMs": 3029.2,
+          "objective": 94433,
+          "visitedCount": 50,
+          "skipped": 0,
+          "valid": true,
+          "problems": [],
+          "peakJsHeapBytes": 60300000,
+          "uaMemoryAfterBytes": null
+        },
+        {
+          "rep": 2,
+          "wallMs": 3039.6,
+          "objective": 94433,
+          "visitedCount": 50,
+          "skipped": 0,
+          "valid": true,
+          "problems": [],
+          "peakJsHeapBytes": 60300000,
+          "uaMemoryAfterBytes": null
+        }
+      ]
+    },
+    {
+      "id": "uniform-n50-k24-s7",
+      "family": "uniform",
+      "n": 50,
+      "k": 24,
+      "tier": "deep",
+      "budgetMs": 3000,
+      "reps": 3,
+      "medianWallMs": 3000.3,
+      "medianObjective": 240039375,
+      "bestObjective": 240039375,
+      "worstObjective": 240039375,
+      "medianVisited": 26,
+      "allValid": true,
+      "peakJsHeapBytes": 60300000,
+      "errors": [],
+      "detail": [
+        {
+          "rep": 0,
+          "wallMs": 3022.2,
+          "objective": 240039375,
+          "visitedCount": 26,
+          "skipped": 24,
+          "valid": true,
+          "problems": [],
+          "peakJsHeapBytes": 60300000,
+          "uaMemoryAfterBytes": null
+        },
+        {
+          "rep": 1,
+          "wallMs": 3000.2,
+          "objective": 240039375,
+          "visitedCount": 26,
+          "skipped": 24,
+          "valid": true,
+          "problems": [],
+          "peakJsHeapBytes": 60300000,
+          "uaMemoryAfterBytes": null
+        },
+        {
+          "rep": 2,
+          "wallMs": 3000.3,
+          "objective": 240039375,
+          "visitedCount": 26,
+          "skipped": 24,
+          "valid": true,
+          "problems": [],
+          "peakJsHeapBytes": 60300000,
+          "uaMemoryAfterBytes": null
+        }
+      ]
+    },
+    {
+      "id": "clustered-n50-k48-s7",
+      "family": "clustered",
+      "n": 50,
+      "k": 48,
+      "tier": "deep",
+      "budgetMs": 3000,
+      "reps": 3,
+      "medianWallMs": 3040.2,
+      "medianObjective": 54459,
+      "bestObjective": 54459,
+      "worstObjective": 54459,
+      "medianVisited": 50,
+      "allValid": true,
+      "peakJsHeapBytes": 60300000,
+      "errors": [],
+      "detail": [
+        {
+          "rep": 0,
+          "wallMs": 3044.2,
+          "objective": 54459,
+          "visitedCount": 50,
+          "skipped": 0,
+          "valid": true,
+          "problems": [],
+          "peakJsHeapBytes": 60300000,
+          "uaMemoryAfterBytes": null
+        },
+        {
+          "rep": 1,
+          "wallMs": 3035.9,
+          "objective": 54459,
+          "visitedCount": 50,
+          "skipped": 0,
+          "valid": true,
+          "problems": [],
+          "peakJsHeapBytes": 60300000,
+          "uaMemoryAfterBytes": null
+        },
+        {
+          "rep": 2,
+          "wallMs": 3040.2,
+          "objective": 54459,
+          "visitedCount": 50,
+          "skipped": 0,
+          "valid": true,
+          "problems": [],
+          "peakJsHeapBytes": 60300000,
+          "uaMemoryAfterBytes": null
+        }
+      ]
+    },
+    {
+      "id": "clustered-n50-k24-s7",
+      "family": "clustered",
+      "n": 50,
+      "k": 24,
+      "tier": "deep",
+      "budgetMs": 3000,
+      "reps": 3,
+      "medianWallMs": 3019.4,
+      "medianObjective": 240030356,
+      "bestObjective": 240030356,
+      "worstObjective": 240030356,
+      "medianVisited": 26,
+      "allValid": true,
+      "peakJsHeapBytes": 60300000,
+      "errors": [],
+      "detail": [
+        {
+          "rep": 0,
+          "wallMs": 3019.4,
+          "objective": 240030356,
+          "visitedCount": 26,
+          "skipped": 24,
+          "valid": true,
+          "problems": [],
+          "peakJsHeapBytes": 60300000,
+          "uaMemoryAfterBytes": null
+        },
+        {
+          "rep": 1,
+          "wallMs": 3017.5,
+          "objective": 240030356,
+          "visitedCount": 26,
+          "skipped": 24,
+          "valid": true,
+          "problems": [],
+          "peakJsHeapBytes": 60300000,
+          "uaMemoryAfterBytes": null
+        },
+        {
+          "rep": 2,
+          "wallMs": 3022.7,
+          "objective": 240030356,
+          "visitedCount": 26,
+          "skipped": 24,
+          "valid": true,
+          "problems": [],
+          "peakJsHeapBytes": 60300000,
+          "uaMemoryAfterBytes": null
+        }
+      ]
+    },
+    {
+      "id": "decoy-n50-k19-s11",
+      "family": "decoy",
+      "n": 50,
+      "k": 19,
+      "tier": "deep",
+      "budgetMs": 3000,
+      "reps": 3,
+      "medianWallMs": 3020.8,
+      "medianObjective": 290020495,
+      "bestObjective": 290020495,
+      "worstObjective": 290020495,
+      "medianVisited": 21,
+      "allValid": true,
+      "peakJsHeapBytes": 60300000,
+      "errors": [],
+      "detail": [
+        {
+          "rep": 0,
+          "wallMs": 3020.8,
+          "objective": 290020495,
+          "visitedCount": 21,
+          "skipped": 29,
+          "valid": true,
+          "problems": [],
+          "peakJsHeapBytes": 60300000,
+          "uaMemoryAfterBytes": null
+        },
+        {
+          "rep": 1,
+          "wallMs": 3009.5,
+          "objective": 290020495,
+          "visitedCount": 21,
+          "skipped": 29,
+          "valid": true,
+          "problems": [],
+          "peakJsHeapBytes": 60300000,
+          "uaMemoryAfterBytes": null
+        },
+        {
+          "rep": 2,
+          "wallMs": 3026.8,
+          "objective": 290020495,
+          "visitedCount": 21,
+          "skipped": 29,
+          "valid": true,
+          "problems": [],
+          "peakJsHeapBytes": 60300000,
+          "uaMemoryAfterBytes": null
+        }
+      ]
+    },
+    {
+      "id": "uniform-n107-k105-s7",
+      "family": "uniform",
+      "n": 107,
+      "k": 105,
+      "tier": "deep",
+      "budgetMs": 3000,
+      "reps": 3,
+      "medianWallMs": 3011.4,
+      "medianObjective": 140032,
+      "bestObjective": 140032,
+      "worstObjective": 140032,
+      "medianVisited": 107,
+      "allValid": true,
+      "peakJsHeapBytes": 60300000,
+      "errors": [],
+      "detail": [
+        {
+          "rep": 0,
+          "wallMs": 3019.3,
+          "objective": 140032,
+          "visitedCount": 107,
+          "skipped": 0,
+          "valid": true,
+          "problems": [],
+          "peakJsHeapBytes": 60300000,
+          "uaMemoryAfterBytes": null
+        },
+        {
+          "rep": 1,
+          "wallMs": 3008.1,
+          "objective": 140032,
+          "visitedCount": 107,
+          "skipped": 0,
+          "valid": true,
+          "problems": [],
+          "peakJsHeapBytes": 60300000,
+          "uaMemoryAfterBytes": null
+        },
+        {
+          "rep": 2,
+          "wallMs": 3011.4,
+          "objective": 140032,
+          "visitedCount": 107,
+          "skipped": 0,
+          "valid": true,
+          "problems": [],
+          "peakJsHeapBytes": 60300000,
+          "uaMemoryAfterBytes": null
+        }
+      ]
+    },
+    {
+      "id": "uniform-n107-k52-s7",
+      "family": "uniform",
+      "n": 107,
+      "k": 52,
+      "tier": "deep",
+      "budgetMs": 3000,
+      "reps": 3,
+      "medianWallMs": 3045.1,
+      "medianObjective": 530058571,
+      "bestObjective": 530058571,
+      "worstObjective": 530058571,
+      "medianVisited": 54,
+      "allValid": true,
+      "peakJsHeapBytes": 60300000,
+      "errors": [],
+      "detail": [
+        {
+          "rep": 0,
+          "wallMs": 3037.8,
+          "objective": 530058571,
+          "visitedCount": 54,
+          "skipped": 53,
+          "valid": true,
+          "problems": [],
+          "peakJsHeapBytes": 60300000,
+          "uaMemoryAfterBytes": null
+        },
+        {
+          "rep": 1,
+          "wallMs": 3054.6,
+          "objective": 530058571,
+          "visitedCount": 54,
+          "skipped": 53,
+          "valid": true,
+          "problems": [],
+          "peakJsHeapBytes": 60300000,
+          "uaMemoryAfterBytes": null
+        },
+        {
+          "rep": 2,
+          "wallMs": 3045.1,
+          "objective": 530058571,
+          "visitedCount": 54,
+          "skipped": 53,
+          "valid": true,
+          "problems": [],
+          "peakJsHeapBytes": 60300000,
+          "uaMemoryAfterBytes": null
+        }
+      ]
+    },
+    {
+      "id": "clustered-n107-k105-s7",
+      "family": "clustered",
+      "n": 107,
+      "k": 105,
+      "tier": "deep",
+      "budgetMs": 3000,
+      "reps": 3,
+      "medianWallMs": 3159.7,
+      "medianObjective": 81225,
+      "bestObjective": 81225,
+      "worstObjective": 81225,
+      "medianVisited": 107,
+      "allValid": true,
+      "peakJsHeapBytes": 60300000,
+      "errors": [],
+      "detail": [
+        {
+          "rep": 0,
+          "wallMs": 3152.6,
+          "objective": 81225,
+          "visitedCount": 107,
+          "skipped": 0,
+          "valid": true,
+          "problems": [],
+          "peakJsHeapBytes": 60300000,
+          "uaMemoryAfterBytes": null
+        },
+        {
+          "rep": 1,
+          "wallMs": 3159.7,
+          "objective": 81225,
+          "visitedCount": 107,
+          "skipped": 0,
+          "valid": true,
+          "problems": [],
+          "peakJsHeapBytes": 60300000,
+          "uaMemoryAfterBytes": null
+        },
+        {
+          "rep": 2,
+          "wallMs": 3163.6,
+          "objective": 81225,
+          "visitedCount": 107,
+          "skipped": 0,
+          "valid": true,
+          "problems": [],
+          "peakJsHeapBytes": 60300000,
+          "uaMemoryAfterBytes": null
+        }
+      ]
+    },
+    {
+      "id": "clustered-n107-k52-s7",
+      "family": "clustered",
+      "n": 107,
+      "k": 52,
+      "tier": "deep",
+      "budgetMs": 3000,
+      "reps": 3,
+      "medianWallMs": 3101.8,
+      "medianObjective": 530035109,
+      "bestObjective": 530035109,
+      "worstObjective": 530035109,
+      "medianVisited": 54,
+      "allValid": true,
+      "peakJsHeapBytes": 60300000,
+      "errors": [],
+      "detail": [
+        {
+          "rep": 0,
+          "wallMs": 3002.6,
+          "objective": 530035109,
+          "visitedCount": 54,
+          "skipped": 53,
+          "valid": true,
+          "problems": [],
+          "peakJsHeapBytes": 60300000,
+          "uaMemoryAfterBytes": null
+        },
+        {
+          "rep": 1,
+          "wallMs": 3104.5,
+          "objective": 530035109,
+          "visitedCount": 54,
+          "skipped": 53,
+          "valid": true,
+          "problems": [],
+          "peakJsHeapBytes": 60300000,
+          "uaMemoryAfterBytes": null
+        },
+        {
+          "rep": 2,
+          "wallMs": 3101.8,
+          "objective": 530035109,
+          "visitedCount": 54,
+          "skipped": 53,
+          "valid": true,
+          "problems": [],
+          "peakJsHeapBytes": 60300000,
+          "uaMemoryAfterBytes": null
+        }
+      ]
+    },
+    {
+      "id": "decoy-n107-k42-s11",
+      "family": "decoy",
+      "n": 107,
+      "k": 42,
+      "tier": "deep",
+      "budgetMs": 3000,
+      "reps": 3,
+      "medianWallMs": 3033.9,
+      "medianObjective": 630023033,
+      "bestObjective": 630023033,
+      "worstObjective": 630023033,
+      "medianVisited": 44,
+      "allValid": true,
+      "peakJsHeapBytes": 60300000,
+      "errors": [],
+      "detail": [
+        {
+          "rep": 0,
+          "wallMs": 3033.9,
+          "objective": 630023033,
+          "visitedCount": 44,
+          "skipped": 63,
+          "valid": true,
+          "problems": [],
+          "peakJsHeapBytes": 60300000,
+          "uaMemoryAfterBytes": null
+        },
+        {
+          "rep": 1,
+          "wallMs": 3030.2,
+          "objective": 630023033,
+          "visitedCount": 44,
+          "skipped": 63,
+          "valid": true,
+          "problems": [],
+          "peakJsHeapBytes": 60300000,
+          "uaMemoryAfterBytes": null
+        },
+        {
+          "rep": 2,
+          "wallMs": 3061.5,
+          "objective": 630023033,
+          "visitedCount": 44,
+          "skipped": 63,
+          "valid": true,
+          "problems": [],
+          "peakJsHeapBytes": 60300000,
+          "uaMemoryAfterBytes": null
+        }
+      ]
+    },
+    {
+      "id": "sample-n107-k50-s1",
+      "family": "sample",
+      "n": 107,
+      "k": 50,
+      "tier": "fast",
+      "budgetMs": 1000,
+      "reps": 3,
+      "medianWallMs": 1038.3,
+      "medianObjective": 550004336,
+      "bestObjective": 550004336,
+      "worstObjective": 550004336,
+      "medianVisited": 52,
+      "allValid": true,
+      "peakJsHeapBytes": 60300000,
+      "errors": [],
+      "detail": [
+        {
+          "rep": 0,
+          "wallMs": 1051.7,
+          "objective": 550004336,
+          "visitedCount": 52,
+          "skipped": 55,
+          "valid": true,
+          "problems": [],
+          "peakJsHeapBytes": 60300000,
+          "uaMemoryAfterBytes": null
+        },
+        {
+          "rep": 1,
+          "wallMs": 1036.7,
+          "objective": 550004336,
+          "visitedCount": 52,
+          "skipped": 55,
+          "valid": true,
+          "problems": [],
+          "peakJsHeapBytes": 60300000,
+          "uaMemoryAfterBytes": null
+        },
+        {
+          "rep": 2,
+          "wallMs": 1038.3,
+          "objective": 550004336,
+          "visitedCount": 52,
+          "skipped": 55,
+          "valid": true,
+          "problems": [],
+          "peakJsHeapBytes": 60300000,
+          "uaMemoryAfterBytes": null
+        }
+      ]
+    },
+    {
+      "id": "sample-n107-k50-s1",
+      "family": "sample",
+      "n": 107,
+      "k": 50,
+      "tier": "maximum",
+      "budgetMs": 5000,
+      "reps": 3,
+      "medianWallMs": 5037.1,
+      "medianObjective": 550004336,
+      "bestObjective": 550004336,
+      "worstObjective": 550004336,
+      "medianVisited": 52,
+      "allValid": true,
+      "peakJsHeapBytes": 60300000,
+      "errors": [],
+      "detail": [
+        {
+          "rep": 0,
+          "wallMs": 5037.1,
+          "objective": 550004336,
+          "visitedCount": 52,
+          "skipped": 55,
+          "valid": true,
+          "problems": [],
+          "peakJsHeapBytes": 60300000,
+          "uaMemoryAfterBytes": null
+        },
+        {
+          "rep": 1,
+          "wallMs": 5036.5,
+          "objective": 550004336,
+          "visitedCount": 52,
+          "skipped": 55,
+          "valid": true,
+          "problems": [],
+          "peakJsHeapBytes": 60300000,
+          "uaMemoryAfterBytes": null
+        },
+        {
+          "rep": 2,
+          "wallMs": 5050.5,
+          "objective": 550004336,
+          "visitedCount": 52,
+          "skipped": 55,
+          "valid": true,
+          "problems": [],
+          "peakJsHeapBytes": 60300000,
+          "uaMemoryAfterBytes": null
+        }
+      ]
+    }
+  ]
+}

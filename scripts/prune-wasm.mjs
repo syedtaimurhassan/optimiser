@@ -8,7 +8,9 @@
 import { readdirSync, rmSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 
-const assetsDir = 'dist/assets'
+// Defaults to the production output; the benchmark harness passes its own
+// build directory so it can measure a pruned bundle identical to the deployed one.
+const assetsDir = process.argv[2] ?? 'dist/assets'
 const KEEP = /^routing_runtime_asyncify-/ // the only runtime we load
 const IS_RUNTIME = /_runtime.*\.(wasm|js)$/
 

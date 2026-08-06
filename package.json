@@ -10,7 +10,14 @@
     "lint": "oxlint",
     "preview": "vite preview",
     "predeploy": "npm run build && node scripts/prune-wasm.mjs",
-    "deploy": "gh-pages -d dist --dotfiles"
+    "deploy": "gh-pages -d dist --dotfiles",
+    "bench:build": "VITE_BENCH_SEAM=1 vite build --outDir dist-bench && node scripts/prune-wasm.mjs dist-bench/assets",
+    "bench:build:nocoi": "rm -rf dist-bench-nocoi && cp -R dist-bench dist-bench-nocoi && node bench/patch-pthread-pool.mjs dist-bench-nocoi/assets",
+    "bench:nocoi": "npm run bench:build:nocoi && node bench/run.mjs --dist=dist-bench-nocoi --no-coi --out=ortools-nocoi.json",
+    "bench:fixtures": "node bench/fetch-fixtures.mjs",
+    "bench:verify-seam": "node bench/verify-seam.mjs",
+    "prebench": "npm run bench:build",
+    "bench": "node bench/run.mjs"
   },
   "dependencies": {
     "leaflet": "^1.9.4",

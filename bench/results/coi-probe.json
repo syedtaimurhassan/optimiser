@@ -1,0 +1,32 @@
+{
+  "blockedRequests": [
+    "/optimiser/coi-serviceworker.js"
+  ],
+  "crossOriginIsolated": false,
+  "sharedArrayBufferDefined": false,
+  "sharedMemoryConstructible": {
+    "ok": true,
+    "bufferCtor": "SharedArrayBuffer",
+    "growable": true,
+    "atomicsUsable": true,
+    "postMessageToWorker": false,
+    "postMessageError": "Failed to execute 'postMessage' on 'Worker': SharedArrayBuffer transfer requires self.crossOriginIsolated."
+  },
+  "unguardedInit": {
+    "ok": true,
+    "ms": 71
+  },
+  "solve": {
+    "stage": "solve",
+    "ok": true,
+    "visited": [
+      0,
+      1,
+      2,
+      3
+    ]
+  },
+  "consoleErrors": [
+    "Failed to load resource: the server responded with a status of 404 (Not Found)"
+  ]
+}
