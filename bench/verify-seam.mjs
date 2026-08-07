@@ -12,7 +12,8 @@ import { fileURLToPath } from 'node:url'
 import { dirname, join, resolve } from 'node:path'
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
-const MARKER = '__bench'
+/** Everything that must never reach a production bundle. */
+const MARKERS = ['__bench', '__crash']
 
 console.log('building production bundle (no VITE_BENCH_SEAM)…')
 execFileSync('npx', ['vite', 'build', '--outDir', 'dist-seamcheck'], {
@@ -30,14 +31,18 @@ if (!existsSync(assets)) {
 const offenders = []
 for (const file of readdirSync(assets)) {
   if (!/\.(js|css)$/.test(file)) continue
-  if (readFileSync(join(assets, file), 'utf8').includes(MARKER)) offenders.push(file)
+  const src = readFileSync(join(assets, file), 'utf8')
+  for (const marker of MARKERS) {
+    if (src.includes(marker)) offenders.push(`assets/${file} contains "${marker}"`)
+  }
 }
 
 if (offenders.length > 0) {
-  console.error(`\nFAIL: seam marker "${MARKER}" found in production output:`)
-  for (const f of offenders) console.error(`  - assets/${f}`)
-  console.error('\nThe dead-branch elimination in src/main.tsx is no longer working.')
+  console.error('\nFAIL: dev-only markers found in production output:')
+  for (const f of offenders) console.error(`  - ${f}`)
+  console.error('\nDead-branch elimination is no longer working. Check the')
+  console.error('import.meta.env guards in src/main.tsx and src/routes.tsx.')
   process.exit(1)
 }
 
-console.log(`\nPASS: "${MARKER}" absent from all production assets — seam is bench-only.`)
+console.log(`\nPASS: ${MARKERS.map((m) => `"${m}"`).join(', ')} absent from all production assets.`)
