@@ -1,9 +1,12 @@
 import { create } from 'zustand'
-import { persist } from 'zustand/middleware'
+import { persist, createJSONStorage } from 'zustand/middleware'
 import type { LatLng, OptimizedRoute, Favorite, Stop } from '../types'
 import type { Objective } from '../lib/routingService'
 import { planSelectiveRoute } from '../lib/planRoute'
 import { warmUpSolver } from '../lib/solver'
+import { indexedDbStorage } from '../lib/persistence/zustandStorage'
+import { STATE_PERSIST_KEY } from '../lib/persistence/db'
+import { bootPersistence } from '../lib/persistence/boot'
 
 interface RouteState {
   // --- Persisted (the user's work) ---
@@ -256,8 +259,20 @@ export const useRouteStore = create<RouteState>()(
         set((s) => ({ favorites: s.favorites.filter((f) => f.id !== id) })),
     }),
     {
-      name: 'route-optimiser:v2',
+      name: STATE_PERSIST_KEY,
       version: 2,
+      /**
+       * Persist to IndexedDB rather than localStorage (M1). The blob format is
+       * unchanged — only the backend moved — which is what lets the legacy
+       * migration relocate an existing session verbatim.
+       *
+       * `skipHydration` hands rehydration timing to us: the migration has to
+       * finish writing the blob before `persist` reads it, or rehydration reads
+       * an empty store and the first write destroys the migrated session. See
+       * lib/persistence/boot.ts.
+       */
+      storage: createJSONStorage(() => indexedDbStorage),
+      skipHydration: true,
       // Migrate old sessions: waypoints used to be plain {lat,lng}[], then Stops
       // without a stable `num`.
       migrate: (persisted, version) => {
@@ -287,3 +302,24 @@ export const useRouteStore = create<RouteState>()(
     },
   ),
 )
+
+/**
+ * Boot the persistence layer, then rehydrate — strictly in that order.
+ *
+ * Idempotent and never rejects: a persistence failure starts the app empty
+ * rather than blocking it. `useHydrated` gates the UI so the user sees a
+ * loading state instead of a flash of empty state that then fills in.
+ */
+let hydrationPromise: Promise<void> | null = null
+
+export function hydrateRouteStore(): Promise<void> {
+  if (!hydrationPromise) {
+    hydrationPromise = (async () => {
+      await bootPersistence()
+      await useRouteStore.persist.rehydrate()
+    })().catch((e) => {
+      console.error('[store] hydration failed; continuing with empty state', e)
+    })
+  }
+  return hydrationPromise
+}
