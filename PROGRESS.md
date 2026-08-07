@@ -448,3 +448,181 @@ the "+". Screenshots showed it; the geometry probe proved the fix.
 5. **The semantic colour rule is enforceable and worth enforcing**: red only
    for failure or destruction, green only for success. If M4 needs a warning
    colour, add an amber token — do not reach for `danger`.
+
+---
+
+## M4 — MapLibre GL, and the map layer Spoke's UI needs
+
+**Date:** 2026-08-07 · **Branch:** `m4-maplibre` (from `m3-outer-shell` @ `fb8d353`)
+
+Leaflet is gone. The map is now WebGL with global symbol collision, which is
+the whole point: Spoke ships overlapping chips and labels clipped mid-word
+("Elmekro… 10"), and this is the machinery that makes that impossible rather
+than the machinery that makes it a bug to fix later.
+
+### What changed
+
+**Dependencies:** `+maplibre-gl` 5.24.0 (pinned exact), `−leaflet`,
+`−react-leaflet`, `−@types/leaflet`. Net one.
+
+**Added**
+
+- `src/lib/map/*` — `basemap`, `palette`, `chipSpec`, `chipImage`, `features`,
+  `splitRoute`, `camera`, `layers`, `controller`, plus four test files
+- `src/components/map/*` — `MapChrome`, `FabStack`, `FinishPill`, `PeekPill`,
+  `MapControllerContext`
+- `src/hooks/useGeolocation.ts`
+- `bench/m4-smoke.mjs` (40 checks, `npm run smoke:m4`), `bench/m4-perf.mjs`
+  (`npm run map:perf`)
+- `DEVICE-SMOKE-TEST.md` §10–14
+
+**Rewritten:** `MapComponent.tsx`. **Modified:** `index.css` (all Leaflet CSS
+deleted), `ui/icons.tsx` (+6 glyphs), `DrawerTrigger`, `uiStore` (+`basemap`,
+and `cameraIntent` finally has a consumer).
+
+### Task 1 — the tile source, with receipts
+
+**OpenFreeMap primary, Stadia Maps fallback.** Neither puts a secret in the
+bundle: OpenFreeMap has no key at all, Stadia authenticates on the `Origin`
+header. Verified by hitting the endpoints, not by reading docs —
+`access-control-allow-origin: *`, 111 style layers, glyphs and sprites on the
+same host, no request cap, commercial use permitted.
+
+**GitHub Pages does serve range requests.** Measured against the live site:
+`HTTP/2 206`, `content-range: bytes 0-99/721351`, `accept-ranges: bytes`. So
+PMTiles is technically viable, and I still recommended against it for M4 — not
+because of the known Firefox range-caching bug (PMTiles #582, still open) but
+because **this app has no fixed geography**. A driver uploads arbitrary
+coordinates; a Copenhagen extract renders grey tiles for a route in Aarhus.
+PMTiles is right for M14, scoped to the driver's actual bbox.
+
+### Verified
+
+- **40/40 M4 browser checks**, including the milestone's critical detail
+  driven end to end: tap a failed stop in a green group, assert the chip fills
+  `#12823c` and the failure appears only on the badge
+- **180 unit tests** (97 from M3 + 83 new)
+- M1/M2 (42) and M3 (50) checks still pass; seam absent from production
+- `npm run lint`, `npm run build`, `tsc -b` clean; `lib/` still imports neither
+  React nor the store
+
+### The numbers
+
+**Bundle.** 459 kB gzip, up from 171 kB — MapLibre costs **~288 kB gzip** as
+currently built. Building with explicit `--minify esbuild` gives 392 kB, so
+**M1's unminified-bundle finding is now worth 67 kB gzip / 893 kB raw**, up
+from 23 kB / 272 kB. It was a nice-to-have at M1; it is three times more
+valuable now and I would take it in M5.
+
+**Performance — a proxy, not the definition of done.** 300 markers, 390×844,
+desktop Chromium:
+
+| | median frame | mean | p95 |
+|---|---|---|---|
+| unthrottled | 17.4 ms (57 fps) | 25.6 ms | 50.0 ms |
+| 4× CPU throttle | 33.4 ms (30 fps) | 39.6 ms | 66.7 ms |
+
+Cold load → map ready: ~300 ms. Markers placed: **z12 39 · z14 18 · z16 0** of
+300 — suppression is deliberate.
+
+🔴 **I could not measure FPS on a real mid-range Android, and that is the
+definition-of-done item.** This rig throttles the CPU and models nothing else
+— no GPU, no memory bandwidth, no thermals — and a phone is usually bound by
+the things it cannot see. The median sitting at the vsync cap unthrottled is
+reassuring; the p95 spikes during zoom transitions are symbol re-placement and
+are the weak point. **Run DEVICE-SMOKE-TEST.md §11.**
+
+### Decisions worth knowing
+
+**One bitmap per stop, one symbol layer.** The alternative was a chip layer
+plus a separate badge layer, and MapLibre cannot link two layers into one
+collision unit — a badge could outlive the chip it belongs to. Baking the
+badge into the chip makes the pairing true by construction. `icon-optional`
+and `text-optional` are both `false`, which is what makes a chip and its
+label collide as one thing; with either `true`, MapLibre will place a chip
+whose label did not fit. That single pair of properties is the fix for the
+clipped labels.
+
+**Fill and badge are independent inputs, and that is a unit test.**
+`chipSpec.ts` is pure and separate from the canvas precisely so the rule —
+fill is the GROUP colour, badge is the STATUS, they never cross — is
+enforceable rather than a thing to remember.
+
+**Deviations, all deliberate:**
+- **Delivered stops are dimmed** as well as badged. Opacity only, never hue.
+  A finished round is otherwise 200 chips at full strength and the remaining
+  work stops standing out.
+- **Labels are dropped below z14.** Measured, not taste: with labels always
+  on, 2 of 6 test stops placed at z12. `LABEL_MIN_ZOOM` is the knob.
+- **Streets ↔ light, not streets ↔ satellite.** Keyless satellite has no
+  clean free source; picking one is a provider decision, not a smuggled-in
+  default.
+- **The finish pill's estimate is a straight line through a curve** — the
+  solved total scaled by the share of stops still pending. `arrivalSec` is
+  still empty; M7 should replace this, not refine it.
+
+### What surprised me
+
+1. **`map.isStyleLoaded()` is the wrong gate for adding sources and layers.**
+   It is true only once the style is parsed AND every source has loaded — and
+   sources finish on `sourcedata`, not `styledata`. So the gate never opened
+   on the same tick an event fired, and the app rendered a flawless basemap
+   with absolutely nothing on it. No error, no warning, a perfect map of
+   Copenhagen with no stops. It now simply tries, and retries on the next
+   `styledata` if the style is not parsed.
+
+2. **My basemap-fallback trigger matched MapLibre's own error messages.** It
+   sniffed message text for `/style/`, which matches "does not exist in the
+   map's style" — so an unrelated runtime error silently switched tile
+   provider mid-session. It now fires only on an AJAXError whose URL is
+   actually an openfreemap.org one. Error-string matching was never going to
+   survive contact with a library that talks about styles constantly.
+
+3. **My own test for the milestone's critical detail passed vacuously.** It
+   asserted a failed stop in a green group was "not red" — but unselected
+   chips are white whatever group they belong to, so the assertion was true
+   for a reason that had nothing to do with the rule. The rule only exists on
+   a *selected* chip. A green tick on the one check the brief flagged as
+   easiest to get wrong, proving nothing.
+
+Runner-up: **the FAB stack was buried under the legacy controls sheet** and
+completely untappable. The first screenshot showed no FABs and I read that as
+"cropped" rather than "covered". Playwright caught it properly, reporting the
+sheet's subtree as intercepting every click.
+
+### Deferred
+
+- 🔴 **Real-device FPS** — the outstanding definition-of-done item
+- **Satellite basemap** — needs a provider decision
+- **The Stadia fallback is untested and will 401 until
+  `syedtaimurhassan.github.io` is registered** under Manage Properties. Also:
+  do not add a `Referrer-Policy` meta tag to index.html without re-checking
+  it, because domain auth dies under `no-referrer`
+- MapLibre v6 (ESM-only, WebGL2-only) — a self-contained upgrade
+- PMTiles for M14; offline tiles were explicitly out of scope
+- Cross-origin isolation (M0) and minification (M1) still open
+
+### What the next session needs to know
+
+1. **300 stops means 300 distinct chip bitmaps**, because the label is baked
+   into the image. At 2× DPR that is roughly 10 MB of texture atlas. If the
+   device FPS in §11 comes back bad, this is the first thing to attack, and
+   the fix is known: `icon-text-fit` with one stretchable chip image per
+   (fill, badge, tail) combination — about a dozen images — and the number as
+   the symbol's `text-field`. The cost is that the address block can no longer
+   live in the same layer, so you would trade collision unity for memory.
+   **Do not attempt it before there is a real device number to justify it.**
+2. **`LABEL_MIN_ZOOM` in `layers.ts` is the density knob.** Raising it shows
+   more chips at overview zoom; lowering it shows addresses sooner.
+3. **`PendingChange.stopId` is read as the stop's UUID, not its label.** The
+   field name says otherwise and nothing else writes it yet. M6 owns staged
+   edits and should rename it — labels are not unique after a "Reset Stop IDs".
+4. **The FAB stack's 128px bottom offset is coupled to `Sidebar`'s
+   `PEEK_PX = 116`.** M5 rebuilds that sheet and must own the relationship
+   rather than inherit the magic number.
+5. **`globalThis.__mapController` is the test seam**, behind `__DEV_ROUTES__`
+   and folded out of production. Assert on `queryRenderedFeatures` — it is the
+   only way to tell a marker that failed to render from one the collision
+   detector correctly suppressed.
+6. **`SCHEMA_VERSION` is still 4.** M4 persisted no new field; `basemap` lives
+   in the transient `uiStore` deliberately.
