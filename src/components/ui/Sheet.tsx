@@ -14,8 +14,13 @@ export function GrabHandle() {
 export interface SheetProps {
   open: boolean
   onClose: () => void
-  /** `bottom` is the classic sheet; `left` is the side sheet the routes drawer uses. */
-  side?: 'bottom' | 'left'
+  /**
+   * `bottom` is the classic sheet, `left` the side sheet the routes drawer
+   * uses, and `full` a full-screen modal — which is a sheet in every way that
+   * matters here (it slides up, it traps focus, it is dismissed rather than
+   * navigated back from) and would otherwise be a second copy of all of it.
+   */
+  side?: 'bottom' | 'left' | 'full'
   /** Accessible name — this is a dialog, so it must have one. */
   label: string
   /** Bottom sheets get a grab handle. Side sheets don't (nothing drags sideways). */
@@ -112,14 +117,15 @@ export function Sheet({
     }
   }
 
-  const panelPosition =
-    side === 'bottom'
-      ? 'inset-x-0 bottom-0 max-h-[88dvh] rounded-t-sheet'
-      : // ~90% wide, so a strip of the screen underneath stays visible and
-        // tappable. Capped on desktop: 90% of a 1440px window is not a sheet.
-        'inset-y-0 left-0 w-[90%] max-w-sm rounded-r-sheet'
+  const panelPosition = {
+    bottom: 'inset-x-0 bottom-0 max-h-[88dvh] rounded-t-sheet',
+    // ~90% wide, so a strip of the screen underneath stays visible and
+    // tappable. Capped on desktop: 90% of a 1440px window is not a sheet.
+    left: 'inset-y-0 left-0 w-[90%] max-w-sm rounded-r-sheet',
+    full: 'inset-0',
+  }[side]
 
-  const closedTransform = side === 'bottom' ? 'translate-y-full' : '-translate-x-full'
+  const closedTransform = side === 'left' ? '-translate-x-full' : 'translate-y-full'
 
   return createPortal(
     <div className="fixed inset-0" style={{ zIndex }}>

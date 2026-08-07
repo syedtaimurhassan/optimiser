@@ -104,6 +104,15 @@ body {
   margin: 0;
 }
 
+/* The routes-drawer trigger floats in the map's top-left corner, which is
+   where Leaflet stacks its zoom control by default — the "+" ended up
+   underneath it. Push the whole top-left control stack clear rather than
+   moving the trigger: the corner is where the menu belongs, and this stays
+   correct if more controls are added to that stack later. */
+.leaflet-top.leaflet-left {
+  margin-top: 3.5rem;
+}
+
 /* Leaflet's default zoom buttons ship at 30px; bump to a 44px WCAG 2.5.5
    touch target. (Attribution links are inline text and exempt.) */
 .leaflet-control-zoom a {

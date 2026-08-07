@@ -12,6 +12,14 @@ export interface ListRowProps {
   /** `row` is the two-line 72dp row; `row-lg` the three-line 96dp one. */
   size?: 'row' | 'row-lg'
   onClick?: () => void
+  /**
+   * `radio` makes the row one option in an exclusive set — the date choices on
+   * Create route. The parent must then be a `role="radiogroup"`, and `checked`
+   * says whether this is the chosen one. Announced as "radio, selected"
+   * instead of the meaningless "button".
+   */
+  role?: 'button' | 'radio'
+  checked?: boolean
   /** Renders the light-blue active treatment. */
   selected?: boolean
   /** Outlined box treatment, as used by the date options on Create route. */
@@ -44,6 +52,8 @@ export function ListRow({
   trailing,
   size = 'row',
   onClick,
+  role = 'button',
+  checked,
   selected = false,
   outlined = false,
   className = '',
@@ -62,7 +72,8 @@ export function ListRow({
 
   return (
     <div
-      role={interactive ? 'button' : undefined}
+      role={interactive ? role : undefined}
+      aria-checked={interactive && role === 'radio' ? Boolean(checked) : undefined}
       tabIndex={interactive ? 0 : undefined}
       onClick={onClick}
       onKeyDown={onKeyDown}

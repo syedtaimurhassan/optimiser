@@ -5,6 +5,7 @@ import { MapComponent } from '../components/MapComponent'
 import { CalculatingOverlay } from '../components/CalculatingOverlay'
 import { CalculateFab } from '../components/CalculateFab'
 import { ErrorBoundary } from '../components/ErrorBoundary'
+import { CreateRouteModal } from '../components/routes/CreateRouteModal'
 import { DrawerTrigger } from '../components/routes/DrawerTrigger'
 import { RoutesDrawer } from '../components/routes/RoutesDrawer'
 import { useRoutesStore } from '../store/routesStore'
@@ -65,9 +66,12 @@ export function RouteWorkScreen() {
       {/* Calculate FAB — mobile only */}
       <CalculateFab />
 
-      {/* The routes drawer and the control that opens it */}
+      {/* The routes drawer, the control that opens it, and the create/edit
+          modal that opens over it. All three portal to the body, so their
+          order here is not their stacking order — see each one's zIndex. */}
       <DrawerTrigger />
       <RoutesDrawer />
+      <CreateRouteModal />
     </div>
   )
 }
