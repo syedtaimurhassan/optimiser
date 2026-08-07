@@ -19,7 +19,9 @@
     "prebench": "npm run bench:build",
     "bench": "node bench/run.mjs",
     "presmoke": "npm run bench:build",
-    "smoke": "node bench/m1-smoke.mjs"
+    "smoke": "node bench/m1-smoke.mjs",
+    "test": "node --test 'src/**/*.test.ts'",
+    "test:watch": "node --test --watch 'src/**/*.test.ts'"
   },
   "dependencies": {
     "idb": "^8.0.3",
