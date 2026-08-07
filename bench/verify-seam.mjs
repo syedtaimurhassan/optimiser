@@ -13,7 +13,7 @@ import { dirname, join, resolve } from 'node:path'
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 /** Everything that must never reach a production bundle. */
-const MARKERS = ['__bench', '__crash']
+const MARKERS = ['__bench', '__crash', '__ui']
 
 console.log('building production bundle (no VITE_BENCH_SEAM)…')
 execFileSync('npx', ['vite', 'build', '--outDir', 'dist-seamcheck'], {

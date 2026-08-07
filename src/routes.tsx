@@ -23,8 +23,9 @@ import { NotFoundScreen } from './screens/NotFoundScreen'
  *    chunk, which is dropped when the guard is false. A plain top-level
  *    component referenced from a dead branch was not eliminated.
  */
-const CRASH_ROUTE_ENABLED = import.meta.env.DEV || __DEV_ROUTES__
-const CrashScreen = CRASH_ROUTE_ENABLED ? lazy(() => import('./screens/CrashScreen')) : null
+const DEV_ROUTES_ENABLED = import.meta.env.DEV || __DEV_ROUTES__
+const CrashScreen = DEV_ROUTES_ENABLED ? lazy(() => import('./screens/CrashScreen')) : null
+const UiGalleryScreen = DEV_ROUTES_ENABLED ? lazy(() => import('./screens/UiGalleryScreen')) : null
 
 /**
  * Route table. Screens are stubs in M1 — later milestones fill them in.
@@ -87,6 +88,19 @@ export function AppRoutes() {
           <Route path="/__crash">
             <Suspense fallback={null}>
               <CrashScreen />
+            </Suspense>
+          </Route>
+        )}
+
+        {/*
+          Dev/bench only: every design-system primitive on one page, so the
+          ones M3 builds but doesn't yet use can be checked with a thumb on a
+          real phone. Dropped from production by the same guard.
+        */}
+        {UiGalleryScreen && (
+          <Route path="/__ui">
+            <Suspense fallback={null}>
+              <UiGalleryScreen />
             </Suspense>
           </Route>
         )}
