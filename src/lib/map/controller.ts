@@ -406,13 +406,78 @@ export class MapController {
   }
 
   // ──────────────────────────────────────────────────────────── camera
+  //
+  // The public camera API takes IDs and no arguments, not coordinates. The
+  // controller already holds the stop features, the route geometry and the
+  // last user fix, so making callers look those up and hand them back would
+  // be asking them to know things this object knows better.
 
-  focusStop(point: LatLng): void {
+  /** Frame one stop by its uuid. Returns false if it is not on the map. */
+  focusStop(stopId: string): boolean {
+    const point = this.#stopPoint(stopId)
+    if (!point) return false
     this.#recenterPhase = 'stop'
+    this.focusPoint(point)
+    return true
+  }
+
+  /** Frame the whole driven route, falling back to the stops on an unsolved one. */
+  fitRoute(): boolean {
+    const points = this.#routePoints()
+    if (points.length === 0) return false
+    this.fitPoints(points)
+    return true
+  }
+
+  /** Recentre on the last known device position. */
+  followUser(): boolean {
+    const point = this.#userPoint()
+    if (!point) return false
+    this.map.easeTo({
+      center: [point.lng, point.lat],
+      zoom: Math.max(this.map.getZoom(), FOCUS_ZOOM - 1),
+      duration: CAMERA_DURATION_MS,
+    })
+    return true
+  }
+
+  /** The coordinate primitive behind focusStop, also used by camera intents. */
+  focusPoint(point: LatLng): void {
     this.map.easeTo({
       center: [point.lng, point.lat],
       zoom: Math.max(this.map.getZoom(), FOCUS_ZOOM),
       duration: CAMERA_DURATION_MS,
+    })
+  }
+
+  #stopPoint(stopId: string): LatLng | null {
+    const feature = this.#stopData.features.find((f) => f.properties.id === stopId)
+    if (!feature) return null
+    const [lng, lat] = feature.geometry.coordinates
+    return { lat, lng }
+  }
+
+  #userPoint(): LatLng | null {
+    const feature = this.#userData.features[0]
+    if (!feature) return null
+    const [lng, lat] = feature.geometry.coordinates
+    return { lat, lng }
+  }
+
+  /** Every point worth framing: the driven line if solved, else the stops. */
+  #routePoints(): LatLng[] {
+    const line = this.#routeData.features.flatMap((f) => f.geometry.coordinates)
+    if (line.length > 0) return line.map(([lng, lat]) => ({ lat, lng }))
+    return this.#stopData.features.map((f) => {
+      const [lng, lat] = f.geometry.coordinates
+      return { lat, lng }
+    })
+  }
+
+  #stopPoints(): LatLng[] {
+    return this.#stopData.features.map((f) => {
+      const [lng, lat] = f.geometry.coordinates
+      return { lat, lng }
     })
   }
 
@@ -436,31 +501,30 @@ export class MapController {
     this.map.fitBounds(bounds, { padding: FIT_PADDING, duration: CAMERA_DURATION_MS })
   }
 
-  followUser(point: LatLng): void {
-    this.map.easeTo({
-      center: [point.lng, point.lat],
-      zoom: Math.max(this.map.getZoom(), FOCUS_ZOOM - 1),
-      duration: CAMERA_DURATION_MS,
-    })
-  }
-
   /**
    * One button, three answers: this stop → every stop → the whole drive.
-   * Repeated taps walk the cycle and wrap; phases with nothing to show are
-   * skipped, so the button never appears to do nothing.
+   *
+   * Takes only the selected stop id, because that is the single thing the
+   * controller cannot know — selection lives in the UI store. Everything else
+   * it derives from the data it was already given. Phases with nothing to
+   * show are skipped, so a tap never appears to do nothing.
    */
-  recenter(context: RecenterContext): RecenterPhase | null {
+  recenter(selectedStopId: string | null): RecenterPhase | null {
+    const selected = selectedStopId ? this.#stopPoint(selectedStopId) : null
+    const stops = this.#stopPoints()
+    const hasRoute = this.#routeData.features.length > 0
+
     const phase = nextRecenterPhase(this.#recenterPhase, {
-      stop: context.selectedStop !== null,
-      stops: context.stops.length > 0,
-      route: context.routeBounds !== null,
+      stop: selected !== null,
+      stops: stops.length > 0,
+      route: hasRoute,
     })
     if (!phase) return null
     this.#recenterPhase = phase
 
-    if (phase === 'stop' && context.selectedStop) this.focusStop(context.selectedStop)
-    else if (phase === 'stops') this.fitPoints(context.stops)
-    else if (phase === 'route' && context.routeBounds) this.fitBounds(context.routeBounds)
+    if (phase === 'stop' && selected) this.focusPoint(selected)
+    else if (phase === 'stops') this.fitPoints(stops)
+    else if (phase === 'route') this.fitPoints(this.#routePoints())
     return phase
   }
 

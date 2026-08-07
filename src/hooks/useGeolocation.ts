@@ -86,5 +86,9 @@ export function useGeolocation() {
 
   useEffect(() => stop, [stop])
 
-  return { ...state, request, stop, watching: watchId.current !== null }
+  // Deliberately no `watching` flag derived from the ref: reading a ref during
+  // render produces a value that never triggers a re-render when it changes,
+  // so callers would silently render a stale answer. `pending` and `position`
+  // are real state and say everything a caller needs.
+  return { ...state, request, stop }
 }

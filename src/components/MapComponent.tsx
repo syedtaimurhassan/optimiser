@@ -4,8 +4,8 @@ import 'maplibre-gl/dist/maplibre-gl.css'
 import type { LatLng } from '../types'
 import { MapController } from '../lib/map/controller'
 import { buildStopFeatures, collectChipSpecs, lastHandledStop, nextStopId } from '../lib/map/features'
+import type { StagedKind } from '../lib/map/chipSpec'
 import { splitRouteGeometry } from '../lib/map/splitRoute'
-import { boundsOf } from '../lib/map/camera'
 import { selectActiveRoute, useRoutesStore } from '../store/routesStore'
 import { useUiStore } from '../store/uiStore'
 import { MapControllerContext } from './map/MapControllerContext'
@@ -51,11 +51,17 @@ export function MapComponent() {
   const cameraIntent = useUiStore((s) => s.cameraIntent)
   const clearCameraIntent = useUiStore((s) => s.clearCameraIntent)
 
-  // Placement writes go through refs so the map's click handler — registered
-  // once, for the life of the map — always sees current values without the
-  // controller being torn down and rebuilt every time one of them changes.
+  // Placement mode goes through a ref so the map's click handler — registered
+  // once, for the life of the map — sees the current value without the
+  // controller being torn down and rebuilt every time it changes.
+  //
+  // Written in an effect rather than during render: assigning to a ref while
+  // rendering is not safe under StrictMode's double invocation, and a click
+  // cannot physically arrive between the render and the effect anyway.
   const placementRef = useRef(placementMode)
-  placementRef.current = placementMode
+  useEffect(() => {
+    placementRef.current = placementMode
+  }, [placementMode])
 
   // ── Lifecycle ──────────────────────────────────────────────────────────
 
@@ -96,9 +102,31 @@ export function MapComponent() {
     [route],
   )
 
+  /**
+   * Edits staged since the last optimisation, as marker states.
+   *
+   * ⚠️ `PendingChange.stopId` is read here as the stop's `id` (the uuid), NOT
+   * as its display label. The field name says otherwise and nothing else in
+   * the codebase writes it yet, so this is the first decision on the matter:
+   * joining on the label is precisely the coordinate-as-identity bug class M2
+   * spent a milestone removing, and two stops can share a label after a
+   * "Reset Stop IDs". M6 owns staged edits — it should rename the field.
+   */
+  const staged = useMemo(() => {
+    const changes = route?.pending?.changes ?? []
+    if (changes.length === 0) return undefined
+    const byStop: Record<string, StagedKind> = {}
+    for (const change of changes) {
+      if (!change.stopId) continue
+      if (change.kind === 'add') byStop[change.stopId] = 'add'
+      else if (change.kind === 'remove') byStop[change.stopId] = 'remove'
+    }
+    return byStop
+  }, [route])
+
   const featureInput = useMemo(
-    () => ({ stops, groups, selectedStopId, nextStopId: nextId }),
-    [stops, groups, selectedStopId, nextId],
+    () => ({ stops, groups, selectedStopId, nextStopId: nextId, staged }),
+    [stops, groups, selectedStopId, nextId, staged],
   )
 
   useEffect(() => {
@@ -140,13 +168,8 @@ export function MapComponent() {
     const stop = stops.find((s) => s.id === selectedStopId)
     if (!stop) return
     controller.resetRecenterCycle()
-    controller.focusStop(toLatLng(stop))
+    controller.focusStop(stop.id)
   }, [controller, selectedStopId, stops])
-
-  const routeBounds = useMemo(
-    () => boundsOf(routeGeometryPoints(optimized?.geometry?.coordinates)),
-    [optimized],
-  )
 
   // Camera requests from outside the map — the itinerary, search results.
   // The map consumes the intent and clears it, so a repeat request to the
@@ -154,7 +177,7 @@ export function MapComponent() {
   useEffect(() => {
     if (!controller || !cameraIntent) return
     if (cameraIntent.fitPoints?.length) controller.fitPoints(cameraIntent.fitPoints)
-    else if (cameraIntent.center) controller.focusStop(cameraIntent.center)
+    else if (cameraIntent.center) controller.focusPoint(cameraIntent.center)
     clearCameraIntent()
   }, [controller, cameraIntent, clearCameraIntent])
 
@@ -182,11 +205,8 @@ export function MapComponent() {
 
         <MapChrome
           stops={stops}
-          start={route?.start ?? null}
-          end={route?.end ?? null}
           selectedStopId={selectedStopId}
           onSelectStop={setSelectedStopId}
-          routeBounds={routeBounds}
           durationSeconds={optimized?.durationSeconds}
         />
       </div>
@@ -202,9 +222,4 @@ function anchorPoints(start: LatLng | null, end: LatLng | null, stops: LatLng[])
   if (start) points.push(toLatLng(start))
   if (end) points.push(toLatLng(end))
   return points
-}
-
-function routeGeometryPoints(coordinates: number[][] | undefined): LatLng[] {
-  if (!coordinates) return []
-  return coordinates.map(([lng, lat]) => ({ lat, lng }))
 }

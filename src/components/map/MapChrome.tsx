@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo } from 'react'
-import type { AddressedStop, LatLng } from '../../types'
+import type { AddressedStop } from '../../types'
 import { BASEMAPS, type BasemapId } from '../../lib/map/basemap'
-import { contextualFab, type BoundsTuple } from '../../lib/map/camera'
+import { contextualFab } from '../../lib/map/camera'
 import { useGeolocation } from '../../hooks/useGeolocation'
 import { useUiStore } from '../../store/uiStore'
 import { useMapController } from './MapControllerContext'
@@ -20,23 +20,22 @@ import { PeekPill } from './PeekPill'
  * it opens something that is not part of the map. See DrawerTrigger.
  */
 
+/**
+ * Deliberately no `routeBounds` or endpoint props. The controller already
+ * holds the stop features and the route geometry, so asking the chrome to
+ * compute a bounds and hand it back would be passing the map its own data.
+ */
 export interface MapChromeProps {
   stops: AddressedStop[]
-  start: LatLng | null
-  end: LatLng | null
   selectedStopId: string | null
   onSelectStop: (id: string | null) => void
-  routeBounds: BoundsTuple | null
   durationSeconds: number | undefined
 }
 
 export function MapChrome({
   stops,
-  start,
-  end,
   selectedStopId,
   onSelectStop,
-  routeBounds,
   durationSeconds,
 }: MapChromeProps) {
   const controller = useMapController()
@@ -45,13 +44,6 @@ export function MapChrome({
   const geo = useGeolocation()
 
   const contextual = contextualFab({ selectedStopId, stopCount: stops.length })
-
-  const points = useMemo(() => {
-    const list: LatLng[] = stops.map((s) => ({ lat: s.lat, lng: s.lng }))
-    if (start) list.push(start)
-    if (end) list.push(end)
-    return list
-  }, [stops, start, end])
 
   // Feed fixes straight through to the map. The dot is the controller's
   // business; this component only decides when to start asking.
@@ -62,25 +54,19 @@ export function MapChrome({
   const handleContextual = useCallback(() => {
     if (!controller) return
     if (contextual === 'my-location') {
-      // First tap asks permission and starts the watch; once we have a fix,
+      // First tap asks permission and starts the watch; once there is a fix,
       // the same button becomes "recentre on me".
-      if (geo.position) controller.followUser(geo.position)
-      else geo.request()
+      if (!controller.followUser()) geo.request()
       return
     }
-    if (contextual === 'focus-stop') {
-      const stop = stops.find((s) => s.id === selectedStopId)
-      if (stop) controller.focusStop({ lat: stop.lat, lng: stop.lng })
+    if (contextual === 'focus-stop' && selectedStopId) {
+      controller.focusStop(selectedStopId)
       return
     }
     // fit-route: repeated taps widen through the cycle rather than doing the
     // same thing over and over.
-    controller.recenter({
-      selectedStop: null,
-      stops: points,
-      routeBounds,
-    })
-  }, [controller, contextual, geo, stops, selectedStopId, points, routeBounds])
+    controller.recenter(selectedStopId)
+  }, [controller, contextual, geo, selectedStopId])
 
   const toggleBasemap = useCallback(() => {
     const order: BasemapId[] = ['streets', 'light']
