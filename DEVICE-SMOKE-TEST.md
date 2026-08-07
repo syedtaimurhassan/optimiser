@@ -210,3 +210,92 @@ Run **Calculate at Maximum (5 s) five times in a row**, back to back.
 | iPhone reports `false` (my prediction) | Confirms the deployed app is Chromium-only today, and makes the pthread-pool patch from M0 the critical path for M1 |
 | Either device crashes or thermally throttles hard | Raises the priority of getting off the 16 MB WASM entirely, regardless of isolation |
 | The installed home-screen app behaves differently from the tab | Directly reshapes M5 |
+
+---
+
+# M4 addendum — the map, on real hardware
+
+M4 replaced Leaflet with MapLibre GL JS (WebGL). Everything below needs a real
+phone, and **step 11 is the one the milestone's definition of done actually
+depends on** — I cannot measure it from a laptop, and `npm run map:perf` is a
+throttled desktop proxy, not an answer.
+
+Open the app with a route of ~300 stops loaded.
+
+## 10. The map comes up at all
+
+WebGL is a harder requirement than Leaflet's DOM markers ever were.
+
+- [ ] **Android/Chrome:** does the basemap render? ▸ ______
+- [ ] **iPhone/Safari:** does the basemap render? ▸ ______
+- [ ] Check the renderer on each — paste into the address bar as a bookmarklet
+      or use remote debugging:
+
+```js
+const c = document.createElement('canvas').getContext('webgl2')
+  ?? document.createElement('canvas').getContext('webgl')
+const d = c && c.getExtension('WEBGL_debug_renderer_info')
+console.log(c ? (d ? c.getParameter(d.UNMASKED_RENDERER_WEBGL) : 'renderer hidden') : 'NO WEBGL')
+```
+
+**Record:** renderer ▸ Android ______ · iPhone ______
+
+> If either device reports `NO WEBGL`, the map error boundary should show the
+> recovery UI rather than a blank rectangle. Confirm that it does — a blank
+> grey box is indistinguishable from a bug in this app.
+
+## 11. 300 markers, panning and zooming 🎯
+
+**This is the definition-of-done measurement.** Do it on the mid-range Android,
+not the fastest phone you own.
+
+- [ ] Load a route with ~300 stops.
+- [ ] Pan continuously across the whole scatter for ~10 seconds. Does it feel
+      smooth, or does it stutter? ▸ ______
+- [ ] Pinch-zoom from city level to street level and back, twice. ▸ ______
+- [ ] Get a number. Chrome on Android: connect via `chrome://inspect` from a
+      desktop, open the Performance panel, record while panning, and read the
+      FPS track. Failing that, Chrome's **Rendering → Frame Rendering Stats**
+      overlay gives a live FPS readout on the device itself.
+
+**Record:** ▸ Android FPS while panning ______ · while pinch-zooming ______
+**Record:** ▸ device model and Android version ______
+
+| Result | What it means |
+|---|---|
+| Sustained ≥ 50 fps | Definition of done met; the WebGL bet paid off |
+| 30–50 fps | Acceptable but worth a look — try dropping the chip texture ratio to 1 |
+| < 30 fps | Genuinely bad. Investigate: reduce the symbol layer's text work, or lower `CLUSTER_MAX_ZOOM` so fewer chips are live at once |
+
+## 12. Labels and chips at a glance
+
+- [ ] At street zoom, do any two chips overlap? ▸ ______
+- [ ] Is any address label clipped mid-word (e.g. "Elmekro… 10")? ▸ ______
+- [ ] Find a **failed** stop that belongs to a **coloured group**. Is the chip
+      the GROUP's colour with a small red ✗ badge — *not* a red chip? ▸ ______
+- [ ] Are the two route lines visually distinct without reading a legend —
+      thin grey behind, thick blue ahead? ▸ ______
+
+## 13. The chrome, thumb-tested
+
+- [ ] Tap the layers FAB. Does the basemap switch, and do the markers and route
+      lines survive the switch? ▸ ______
+- [ ] With nothing selected, is the second FAB a crosshair? Tap it and accept
+      the location prompt. Does a blue dot appear? ▸ ______
+- [ ] Walk a few metres. Does a heading cone appear and point the right way?
+      ▸ ______  *(heading is null when stationary — this needs movement)*
+- [ ] Tap a stop. Does the second FAB become a pin, and the peek pill appear on
+      the left edge? ▸ ______
+- [ ] Tap the fit-route FAB repeatedly. Does the camera cycle through
+      stop → all stops → whole route and wrap? ▸ ______
+
+## 14. Battery and heat with the map open
+
+WebGL keeps the GPU busy in a way Leaflet did not.
+
+- [ ] Leave the map open and idle for 10 minutes. Note battery drop ▸ ______
+- [ ] Does the phone get noticeably warm? ▸ ______
+
+> Idle should be nearly free — MapLibre stops rendering when nothing moves. A
+> warm phone on a *static* map means something is animating that shouldn't be,
+> and that is a bug worth reporting back.
