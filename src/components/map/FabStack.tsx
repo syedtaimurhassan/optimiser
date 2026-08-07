@@ -48,7 +48,20 @@ export function FabStack({
   return (
     // 12dp gap, per the spec. `items-end` so a wider child (the Calculate
     // FAB is a pill, not a circle) stays flush with the circular buttons.
-    <div className="pointer-events-none absolute bottom-3 right-3 z-20 flex flex-col items-end gap-3">
+    //
+    // ── The mobile offset and z-index are not cosmetic ────────────────────
+    //
+    // The legacy M1 controls sheet is `fixed bottom-0 z-[1500]` and peeks
+    // 116px above the bottom edge, and the Calculate FAB floats over it at
+    // z-1600. At `bottom-3 z-20` these buttons rendered UNDERNEATH the sheet
+    // and were completely untappable — Playwright caught it as the sheet
+    // intercepting every click.
+    //
+    // So: sit above the peek (128px clears 116px), and z-1550 to match
+    // DrawerTrigger, which solved the same problem. M5 rebuilds that sheet
+    // and should own this relationship properly rather than inherit the
+    // magic number.
+    <div className="pointer-events-none absolute bottom-32 right-3 z-[1550] flex flex-col items-end gap-3 md:bottom-3">
       <Fab onClick={onToggleBasemap} label={`Basemap: ${basemapLabel}`} testId="fab-basemap">
         <LayersIcon className="h-6 w-6" />
       </Fab>
