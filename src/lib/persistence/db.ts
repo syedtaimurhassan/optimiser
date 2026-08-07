@@ -16,11 +16,11 @@ import { openDB, type DBSchema, type IDBPDatabase } from 'idb'
 export const DB_NAME = 'route-optimiser'
 
 /**
- * Bump when the object-store layout changes.
+ * Bump when the object-store layout or the persisted state shape changes.
  *   3 — M1: initial IndexedDB layout, migrated from localStorage "route-optimiser:v2"
- *   4 — M2: the real multi-route data model (planned)
+ *   4 — M2: multi-route model with addressed stops and immutable stop IDs
  */
-export const SCHEMA_VERSION = 3
+export const SCHEMA_VERSION = 4
 
 /**
  * The key the Zustand `persist` blob lives under, inside the `meta` store.
@@ -30,6 +30,14 @@ export const SCHEMA_VERSION = 3
  * a legacy session byte-for-byte and have it rehydrate exactly as before.
  */
 export const STATE_PERSIST_KEY = 'route-optimiser:v2'
+
+/**
+ * Where the M2 multi-route store persists. A NEW key rather than a reuse of
+ * STATE_PERSIST_KEY: the v2 blob is kept intact as the 3 → 4 migration's source
+ * and as a rollback path, so overwriting it would destroy the very thing the
+ * migration reads.
+ */
+export const ROUTES_PERSIST_KEY = 'route-optimiser:routes:v4'
 
 /** Placeholder row shape. M2 replaces this with the real model. */
 export interface RouteRow {

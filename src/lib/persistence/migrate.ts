@@ -2,25 +2,29 @@ import {
   getDb,
   getMeta,
   setMeta,
-  putRoute,
   SCHEMA_VERSION,
   STATE_PERSIST_KEY,
+  ROUTES_PERSIST_KEY,
   type RouteRow,
 } from './db'
+import { migrateSessionToV4, type LegacySessionV3 } from './migrateV4'
 
 /**
- * One-time migration of the legacy localStorage session into IndexedDB.
+ * Schema migration chain.
  *
- * Three properties this must have, in order of importance:
+ *   (nothing)  →  3   M1: legacy localStorage session copied into IndexedDB
+ *   3          →  4   M2: multi-route model, addressed stops, immutable stop IDs
  *
- *  1. **It must never block boot.** Every failure path ends with the app
- *     starting on an empty database, never with a crash. A user who loses their
- *     stops is unhappy; a user who cannot open the app at all is stuck.
- *  2. **It must be idempotent.** Guarded by `meta.schemaVersion`, so a second
- *     run is a no-op even if the first was interrupted midway.
- *  3. **It must not destroy the source.** The old localStorage key is KEPT as a
- *     backup and copied to a `.backup` key. M15 deletes it, once the user has
- *     confirmed nothing was lost.
+ * Three properties, in order of importance:
+ *
+ *  1. **Never block boot.** Every failure path ends with the app starting on an
+ *     empty database, never with a crash. A user who loses their stops is
+ *     unhappy; a user who cannot open the app at all is stuck.
+ *  2. **Idempotent.** Guarded by `meta.schemaVersion` and written inside the
+ *     same transaction as the data, so an interrupted run simply repeats.
+ *  3. **Never destroy the source.** The legacy localStorage key and the M1
+ *     `routes` row are both KEPT. M15 deletes the localStorage key, once you
+ *     have confirmed nothing was lost.
  */
 
 export const LEGACY_KEY = 'route-optimiser:v2'
@@ -29,29 +33,16 @@ export const SCHEMA_VERSION_KEY = 'schemaVersion'
 
 export type MigrationOutcome =
   | { status: 'not-needed'; reason: string }
-  | { status: 'migrated'; routeId: string; stopCount: number }
+  | { status: 'migrated'; routeId: string; stopCount: number; fromVersion: number | null; toVersion: number }
   | { status: 'failed'; error: string; backupKept: boolean }
 
-/** The bits of the v2 payload we care about. Everything else rides along in `payload`. */
-interface LegacyV2State {
-  waypoints?: Array<{ id?: string; num?: number; lat: number; lng: number; delivered?: boolean }>
-  startLocation?: unknown
-  endLocation?: unknown
-  targetK?: number | null
-  objective?: string
-  optimizedRoute?: unknown
-  favorites?: Array<{ id: string; name: string; [k: string]: unknown }>
-  routeMode?: string
-  searchQuality?: string
-}
-
 /** Zustand's persist wraps state as `{ state, version }`; tolerate both shapes. */
-function unwrap(raw: string): LegacyV2State | null {
+function unwrap(raw: string): LegacySessionV3 | null {
   const parsed: unknown = JSON.parse(raw)
   if (!parsed || typeof parsed !== 'object') return null
   const maybe = parsed as { state?: unknown }
   const state = maybe.state && typeof maybe.state === 'object' ? maybe.state : parsed
-  return state as LegacyV2State
+  return state as LegacySessionV3
 }
 
 const todayISO = (): string => new Date().toISOString().slice(0, 10)
@@ -61,107 +52,127 @@ const newId = (): string =>
     ? crypto.randomUUID()
     : `${Date.now()}-${Math.random().toString(16).slice(2)}`
 
-/**
- * Run the migration if it hasn't run before.
- *
- * Returns an outcome rather than throwing: callers should record it (the
- * diagnostics panel shows it) and carry on regardless.
- */
+function readLocalStorage(key: string): string | null {
+  try {
+    return localStorage.getItem(key)
+  } catch {
+    // Safari in private mode can throw on localStorage access.
+    return null
+  }
+}
+
+/** Run any outstanding migrations. Returns an outcome; never throws. */
 export async function migrateLegacyIfNeeded(): Promise<MigrationOutcome> {
   try {
-    const existing = await getMeta<number>(SCHEMA_VERSION_KEY)
-    if (typeof existing === 'number') {
-      return { status: 'not-needed', reason: `schemaVersion already ${existing}` }
+    const from = await getMeta<number>(SCHEMA_VERSION_KEY)
+
+    if (from === SCHEMA_VERSION) {
+      return { status: 'not-needed', reason: `schemaVersion already ${from}` }
     }
 
-    let raw: string | null = null
-    try {
-      raw = localStorage.getItem(LEGACY_KEY)
-    } catch {
-      // Safari in private mode can throw on localStorage access.
-      raw = null
+    // Where does the legacy session live? Either still in localStorage (never
+    // migrated), or in the M1 `routes` row (migrated to 3 but not yet to 4).
+    let session: LegacySessionV3 | null = null
+    let rawLegacy: string | null = null
+
+    if (from === undefined) {
+      rawLegacy = readLocalStorage(LEGACY_KEY)
+      if (rawLegacy) session = unwrap(rawLegacy)
+    } else if (from === 3) {
+      const db = await getDb()
+      const rows = await db.getAll('routes')
+      // M1 wrote exactly one row, carrying the legacy payload verbatim.
+      const payload = (rows[0] as RouteRow | undefined)?.payload
+      if (payload && typeof payload === 'object') session = payload as LegacySessionV3
     }
 
-    if (!raw) {
-      // Fresh install: nothing to migrate, but the DB is now at this version.
+    if (!session) {
+      // Fresh install, or a payload we can't read. Stamp the version so we
+      // don't re-attempt on every boot, and start clean.
       await setMeta(SCHEMA_VERSION_KEY, SCHEMA_VERSION)
-      return { status: 'not-needed', reason: 'no legacy localStorage payload' }
-    }
-
-    const state = unwrap(raw)
-    if (!state) {
-      await setMeta(SCHEMA_VERSION_KEY, SCHEMA_VERSION)
-      return { status: 'not-needed', reason: 'legacy payload was not an object' }
-    }
-
-    const waypoints = Array.isArray(state.waypoints) ? state.waypoints : []
-
-    // M1 does not invent the data model — M2 does. The whole legacy session
-    // becomes ONE route row with its payload carried over verbatim, so nothing
-    // is lost and M2 can restructure from complete information.
-    const route: RouteRow = {
-      id: newId(),
-      dateISO: todayISO(),
-      name: 'Imported session',
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-      payload: {
-        migratedFrom: LEGACY_KEY,
-        startLocation: state.startLocation ?? null,
-        endLocation: state.endLocation ?? null,
-        waypoints,
-        targetK: state.targetK ?? null,
-        objective: state.objective ?? 'duration',
-        optimizedRoute: state.optimizedRoute ?? null,
-        routeMode: state.routeMode ?? 'fixed',
-        searchQuality: state.searchQuality ?? 'deep',
-      },
-    }
-
-    const db = await getDb()
-    const tx = db.transaction(['routes', 'favorites', 'meta'], 'readwrite')
-    await tx.objectStore('routes').put(route)
-
-    // Relocate the state blob verbatim so Zustand rehydrates the user's live
-    // session exactly as it was. The blob FORMAT is unchanged in M1 — only its
-    // storage backend moved — so this is a copy, not a translation. Without it
-    // the session would sit safely in `routes` while the UI came up empty.
-    await tx.objectStore('meta').put({ key: STATE_PERSIST_KEY, value: raw })
-
-    for (const fav of state.favorites ?? []) {
-      if (fav && typeof fav.id === 'string') {
-        await tx.objectStore('favorites').put({
-          id: fav.id,
-          name: typeof fav.name === 'string' ? fav.name : 'Saved route',
-          payload: fav,
-        })
+      return {
+        status: 'not-needed',
+        reason: from === undefined ? 'no legacy payload to migrate' : `nothing to carry from v${from}`,
       }
     }
 
-    // Written inside the same transaction as the data, so a crash midway leaves
-    // schemaVersion unset and the migration simply runs again.
+    const routeId = newId()
+    const migrated = migrateSessionToV4(session, {
+      routeId,
+      dateISO: todayISO(),
+      nowMs: Date.now(),
+      makeId: newId,
+      name: 'Imported session',
+    })
+
+    // The shape Zustand's persist middleware expects to read back.
+    const blob = JSON.stringify({
+      state: {
+        routes: migrated.routes,
+        activeRouteId: migrated.activeRouteId,
+        favorites: migrated.favorites,
+        stopIdMode: migrated.stopIdMode,
+      },
+      version: 4,
+    })
+
+    const db = await getDb()
+    const tx = db.transaction(['routes', 'favorites', 'meta'], 'readwrite')
+
+    // Keep an M1-style row too, so the DB's own `routes` store stays a truthful
+    // index of what exists. M3's route list reads from the Zustand blob; this
+    // row is what a future non-Zustand reader would use.
+    const route = migrated.routes[routeId]
+    await tx.objectStore('routes').put({
+      id: routeId,
+      dateISO: route.dateISO,
+      name: route.name,
+      createdAt: route.createdAt,
+      updatedAt: route.updatedAt,
+      payload: route,
+    } satisfies RouteRow)
+
+    // Favorites live in the Zustand blob (that is what the app reads) AND in
+    // their own object store, so the database is a truthful index of what
+    // exists rather than an opaque blob a future reader can't interpret.
+    for (const fav of migrated.favorites) {
+      await tx.objectStore('favorites').put({ id: fav.id, name: fav.name, payload: fav })
+    }
+
+    await tx.objectStore('meta').put({ key: ROUTES_PERSIST_KEY, value: blob })
+
+    // Preserve the v2 blob under its original key as well, on the 3-path where
+    // it was already relocated. Harmless if it isn't there.
+    if (rawLegacy) {
+      await tx.objectStore('meta').put({ key: STATE_PERSIST_KEY, value: rawLegacy })
+    }
+
+    // Written in the SAME transaction as the data, so a crash midway leaves the
+    // version unset and the migration simply runs again.
     await tx.objectStore('meta').put({ key: SCHEMA_VERSION_KEY, value: SCHEMA_VERSION })
     await tx.done
 
     // Source preserved deliberately. Removed in M15, not before.
-    try {
-      localStorage.setItem(LEGACY_BACKUP_KEY, raw)
-    } catch {
-      // A failed backup copy is not worth failing the migration over — the
-      // original key is still untouched, which is the real backup.
+    if (rawLegacy) {
+      try {
+        localStorage.setItem(LEGACY_BACKUP_KEY, rawLegacy)
+      } catch {
+        // A failed backup copy isn't worth failing the migration over — the
+        // original key is untouched, which is the real backup.
+      }
     }
 
-    return { status: 'migrated', routeId: route.id, stopCount: waypoints.length }
+    return {
+      status: 'migrated',
+      routeId,
+      stopCount: route.stops.length,
+      fromVersion: from ?? null,
+      toVersion: SCHEMA_VERSION,
+    }
   } catch (e) {
     const error = e instanceof Error ? e.message : String(e)
     console.error('[migrate] failed; starting with an empty database', e)
-    let backupKept = false
-    try {
-      backupKept = localStorage.getItem(LEGACY_KEY) !== null
-    } catch {
-      backupKept = false
-    }
-    return { status: 'failed', error, backupKept }
+    return { status: 'failed', error, backupKept: readLocalStorage(LEGACY_KEY) !== null }
   }
 }
 
@@ -172,8 +183,4 @@ export async function recordMigrationOutcome(outcome: MigrationOutcome): Promise
   } catch {
     /* diagnostics only */
   }
-}
-
-export async function putRouteRow(row: RouteRow): Promise<void> {
-  return putRoute(row)
 }
