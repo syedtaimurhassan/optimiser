@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo } from 'react'
-import type { AddressedStop } from '../../types'
+import type { AddressedStop, OptimizedRoute } from '../../types'
 import { BASEMAPS, type BasemapId } from '../../lib/map/basemap'
 import { contextualFab } from '../../lib/map/camera'
 import { useGeolocation } from '../../hooks/useGeolocation'
@@ -29,14 +29,15 @@ export interface MapChromeProps {
   stops: AddressedStop[]
   selectedStopId: string | null
   onSelectStop: (id: string | null) => void
-  durationSeconds: number | undefined
+  /** The solve, for the finish estimate. Undefined on an unsolved route. */
+  optimized: OptimizedRoute | undefined
 }
 
 export function MapChrome({
   stops,
   selectedStopId,
   onSelectStop,
-  durationSeconds,
+  optimized,
 }: MapChromeProps) {
   const controller = useMapController()
   const basemap = useUiStore((s) => s.basemap)
@@ -82,15 +83,9 @@ export function MapChrome({
     return index > 0 ? stops[index - 1] : null
   }, [stops, selectedStopId])
 
-  const pendingCount = stops.filter((s) => s.status === 'pending').length
-
   return (
     <>
-      <FinishPill
-        durationSeconds={durationSeconds}
-        pendingCount={pendingCount}
-        totalCount={stops.length}
-      />
+      <FinishPill stops={stops} optimized={optimized} />
 
       <PeekPill
         label={previous ? `${previous.stopId} ${previous.address?.title ?? ''}`.trim() : null}

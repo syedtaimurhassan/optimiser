@@ -1,7 +1,8 @@
 import type { Feature, FeatureCollection, Point } from 'geojson'
-import type { AddressedStop, OptimizedRoute, Route, StopGroup } from '../../types'
+import type { AddressedStop, StopGroup } from '../../types'
 import { chipSpecFor, type ChipSpec, type StagedKind } from './chipSpec.ts'
 import { formatLatLng } from '../coordinates.ts'
+import { visitOrder, type OrderableRoute } from '../routeOrder.ts'
 
 /**
  * Stops → GeoJSON, ready for a MapLibre symbol layer.
@@ -136,26 +137,8 @@ export function collectChipSpecs(input: StopFeatureInput): Map<string, ChipSpec>
  * been solved. A stop is "next" if it is the first one still pending —
  * failures are skipped, because a failed stop is finished with, not upcoming.
  */
-export function nextStopId(route: Pick<Route, 'stops' | 'optimized'>): string | null {
-  const byId = new Map(route.stops.map((s) => [s.id, s]))
-  const ordered = orderedStops(route.optimized, byId)
-  const source = ordered.length > 0 ? ordered : route.stops
-  return source.find((s) => s.status === 'pending')?.id ?? null
-}
-
-/** The stops in solved order, skipping endpoints and anything since deleted. */
-function orderedStops(
-  optimized: OptimizedRoute | undefined,
-  byId: Map<string, AddressedStop>,
-): AddressedStop[] {
-  if (!optimized) return []
-  const out: AddressedStop[] = []
-  for (const id of optimized.orderedStopIds) {
-    if (id === null) continue
-    const stop = byId.get(id)
-    if (stop) out.push(stop)
-  }
-  return out
+export function nextStopId(route: OrderableRoute): string | null {
+  return visitOrder(route).find((s) => s.status === 'pending')?.id ?? null
 }
 
 /**
@@ -164,14 +147,9 @@ function orderedStops(
  * This is where the grey "done" polyline ends and the blue "remaining" one
  * begins. Failed counts as dealt with: the van has been there and left.
  */
-export function lastHandledStop(
-  route: Pick<Route, 'stops' | 'optimized'>,
-): AddressedStop | null {
-  const byId = new Map(route.stops.map((s) => [s.id, s]))
-  const ordered = orderedStops(route.optimized, byId)
-  const source = ordered.length > 0 ? ordered : route.stops
+export function lastHandledStop(route: OrderableRoute): AddressedStop | null {
   let last: AddressedStop | null = null
-  for (const stop of source) {
+  for (const stop of visitOrder(route)) {
     if (stop.status !== 'pending') last = stop
   }
   return last

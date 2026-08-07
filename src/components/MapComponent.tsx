@@ -207,7 +207,7 @@ export function MapComponent() {
           stops={stops}
           selectedStopId={selectedStopId}
           onSelectStop={setSelectedStopId}
-          durationSeconds={optimized?.durationSeconds}
+          optimized={optimized}
         />
       </div>
     </MapControllerContext.Provider>
