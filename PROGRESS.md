@@ -107,3 +107,100 @@ finding no improvement. The tier control is a placebo on that instance.
 - Commit `DOCUMENTATION.md`? It's untracked, and AUDIT.md now contradicts it in
   two places (the FFI claim, the `time_limit` type claim).
 - `vite-plugin-pwa` at M5 — still the one dependency I'd like to add.
+
+---
+
+## M1 — Infrastructure: routing, persistence, capabilities, error boundaries
+
+**Date:** 2026-08-07 · **Branch:** `m1-infrastructure` (from `main` @ `4d342df`)
+
+Plumbing only. The app looks and behaves exactly as before; everything added is
+foundation for M2 onwards.
+
+### What changed
+
+**Dependencies added** (both approved): `wouter` 3.10.0 (~2.2 kB gz),
+`idb` 8.0.3 (~1 kB gz).
+
+**Added**
+
+- `src/routes.tsx` + `src/screens/*` — hash router, route table, stub screens
+- `src/lib/device/capabilities.ts`, `src/store/deviceStore.ts`,
+  `src/components/DiagnosticsPanel.tsx`
+- `src/lib/persistence/{db,zustandStorage,migrate,boot}.ts`
+- `src/components/ErrorBoundary.tsx`, `src/lib/diagnostics/errorLog.ts`
+- `src/hooks/useHydrated.ts`, `src/vite-env.d.ts`, `src/routeIds.ts`
+- `bench/m1-smoke.mjs` — 24 acceptance checks (`npm run smoke`)
+
+**Removed:** `src/App.css`, `src/assets/{react.svg,vite.svg,hero.png}`
+
+### Verified
+
+- **24/24 smoke checks pass** against the pruned production bundle
+- A seeded v2 localStorage session reaches the UI: 3 stops migrated, favorite
+  carried over, `schemaVersion` 3, legacy key + `.backup` both preserved,
+  idempotent across reloads
+- Fresh install stamps `schemaVersion` without inventing data
+- Deep links (`#/settings`, `#/route/current/stop/a1`) resolve on cold load;
+  unknown paths show not-found; `/` still lands on the working screen
+- A thrown render error produces the recovery UI with all three actions
+- `npm run lint` and `npm run build` clean; `lib/` imports neither React nor the
+  store; seam and `/__crash` both absent from production output
+
+### What surprised me
+
+1. **The error boundary was broken when I wrote it.** `getDerivedStateFromError`
+   returned `{ error: null }`, deferring to `componentDidCatch`. Because that's a
+   commit-phase hook, React re-rendered the same throwing children, and a
+   throw-while-handling-a-throw unmounts the tree — a blank page, the exact
+   failure the component exists to prevent. Only the `/__crash` route caught it.
+   An untested recovery path is not a recovery path.
+
+2. **`import.meta.env.VITE_BENCH_SEAM` is not a compile-time constant when the
+   variable is unset.** Vite inlines VITE_ vars only when they're set, so in a
+   normal production build the guard stayed a runtime lookup, never folded, and
+   the dev-only `/__crash` route's strings shipped. Fixed with a `define`.
+   The bench seam was unaffected because a dynamic `import()` behind a false
+   branch drops its whole chunk regardless.
+
+3. **A `path=""` route in wouter matches every location.** It silently swallowed
+   `/nonsense` and redirected it to the working screen. `useHashLocation` already
+   normalises an empty fragment to `/`, so the route was both unnecessary and
+   harmful.
+
+### 🟡 Finding: the production bundle is not fully minified
+
+`npm run build` emits **739 kB** (gzip 171 kB). Building with an explicit
+`--minify esbuild` gives **467 kB** (gzip 148 kB) — a **272 kB / 23 kB gzip**
+saving for a one-line config change. Identifiers are mangled but dead-code
+folding and whitespace removal are not running, which suggests the Vite 8 +
+Rolldown default for `build.minify` is doing less than expected.
+
+**I did not change it.** M1 said infrastructure only and behaviour unchanged, and
+minification alters the deployed artifact. Flagging it for your call — I'd take
+it in M5 alongside the PWA work, where bundle size directly affects install and
+offline cost.
+
+### Deferred
+
+- Dropping cross-origin isolation (M0's recommendation) — needs `solver.ts`,
+  which M1 was told not to touch. Still the right M-next move.
+- Coordinate-as-identity bug (28 sites) — M2, before the UI rebuild
+- `matrices` and `photos` stores are created but unused until M6
+
+### What the next session needs to know
+
+1. **The data model is deliberately untouched.** The migration puts the whole
+   legacy session into ONE `routes` row with its payload verbatim, so M2 can
+   restructure from complete information. `RouteRow.payload` is `unknown` on
+   purpose — do not build on its shape, replace it.
+2. **`SCHEMA_VERSION` is 3; M2 goes to 4.** `db.ts`'s `upgrade` callback already
+   receives `oldVersion` and must stay purely structural — no awaits inside an
+   upgrade transaction, or it deadlocks. Data migration belongs in `migrate.ts`.
+3. **Boot order is load-bearing.** Migration must finish before rehydration. If
+   M2 adds another async boot step, it goes inside `bootPersistence()`, not
+   alongside it.
+4. **`CURRENT_ROUTE_ID = 'current'`** is a placeholder in `src/routeIds.ts`. M2
+   replaces it with real ids and deletes the redirect in `RoutesListScreen`.
+5. **Run `npm run smoke` after touching persistence, routing or boot.** It is
+   fast and it has already caught two shipped-quality bugs.
