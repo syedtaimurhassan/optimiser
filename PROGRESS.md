@@ -502,7 +502,15 @@ PMTiles is right for M14, scoped to the driver's actual bbox.
   driven end to end: tap a failed stop in a green group, assert the chip fills
   `#12823c` and the failure appears only on the badge
 - **180 unit tests** (97 from M3 + 83 new)
-- M1/M2 (42) and M3 (50) checks still pass; seam absent from production
+- **42/42 M1+M2 and 52/52 M3** — but three of their assertions had to be
+  rewritten, and two were weak before M4 touched them. M1 asserted the map
+  existed by querying `.leaflet-container` without waiting for the mount, so
+  it passed on timing luck. M3's `settle()` was documented as waiting for the
+  sheet transition and was a flat 400ms sleep; MapLibre competing for the main
+  thread pushed the drawer's close past it. Both now wait on real conditions.
+  M3's Leaflet-zoom-control overlap check had no subject left, and became
+  "nothing overlaps the drawer trigger" instead
+- Seam absent from production output
 - `npm run lint`, `npm run build`, `tsc -b` clean; `lib/` still imports neither
   React nor the store
 
