@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { hydrateRouteStore, useRouteStore } from '../store/routeStore'
+import { hydrateRoutesStore, useRoutesStore } from '../store/routesStore'
 
 /**
  * True once the persisted state has been read back from IndexedDB.
@@ -10,17 +10,17 @@ import { hydrateRouteStore, useRouteStore } from '../store/routeStore'
  * show a loading state instead.
  */
 export function useHydrated(): boolean {
-  const [hydrated, setHydrated] = useState(() => useRouteStore.persist.hasHydrated())
+  const [hydrated, setHydrated] = useState(() => useRoutesStore.persist.hasHydrated())
 
   useEffect(() => {
     let cancelled = false
 
     // Fires even when rehydration finished before this effect ran.
-    const unsub = useRouteStore.persist.onFinishHydration(() => {
+    const unsub = useRoutesStore.persist.onFinishHydration(() => {
       if (!cancelled) setHydrated(true)
     })
 
-    void hydrateRouteStore().then(() => {
+    void hydrateRoutesStore().then(() => {
       if (!cancelled) setHydrated(true)
     })
 

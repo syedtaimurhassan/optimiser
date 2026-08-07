@@ -1,4 +1,4 @@
-import { useRouteStore } from '../store/routeStore'
+import { useSolverStore } from '../store/solverStore'
 
 /**
  * Frosted-glass overlay shown over the map while a route is being computed.
@@ -6,8 +6,8 @@ import { useRouteStore } from '../store/routeStore'
  * the map area reflects the same progress as the Calculate button.
  */
 export function CalculatingOverlay() {
-  const isCalculating = useRouteStore((s) => s.isCalculating)
-  const calcStatus = useRouteStore((s) => s.calcStatus)
+  const isCalculating = useSolverStore((s) => s.isCalculating)
+  const calcStatus = useSolverStore((s) => s.status)
 
   if (!isCalculating) return null
 

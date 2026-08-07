@@ -3,6 +3,7 @@ import { useShallow } from 'zustand/react/shallow'
 import type { LatLng, OptimizedRoute } from '../types'
 import { formatLatLng } from '../lib/coordinates'
 import { useRouteStore } from '../store/routeStore'
+import { useUiStore } from '../store/uiStore'
 import {
   googleMapsSearchUrl,
   googleMapsDirectionsBatches,
@@ -42,8 +43,8 @@ interface RowProps {
  *  re-renders on hover) and its own slide-out animation when delivered. */
 function ItineraryRow({ p, seq, isStop, isCurrent, isLast, num, stopId }: RowProps) {
   const markDone = useRouteStore((s) => s.markDeliveredByCoord)
-  const setHoveredStopId = useRouteStore((s) => s.setHoveredStopId)
-  const isHovered = useRouteStore((s) => stopId != null && s.hoveredStopId === stopId)
+  const setHoveredStopId = useUiStore((s) => s.setHoveredStopId)
+  const isHovered = useUiStore((s) => stopId != null && s.hoveredStopId === stopId)
   const [leaving, setLeaving] = useState(false)
 
   const color = isCurrent ? '#059669' : isLast ? '#e11d48' : '#2563eb'

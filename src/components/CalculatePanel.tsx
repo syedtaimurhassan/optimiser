@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useRouteStore } from '../store/routeStore'
+import { useSolverStore } from '../store/solverStore'
 
 /** Inline spinner for the loading state. */
 function Spinner() {
@@ -33,10 +34,10 @@ function Spinner() {
  * map or the results/itinerary.
  */
 export function CalculatePanel() {
-  const isCalculating = useRouteStore((s) => s.isCalculating)
-  const calcStatus = useRouteStore((s) => s.calcStatus)
-  const routeError = useRouteStore((s) => s.routeError)
-  const solverReady = useRouteStore((s) => s.solverReady)
+  const isCalculating = useSolverStore((s) => s.isCalculating)
+  const calcStatus = useSolverStore((s) => s.status)
+  const routeError = useSolverStore((s) => s.error)
+  const solverReady = useSolverStore((s) => s.ready)
   const pointCount = useRouteStore(
     (s) =>
       s.waypoints.filter((w) => !w.delivered).length +

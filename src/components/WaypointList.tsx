@@ -1,8 +1,10 @@
 import { useMemo, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { useRouteStore } from '../store/routeStore'
+import { useUiStore } from '../store/uiStore'
 import { formatLatLng } from '../lib/coordinates'
-import type { LatLng, Stop } from '../types'
+import type { LatLng } from '../types'
+import type { LegacyStop as Stop } from '../store/routeStore'
 
 const sameCoord = (a: LatLng | null, b: LatLng) =>
   !!a && a.lat === b.lat && a.lng === b.lng
@@ -40,8 +42,8 @@ function StopRow({ stop }: { stop: Stop }) {
   const markDelivered = useRouteStore((s) => s.markDelivered)
   const removeWaypoint = useRouteStore((s) => s.removeWaypoint)
   // Only this row re-renders when its own hover state flips.
-  const isHovered = useRouteStore((s) => s.hoveredStopId === stop.id)
-  const setHoveredStopId = useRouteStore((s) => s.setHoveredStopId)
+  const isHovered = useUiStore((s) => s.hoveredStopId === stop.id)
+  const setHoveredStopId = useUiStore((s) => s.setHoveredStopId)
 
   const isStart = sameCoord(startLocation, stop)
   const isEnd = sameCoord(endLocation, stop)
@@ -56,7 +58,7 @@ function StopRow({ stop }: { stop: Stop }) {
     >
       <div className="flex items-center gap-2 px-2 py-2">
         <span className="min-w-0 flex-1 truncate text-slate-600">
-          <span className="mr-1.5 font-semibold text-slate-400">#{stop.num}</span>
+          <span className="mr-1.5 font-semibold text-slate-400">{stop.stopId}</span>
           {formatLatLng(stop)}
         </span>
         {isStart && (

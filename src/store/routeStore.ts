@@ -1,325 +1,233 @@
-import { create } from 'zustand'
-import { persist, createJSONStorage } from 'zustand/middleware'
-import type { LatLng, OptimizedRoute, Favorite, Stop } from '../types'
-import type { Objective } from '../lib/routingService'
+import { useRoutesStore, hydrateRoutesStore, SEARCH_TIERS_SEC } from './routesStore'
+import { useSolverStore } from './solverStore'
+import { useUiStore } from './uiStore'
+import type { AddressedStop, LatLng, Objective, OptimizedRoute, Favorite } from '../types'
 import { planSelectiveRoute } from '../lib/planRoute'
 import { warmUpSolver } from '../lib/solver'
-import { indexedDbStorage } from '../lib/persistence/zustandStorage'
-import { STATE_PERSIST_KEY } from '../lib/persistence/db'
-import { bootPersistence } from '../lib/persistence/boot'
 
-interface RouteState {
-  // --- Persisted (the user's work) ---
+/**
+ * Compatibility facade over the M2 stores.
+ *
+ * ── Why this exists ───────────────────────────────────────────────────────
+ *
+ * M2 replaces the single-session model with many dated routes, but M3–M8
+ * replace every one of these components anyway. Rewriting ~20 components onto
+ * the new stores now would be throwaway work with real regression risk, so the
+ * shape they already expect is projected over the new model instead.
+ *
+ * The alternative — rewriting the components — was rejected on cost, not
+ * principle. This layer is scaffolding and should shrink to nothing by M8; if
+ * it is still here afterwards, something went wrong.
+ *
+ * ── The referential-stability problem ─────────────────────────────────────
+ *
+ * Zustand re-renders when a selector's RESULT changes by identity. A facade
+ * that rebuilt its view object on every call would hand back fresh arrays and
+ * fresh closures each time, so every selector would look "changed" and every
+ * component would re-render on every store write — quietly destroying the
+ * narrow-selector discipline this codebase depends on, right before M4 makes
+ * the map much more expensive.
+ *
+ * Two devices keep it honest:
+ *   - actions are module-level constants, so their identity never changes;
+ *   - the legacy stop projection is memoised against the underlying `stops`
+ *     array by WeakMap, so it stays reference-stable until the stops actually
+ *     change.
+ */
+
+/** The legacy stop shape: an AddressedStop plus the two fields old components read. */
+export interface LegacyStop extends AddressedStop {
+  /** Was the stable display number. Now the original position. */
+  num: number
+  delivered: boolean
+}
+
+/**
+ * Memoised legacy projection.
+ *
+ * Keyed on the `stops` array identity, which routesStore only replaces when the
+ * stops genuinely change — so `useRouteStore((s) => s.waypoints)` returns the
+ * same array reference across unrelated updates and does not re-render.
+ */
+const projectionCache = new WeakMap<AddressedStop[], LegacyStop[]>()
+const EMPTY_STOPS: AddressedStop[] = []
+const EMPTY_LEGACY: LegacyStop[] = []
+
+function legacyStops(stops: AddressedStop[]): LegacyStop[] {
+  if (stops.length === 0) return EMPTY_LEGACY
+  const cached = projectionCache.get(stops)
+  if (cached) return cached
+  const projected = stops.map((s) => ({
+    ...s,
+    num: s.originalPosition,
+    delivered: s.status === 'delivered',
+  }))
+  projectionCache.set(stops, projected)
+  return projected
+}
+
+// ─────────────────────────────────────────────────────────────── actions
+
+const routes = () => useRoutesStore.getState()
+
+/**
+ * Stable action identities. Defined once at module scope so a selector picking
+ * an action always gets the same function back.
+ */
+const ACTIONS = {
+  setStart: (value: LatLng | null) => routes().setStart(value),
+  setEnd: (value: LatLng | null) => routes().setEnd(value),
+  addWaypoints: (points: LatLng[]) => routes().addStops(points),
+  removeWaypoint: (id: string) => routes().removeStop(id),
+  clearWaypoints: () => routes().clearStops(),
+  markDelivered: (id: string) => routes().setStopStatus(id, 'delivered'),
+  restoreStop: (id: string) => routes().undoStopStatus(id),
+  restoreAll: () => routes().restoreAllStops(),
+  setTargetK: (k: number | null) => routes().setTargetK(k),
+  setObjective: (objective: Objective) => routes().setObjective(objective),
+  setRouteMode: (mode: 'fixed' | 'open') => routes().setEndpointMode(mode),
+  setSearchQuality: (quality: SearchQuality) => routes().setSearchTierSec(SEARCH_BUDGET_SEC[quality]),
+  saveFavorite: (name: string) => routes().saveFavorite(name),
+  loadFavorite: (id: string) => routes().loadFavorite(id),
+  deleteFavorite: (id: string) => routes().deleteFavorite(id),
+  resetAll: () => routes().resetActiveRoute(),
+
+  setHoveredStopId: (id: string | null) => useUiStore.getState().setHoveredStopId(id),
+  setMapPlacementMode: (mode: 'start' | 'end' | null) =>
+    useUiStore.getState().setMapPlacementMode(mode),
+
+  /**
+   * Mark delivered by coordinate.
+   *
+   * Retained only because old components call it. It is the exact ambiguity M2
+   * exists to remove — two deliveries to one building share a coordinate — so
+   * it now resolves to the FIRST pending match rather than silently marking
+   * every stop at that location. Callers should move to `markDelivered(id)`.
+   */
+  markDeliveredByCoord: (lat: number, lng: number) => {
+    const route = routes().routes[routes().activeRouteId ?? '']
+    if (!route) return
+    const match =
+      route.stops.find((s) => s.lat === lat && s.lng === lng && s.status === 'pending') ??
+      route.stops.find((s) => s.lat === lat && s.lng === lng)
+    if (match) routes().setStopStatus(match.id, 'delivered')
+  },
+
+  warmUp: () => {
+    const solver = useSolverStore.getState()
+    if (typeof window !== 'undefined' && window.crossOriginIsolated) {
+      warmUpSolver()
+        .then(() => solver.setReady(true))
+        .catch((e: unknown) => solver.setWarning((e as Error).message))
+    } else {
+      solver.setWarning(
+        'This browser did not enable the isolation the optimizer needs ' +
+          '(SharedArrayBuffer). Please use the latest Chrome or Edge.',
+      )
+    }
+  },
+
+  calculateRoute: async () => {
+    const solver = useSolverStore.getState()
+    const state = routes()
+    const route = state.activeRouteId ? state.routes[state.activeRouteId] : null
+    if (!route) return
+
+    solver.begin()
+    try {
+      const pending = route.stops.filter((s) => s.status === 'pending')
+      const result = await planSelectiveRoute({
+        startLocation: route.start,
+        endLocation: route.end,
+        waypoints: pending,
+        targetK: route.targetK,
+        objective: route.optimizeBy,
+        timeBudgetMs: route.searchTierSec * 1000,
+        onStatus: (msg) => solver.setStatus(msg),
+      })
+
+      // Backfill the M2 fields the planner doesn't know about yet. Coordinate
+      // lookup is the only join available until the planner is updated (M7);
+      // it is recorded as derived data, never relied on for identity.
+      const byCoord = new Map<string, string>()
+      for (const s of pending) {
+        const key = `${s.lat},${s.lng}`
+        if (!byCoord.has(key)) byCoord.set(key, s.id)
+      }
+      const optimized: OptimizedRoute = {
+        ...result,
+        orderedStopIds: result.orderedWaypoints.map((p) => byCoord.get(`${p.lat},${p.lng}`) ?? null),
+        arrivalSec: [],
+      }
+
+      state.setOptimized(optimized)
+      state.clearPending()
+      solver.succeed()
+    } catch (e) {
+      routes().setOptimized(null)
+      solver.fail((e as Error).message)
+    }
+  },
+} as const
+
+// ───────────────────────────────────────────────────────── legacy tiers
+
+export type SearchQuality = 'fast' | 'deep' | 'maximum'
+
+/** The old names, in seconds. The model stores seconds; the solver wants ms. */
+export const SEARCH_BUDGET_SEC: Record<SearchQuality, number> = {
+  fast: SEARCH_TIERS_SEC[0],
+  deep: SEARCH_TIERS_SEC[1],
+  maximum: SEARCH_TIERS_SEC[2],
+}
+
+const qualityForSeconds = (sec: number): SearchQuality =>
+  sec <= 1 ? 'fast' : sec >= 5 ? 'maximum' : 'deep'
+
+// ──────────────────────────────────────────────────────────── the view
+
+export interface LegacyRouteView {
   startLocation: LatLng | null
   endLocation: LatLng | null
-  waypoints: Stop[]
+  waypoints: LegacyStop[]
   targetK: number | null
   objective: Objective
   optimizedRoute: OptimizedRoute | null
   favorites: Favorite[]
-  /** Whether the user wants fixed endpoints or an open (optimizer-chosen) route. */
   routeMode: 'fixed' | 'open'
-  /** Search-effort tier → the solver's wall-clock ceiling. */
   searchQuality: SearchQuality
-
-  // --- Transient (never persisted) ---
-  isCalculating: boolean
-  calcStatus: string | null
-  routeError: string | null
-  solverReady: boolean
-  solverWarning: string | null
-  /** UI-only: which stop is hovered, to sync highlight between list ↔ map. */
-  hoveredStopId: string | null
-  /** UI-only: when set, the next map click places the start/end anchor. */
-  mapPlacementMode: 'start' | 'end' | null
-
-  // --- Events (actions) ---
-  setStart: (value: LatLng | null) => void
-  setEnd: (value: LatLng | null) => void
-  addWaypoints: (points: LatLng[]) => void
-  removeWaypoint: (id: string) => void
-  clearWaypoints: () => void
-  markDelivered: (id: string) => void
-  markDeliveredByCoord: (lat: number, lng: number) => void
-  restoreStop: (id: string) => void
-  restoreAll: () => void
-  setTargetK: (k: number | null) => void
-  setObjective: (objective: Objective) => void
-  setHoveredStopId: (id: string | null) => void
-  setRouteMode: (mode: 'fixed' | 'open') => void
-  setMapPlacementMode: (mode: 'start' | 'end' | null) => void
-  setSearchQuality: (quality: SearchQuality) => void
-  calculateRoute: () => Promise<void>
-  resetAll: () => void
-  warmUp: () => void
-  saveFavorite: (name: string) => void
-  loadFavorite: (id: string) => void
-  deleteFavorite: (id: string) => void
 }
 
-/** How long the multi-start solver is allowed to search (a ceiling, not a fixed
- *  spend — it exits early once converged). */
-export type SearchQuality = 'fast' | 'deep' | 'maximum'
-export const SEARCH_BUDGET_MS: Record<SearchQuality, number> = {
-  fast: 1000,
-  deep: 3000,
-  maximum: 5000,
+export type LegacyStoreView = LegacyRouteView & typeof ACTIONS
+
+function legacyView(s: ReturnType<typeof useRoutesStore.getState>): LegacyStoreView {
+  const route = s.activeRouteId ? s.routes[s.activeRouteId] : null
+  return {
+    startLocation: route?.start ?? null,
+    endLocation: route?.end ?? null,
+    waypoints: legacyStops(route?.stops ?? EMPTY_STOPS),
+    targetK: route?.targetK ?? null,
+    objective: route?.optimizeBy ?? 'duration',
+    optimizedRoute: route?.optimized ?? null,
+    favorites: s.favorites,
+    routeMode: route?.endpointMode ?? 'fixed',
+    searchQuality: qualityForSeconds(route?.searchTierSec ?? 3),
+    ...ACTIONS,
+  }
 }
-
-const newId = () =>
-  typeof crypto !== 'undefined' && crypto.randomUUID
-    ? crypto.randomUUID()
-    : String(Date.now()) + Math.random().toString(16).slice(2)
-
-/** Fresh stops numbered 1..N (used when loading a favorite / migrating). */
-const toStops = (points: LatLng[]): Stop[] =>
-  points.map((p, i) => ({
-    id: newId(),
-    num: i + 1,
-    lat: p.lat,
-    lng: p.lng,
-    delivered: false,
-  }))
-
-const sameCoord = (a: LatLng | null, lat: number, lng: number) =>
-  !!a && a.lat === lat && a.lng === lng
-
-export const useRouteStore = create<RouteState>()(
-  persist(
-    (set, get) => ({
-      startLocation: null,
-      endLocation: null,
-      waypoints: [],
-      targetK: null,
-      objective: 'duration',
-      optimizedRoute: null,
-      favorites: [],
-      routeMode: 'fixed',
-      searchQuality: 'deep',
-
-      isCalculating: false,
-      calcStatus: null,
-      routeError: null,
-      solverReady: false,
-      solverWarning: null,
-      hoveredStopId: null,
-      mapPlacementMode: null,
-
-      setStart: (value) => set({ startLocation: value }),
-      setEnd: (value) => set({ endLocation: value }),
-      addWaypoints: (points) =>
-        set((s) => {
-          // Continue numbering from the highest so far — numbers are stable
-          // identities and are never reused/shifted when stops are removed.
-          const base = s.waypoints.reduce((m, w) => Math.max(m, w.num), 0)
-          const added: Stop[] = points.map((p, i) => ({
-            id: newId(),
-            num: base + i + 1,
-            lat: p.lat,
-            lng: p.lng,
-            delivered: false,
-          }))
-          return { waypoints: [...s.waypoints, ...added] }
-        }),
-      removeWaypoint: (id) =>
-        set((s) => {
-          const stop = s.waypoints.find((w) => w.id === id)
-          return {
-            waypoints: s.waypoints.filter((w) => w.id !== id),
-            // Removing a stop that was the start/end also releases that anchor.
-            startLocation:
-              stop && sameCoord(s.startLocation, stop.lat, stop.lng)
-                ? null
-                : s.startLocation,
-            endLocation:
-              stop && sameCoord(s.endLocation, stop.lat, stop.lng)
-                ? null
-                : s.endLocation,
-          }
-        }),
-      clearWaypoints: () => set({ waypoints: [] }),
-      markDelivered: (id) =>
-        set((s) => ({
-          waypoints: s.waypoints.map((w) =>
-            w.id === id ? { ...w, delivered: true } : w,
-          ),
-        })),
-      markDeliveredByCoord: (lat, lng) =>
-        set((s) => {
-          const match = (p: LatLng | null) => !!p && p.lat === lat && p.lng === lng
-          return {
-            waypoints: s.waypoints.map((w) =>
-              w.lat === lat && w.lng === lng ? { ...w, delivered: true } : w,
-            ),
-            // Completing the stop that was the start/end releases that anchor.
-            startLocation: match(s.startLocation) ? null : s.startLocation,
-            endLocation: match(s.endLocation) ? null : s.endLocation,
-          }
-        }),
-      restoreStop: (id) =>
-        set((s) => ({
-          waypoints: s.waypoints.map((w) =>
-            w.id === id ? { ...w, delivered: false } : w,
-          ),
-        })),
-      restoreAll: () =>
-        set((s) => ({
-          waypoints: s.waypoints.map((w) =>
-            w.delivered ? { ...w, delivered: false } : w,
-          ),
-        })),
-      setTargetK: (k) => set({ targetK: k }),
-      setObjective: (objective) => set({ objective }),
-      setHoveredStopId: (id) => set({ hoveredStopId: id }),
-      // Switching to an open route releases the fixed anchors (and cancels any
-      // pending map placement); switching back just reveals the inputs again.
-      setRouteMode: (mode) =>
-        set(
-          mode === 'open'
-            ? { routeMode: 'open', startLocation: null, endLocation: null, mapPlacementMode: null }
-            : { routeMode: 'fixed' },
-        ),
-      setMapPlacementMode: (mode) => set({ mapPlacementMode: mode }),
-      setSearchQuality: (quality) => set({ searchQuality: quality }),
-
-      resetAll: () =>
-        set({
-          startLocation: null,
-          endLocation: null,
-          waypoints: [],
-          targetK: null,
-          optimizedRoute: null,
-          routeError: null,
-        }),
-
-      warmUp: () => {
-        if (typeof window !== 'undefined' && window.crossOriginIsolated) {
-          warmUpSolver()
-            .then(() => set({ solverReady: true }))
-            .catch((e) => set({ solverWarning: (e as Error).message }))
-        } else {
-          set({
-            solverWarning:
-              'This browser did not enable the isolation the optimizer needs ' +
-              '(SharedArrayBuffer). Please use the latest Chrome or Edge.',
-          })
-        }
-      },
-
-      calculateRoute: async () => {
-        const { startLocation, endLocation, waypoints, targetK, objective, searchQuality } =
-          get()
-        set({ isCalculating: true, routeError: null, calcStatus: null })
-        try {
-          const route = await planSelectiveRoute({
-            startLocation,
-            endLocation,
-            // Delivered stops are done — never route to them.
-            waypoints: waypoints.filter((w) => !w.delivered),
-            targetK,
-            objective,
-            timeBudgetMs: SEARCH_BUDGET_MS[searchQuality],
-            onStatus: (msg) => set({ calcStatus: msg }),
-          })
-          set({ optimizedRoute: route, solverReady: true })
-        } catch (e) {
-          set({ optimizedRoute: null, routeError: (e as Error).message })
-        } finally {
-          set({ isCalculating: false, calcStatus: null })
-        }
-      },
-
-      saveFavorite: (name) =>
-        set((s) => ({
-          favorites: [
-            ...s.favorites,
-            {
-              id: newId(),
-              name: name.trim() || `Route ${s.favorites.length + 1}`,
-              startLocation: s.startLocation,
-              endLocation: s.endLocation,
-              // Store plain coordinates; loading creates a fresh (all-active) list.
-              waypoints: s.waypoints.map((w) => ({ lat: w.lat, lng: w.lng })),
-            },
-          ],
-        })),
-      loadFavorite: (id) =>
-        set((s) => {
-          const fav = s.favorites.find((f) => f.id === id)
-          if (!fav) return {}
-          return {
-            startLocation: fav.startLocation,
-            endLocation: fav.endLocation,
-            waypoints: toStops(fav.waypoints),
-            optimizedRoute: null,
-            routeError: null,
-          }
-        }),
-      deleteFavorite: (id) =>
-        set((s) => ({ favorites: s.favorites.filter((f) => f.id !== id) })),
-    }),
-    {
-      name: STATE_PERSIST_KEY,
-      version: 2,
-      /**
-       * Persist to IndexedDB rather than localStorage (M1). The blob format is
-       * unchanged — only the backend moved — which is what lets the legacy
-       * migration relocate an existing session verbatim.
-       *
-       * `skipHydration` hands rehydration timing to us: the migration has to
-       * finish writing the blob before `persist` reads it, or rehydration reads
-       * an empty store and the first write destroys the migrated session. See
-       * lib/persistence/boot.ts.
-       */
-      storage: createJSONStorage(() => indexedDbStorage),
-      skipHydration: true,
-      // Migrate old sessions: waypoints used to be plain {lat,lng}[], then Stops
-      // without a stable `num`.
-      migrate: (persisted, version) => {
-        const s = persisted as { waypoints?: Array<LatLng & Partial<Stop>> }
-        if (version < 2 && Array.isArray(s.waypoints)) {
-          s.waypoints = s.waypoints.map((w, i) => ({
-            id: w.id ?? newId(),
-            num: w.num ?? i + 1,
-            lat: w.lat,
-            lng: w.lng,
-            delivered: w.delivered ?? false,
-          }))
-        }
-        return persisted as RouteState
-      },
-      partialize: (s) => ({
-        startLocation: s.startLocation,
-        endLocation: s.endLocation,
-        waypoints: s.waypoints,
-        targetK: s.targetK,
-        objective: s.objective,
-        optimizedRoute: s.optimizedRoute,
-        favorites: s.favorites,
-        routeMode: s.routeMode,
-        searchQuality: s.searchQuality,
-      }),
-    },
-  ),
-)
 
 /**
- * Boot the persistence layer, then rehydrate — strictly in that order.
+ * Drop-in replacement for the old `useRouteStore`.
  *
- * Idempotent and never rejects: a persistence failure starts the app empty
- * rather than blocking it. `useHydrated` gates the UI so the user sees a
- * loading state instead of a flash of empty state that then fills in.
+ * Only reads route state. Solver and UI slices moved to `useSolverStore` and
+ * `useUiStore`; keeping them here would mean every solver status tick woke up
+ * every component reading a route field.
  */
-let hydrationPromise: Promise<void> | null = null
-
-export function hydrateRouteStore(): Promise<void> {
-  if (!hydrationPromise) {
-    hydrationPromise = (async () => {
-      await bootPersistence()
-      await useRouteStore.persist.rehydrate()
-    })().catch((e) => {
-      console.error('[store] hydration failed; continuing with empty state', e)
-    })
-  }
-  return hydrationPromise
+export function useRouteStore<T>(selector: (state: LegacyStoreView) => T): T {
+  return useRoutesStore((s) => selector(legacyView(s)))
 }
+
+/** Non-reactive read, mirroring `useRouteStore.getState()`. */
+useRouteStore.getState = (): LegacyStoreView => legacyView(useRoutesStore.getState())
+
+export { hydrateRoutesStore as hydrateRouteStore }

@@ -15,6 +15,7 @@
  * measured against the OR-Tools baseline without the harness changing.
  */
 import { solveSelectiveTSP, warmUpSolver, SKIP_PENALTY } from './lib/solver'
+import { useRoutesStore } from './store/routesStore'
 import { initRouting, setWorkerBridgeEnabled } from 'or-tools-wasm/routing'
 
 export interface BenchSolveOptions {
@@ -27,6 +28,12 @@ export interface BenchSolveOptions {
 export interface BenchSeam {
   /** Bumped when the seam's shape changes, so the harness can fail loudly. */
   version: number
+  /**
+   * The routes store, so acceptance tests can exercise the data model directly
+   * — creating routes, inserting stops, transitioning statuses — without
+   * needing UI that does not exist until M3.
+   */
+  routesStore: typeof useRoutesStore
   skipPenalty: number
   isCrossOriginIsolated: () => boolean
   warmUp: () => Promise<void>
@@ -50,7 +57,8 @@ declare global {
 }
 
 window.__bench = {
-  version: 1,
+  version: 2,
+  routesStore: useRoutesStore,
   skipPenalty: SKIP_PENALTY,
   isCrossOriginIsolated: () => globalThis.crossOriginIsolated === true,
   warmUp: () => warmUpSolver(),

@@ -1,4 +1,5 @@
 import { useRouteStore } from '../store/routeStore'
+import { useSolverStore } from '../store/solverStore'
 
 /** Spinner shown inside the FAB while a route is computing. */
 function Spinner() {
@@ -17,7 +18,7 @@ function Spinner() {
  * the sidebar takes over. Mirrors the enable/loading logic of CalculatePanel.
  */
 export function CalculateFab() {
-  const isCalculating = useRouteStore((s) => s.isCalculating)
+  const isCalculating = useSolverStore((s) => s.isCalculating)
   const calculateRoute = useRouteStore((s) => s.calculateRoute)
   const pointCount = useRouteStore(
     (s) =>

@@ -1,4 +1,4 @@
-import { useRouteStore } from '../store/routeStore'
+import { useSolverStore } from '../store/solverStore'
 
 /**
  * One-time cold-start notice. The optimizer (OR-Tools WASM) is fetched lazily
@@ -8,8 +8,8 @@ import { useRouteStore } from '../store/routeStore'
  * (no SharedArrayBuffer) is surfaced separately as a warning in the header.
  */
 export function ColdStartBanner() {
-  const solverReady = useRouteStore((s) => s.solverReady)
-  const solverWarning = useRouteStore((s) => s.solverWarning)
+  const solverReady = useSolverStore((s) => s.ready)
+  const solverWarning = useSolverStore((s) => s.warning)
 
   if (solverReady || solverWarning) return null
 

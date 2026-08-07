@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from 'react'
 import { useRouteStore } from '../store/routeStore'
+import { useUiStore } from '../store/uiStore'
 import { toLatLng, formatLatLng } from '../lib/coordinates'
 
 interface Props {
@@ -19,8 +20,8 @@ export function CoordinateForm({ field, label, accentClass = 'bg-blue-600' }: Pr
     field === 'start' ? s.startLocation : s.endLocation,
   )
   const setValue = useRouteStore((s) => (field === 'start' ? s.setStart : s.setEnd))
-  const isPlacing = useRouteStore((s) => s.mapPlacementMode === field)
-  const setMapPlacementMode = useRouteStore((s) => s.setMapPlacementMode)
+  const isPlacing = useUiStore((s) => s.mapPlacementMode === field)
+  const setMapPlacementMode = useUiStore((s) => s.setMapPlacementMode)
 
   const [lat, setLat] = useState('')
   const [lng, setLng] = useState('')

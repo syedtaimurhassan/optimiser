@@ -1,4 +1,5 @@
 import { useRouteStore } from '../store/routeStore'
+import { useSolverStore } from '../store/solverStore'
 
 /** App title, "Start over" (when there's a session), the saved note, and the
  *  optimizer isolation warning. */
@@ -9,7 +10,7 @@ export function HeaderPanel() {
     ),
   )
   const resetAll = useRouteStore((s) => s.resetAll)
-  const solverWarning = useRouteStore((s) => s.solverWarning)
+  const solverWarning = useSolverStore((s) => s.warning)
 
   return (
     <>

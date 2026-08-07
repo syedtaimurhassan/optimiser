@@ -11,9 +11,11 @@ import {
 import { useShallow } from 'zustand/react/shallow'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
-import type { LatLng, Stop } from '../types'
+import type { LatLng } from '../types'
+import type { LegacyStop as Stop } from '../store/routeStore'
 import { formatLatLng } from '../lib/coordinates'
 import { useRouteStore } from '../store/routeStore'
+import { useUiStore } from '../store/uiStore'
 
 interface MapMarker {
   point: LatLng
@@ -73,7 +75,7 @@ function buildIcon(m: MapMarker): L.DivIcon {
 /** Toggles the `.is-hovered` class on the marker matching `hoveredStopId`,
  *  mirroring list ↔ map highlight without rebuilding every marker on hover. */
 function HoverSync() {
-  const hoveredStopId = useRouteStore((s) => s.hoveredStopId)
+  const hoveredStopId = useUiStore((s) => s.hoveredStopId)
   const map = useMap()
   useEffect(() => {
     const root = map.getContainer()
@@ -93,10 +95,10 @@ function HoverSync() {
  *  crosshair cursor (MapContainer's className is init-only, so we set the class
  *  on the live container element instead). */
 function PlacementClick() {
-  const mode = useRouteStore((s) => s.mapPlacementMode)
+  const mode = useUiStore((s) => s.mapPlacementMode)
   const setStart = useRouteStore((s) => s.setStart)
   const setEnd = useRouteStore((s) => s.setEnd)
-  const setMode = useRouteStore((s) => s.setMapPlacementMode)
+  const setMode = useUiStore((s) => s.setMapPlacementMode)
   const map = useMapEvents({
     click(e) {
       if (!mode) return
@@ -174,7 +176,7 @@ function PopupActions({ m, setStart, setEnd, markDone, removeWaypoint }: PopupAc
     <div className="min-w-[10rem]">
       <strong>
         {m.role}
-        {m.stop ? ` #${m.stop.num}` : ''}
+        {m.stop ? ` ${m.stop.stopId}` : ''}
       </strong>
       <div className="text-xs text-slate-500">{formatLatLng(m.point)}</div>
       <div className="mt-1.5 flex flex-wrap gap-1.5">
@@ -222,9 +224,9 @@ export function MapComponent() {
   const setEnd = useRouteStore((s) => s.setEnd)
   const markDone = useRouteStore((s) => s.markDeliveredByCoord)
   const removeWaypoint = useRouteStore((s) => s.removeWaypoint)
-  const setHoveredStopId = useRouteStore((s) => s.setHoveredStopId)
-  const placementMode = useRouteStore((s) => s.mapPlacementMode)
-  const setPlacementMode = useRouteStore((s) => s.setMapPlacementMode)
+  const setHoveredStopId = useUiStore((s) => s.setHoveredStopId)
+  const placementMode = useUiStore((s) => s.mapPlacementMode)
+  const setPlacementMode = useUiStore((s) => s.setMapPlacementMode)
 
   // Markers to draw. With a route: the ordered stops, minus any removed since;
   // delivered fade to grey; the current (next) stop is green, the last red.
@@ -284,7 +286,7 @@ export function MapComponent() {
     if (startLocation) list.push(mk(startLocation, 'S', '#059669', 'Start'))
     waypoints
       .filter((w) => !w.delivered)
-      .forEach((point) => list.push(mk(point, String(point.num), '#2563eb', 'Stop')))
+      .forEach((point) => list.push(mk(point, point.stopId, '#2563eb', 'Stop')))
     if (endLocation) list.push(mk(endLocation, 'E', '#e11d48', 'End'))
     return list
   }, [optimizedRoute, startLocation, endLocation, waypoints])

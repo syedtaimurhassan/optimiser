@@ -7,6 +7,7 @@ import {
 } from 'react'
 import { useMediaQuery } from '../hooks/useMediaQuery'
 import { useRouteStore } from '../store/routeStore'
+import { useUiStore } from '../store/uiStore'
 import { HeaderPanel } from './HeaderPanel'
 import { ColdStartBanner } from './ColdStartBanner'
 import { StopsPanel } from './StopsPanel'
@@ -27,7 +28,7 @@ const PEEK_PX = 116
  */
 export function Sidebar() {
   const isMobile = useMediaQuery('(max-width: 767px)')
-  const placementMode = useRouteStore((s) => s.mapPlacementMode)
+  const placementMode = useUiStore((s) => s.mapPlacementMode)
 
   const sheetRef = useRef<HTMLElement>(null)
   const [peekY, setPeekY] = useState(600)
