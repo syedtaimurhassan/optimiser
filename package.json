@@ -17,15 +17,19 @@
     "bench:fixtures": "node bench/fetch-fixtures.mjs",
     "bench:verify-seam": "node bench/verify-seam.mjs",
     "prebench": "npm run bench:build",
-    "bench": "node bench/run.mjs"
+    "bench": "node bench/run.mjs",
+    "presmoke": "npm run bench:build",
+    "smoke": "node bench/m1-smoke.mjs"
   },
   "dependencies": {
+    "idb": "^8.0.3",
     "leaflet": "^1.9.4",
     "or-tools-wasm": "^0.9.1",
     "papaparse": "^5.5.4",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
     "react-leaflet": "^5.0.0",
+    "wouter": "^3.10.0",
     "zustand": "^5.0.14"
   },
   "devDependencies": {

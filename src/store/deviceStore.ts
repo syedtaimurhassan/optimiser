@@ -1,0 +1,60 @@
+import { create } from 'zustand'
+import {
+  detectSync,
+  detectAsync,
+  type Capabilities,
+} from '../lib/device/capabilities'
+
+/**
+ * Coarse capability tier, so components ask "can this device cope" rather than
+ * re-deriving policy from a dozen booleans at every call site.
+ *
+ * Deliberately NOT about raw speed — we can't measure that at boot without
+ * spending the very budget we're trying to protect. It's about headroom.
+ */
+export type DeviceTier = 'full' | 'limited' | 'minimal'
+
+interface DeviceState {
+  capabilities: Capabilities
+  tier: DeviceTier
+  /** True once the async probes have landed. */
+  ready: boolean
+  /** Kick off the async probes. Idempotent. */
+  probe: () => Promise<void>
+}
+
+/**
+ * `full`    — desktop-class headroom: 4+ cores and persistent storage granted.
+ * `limited` — a normal phone. The default assumption; nothing is disabled.
+ * `minimal` — no IndexedDB or no WebAssembly. Something we depend on is absent,
+ *             so features should degrade rather than fail.
+ */
+function classify(caps: Capabilities): DeviceTier {
+  if (!caps.indexedDB || !caps.wasm) return 'minimal'
+  const cores = caps.hardwareConcurrency ?? 2
+  if (cores >= 4 && caps.storagePersisted) return 'full'
+  return 'limited'
+}
+
+const initial: Capabilities = { ...detectSync(), asyncResolved: false }
+
+export const useDeviceStore = create<DeviceState>()((set, get) => ({
+  capabilities: initial,
+  tier: classify(initial),
+  ready: false,
+
+  probe: async () => {
+    if (get().ready) return
+    // Never let a capability probe take the app down — an unknown capability is
+    // survivable, a boot crash is not.
+    try {
+      const async = await detectAsync()
+      set((s) => {
+        const capabilities: Capabilities = { ...s.capabilities, ...async, asyncResolved: true }
+        return { capabilities, tier: classify(capabilities), ready: true }
+      })
+    } catch {
+      set({ ready: true })
+    }
+  },
+}))
