@@ -57,8 +57,30 @@ const check = (name, pass, detail = '') => {
 
 const DRAWER = '[role="dialog"][aria-label="Your routes"]'
 
-/** Wait for the sheet transition to finish rather than guessing at a delay. */
-const settle = (page) => page.waitForTimeout(400)
+/**
+ * Wait for the sheet transition to finish.
+ *
+ * This used to claim that and then sleep for a flat 400ms, which is a guess,
+ * not a wait — and M4 exposed it: with MapLibre competing for the main thread
+ * the drawer's close animation ran past the window and "tapping the exposed
+ * strip closes the drawer" started failing on a drawer that closes perfectly
+ * well, just ~100ms later.
+ *
+ * `document.getAnimations()` reports running CSS transitions, so this now
+ * waits for the actual condition. MapLibre animates with rAF rather than the
+ * Web Animations API, so it never appears here and cannot hold the wait open.
+ */
+const settle = async (page) => {
+  await page
+    .waitForFunction(
+      () => document.getAnimations().every((a) => a.playState !== 'running'),
+      null,
+      { timeout: 5_000 },
+    )
+    .catch(() => {})
+  // One frame for React to commit the unmount the transition's end triggers.
+  await page.waitForTimeout(50)
+}
 
 async function openDrawer(page) {
   await page.click('button[aria-label="Your routes"]')
@@ -338,8 +360,40 @@ async function main() {
   })
   check('the drawer trigger is a 44dp target', trigger.size >= 44, `${trigger.size}px`)
 
-  const zoom = await page.$eval('.leaflet-control-zoom', (el) => el.getBoundingClientRect().top)
-  check("the trigger doesn't cover the map's zoom control", zoom >= trigger.top + trigger.size, `zoom at ${zoom}px`)
+  // M3 checked the trigger cleared Leaflet's zoom control, which it had
+  // originally landed on top of. M4 removed Leaflet, and MapLibre adds no
+  // controls to that corner at all — so the original assertion has no subject.
+  //
+  // What still matters is the thing that check was really protecting: nothing
+  // sits under the trigger where a thumb will land. Assert that directly —
+  // with the drawer actually closed, since an open drawer covers the trigger
+  // on purpose and the single Escape above only dismisses the topmost overlay.
+  // Dismiss via the scrim, which this suite already proved works. Escape only
+  // closes the topmost overlay and does not reliably reach the drawer from
+  // this state — looping on it hangs.
+  if ((await page.locator(DRAWER).count()) > 0) {
+    await page.mouse.click(page.viewportSize().width - 8, 400)
+    await settle(page)
+  }
+  check('the drawer is closed before measuring the trigger', (await page.locator(DRAWER).count()) === 0)
+
+  const underTrigger = await page.evaluate(() => {
+    const el = document.querySelector('button[aria-label="Your routes"]')
+    const r = el.getBoundingClientRect()
+    const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2)
+    return el.contains(hit) ? null : `${hit?.tagName}.${(hit?.className || '').toString().slice(0, 40)}`
+  })
+  check('nothing overlaps the drawer trigger', underTrigger === null, underTrigger ?? 'trigger is on top')
+
+  const mapControls = await page.evaluate(() => {
+    const el = document.querySelector('button[aria-label="Your routes"]')
+    const r = el.getBoundingClientRect()
+    return [...document.querySelectorAll('.maplibregl-ctrl')].filter((c) => {
+      const b = c.getBoundingClientRect()
+      return b.left < r.right && b.right > r.left && b.top < r.bottom && b.bottom > r.top
+    }).length
+  })
+  check("no map control shares the trigger's corner", mapControls === 0, `${mapControls} overlapping`)
 
   const tokens = await page.evaluate(() => {
     const style = getComputedStyle(document.documentElement)

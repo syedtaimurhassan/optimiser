@@ -179,6 +179,9 @@ async function main() {
       null,
       { timeout: 30_000 },
     )
+    // Wait for the map rather than sampling at an arbitrary moment: MapLibre
+    // builds its canvas inside an effect, so a bare evaluate races the mount.
+    await page.waitForSelector('.maplibregl-canvas', { timeout: 30_000 }).catch(() => {})
     const fresh = await page.evaluate(async () => {
       const db = await new Promise((res, rej) => {
         const r = indexedDB.open('route-optimiser')
@@ -192,7 +195,7 @@ async function main() {
       })
       return {
         schemaVersion: Object.fromEntries(meta.map((m) => [m.key, m.value])).schemaVersion ?? null,
-        hasMap: document.querySelector('.leaflet-container') !== null,
+        hasMap: document.querySelector('.maplibregl-canvas') !== null,
       }
     })
     check('schemaVersion stamped on fresh install', fresh.schemaVersion === 4, `got ${fresh.schemaVersion}`)
@@ -407,9 +410,10 @@ async function main() {
     // Root must land on the working screen, not a stub — behaviour unchanged.
     await page.goto(server.url, { waitUntil: 'load', timeout: 60_000 })
     await page.waitForFunction(() => location.hash.includes('/route/'), null, { timeout: 30_000 })
+    await page.waitForSelector('.maplibregl-canvas', { timeout: 30_000 }).catch(() => {})
     const landed = await page.evaluate(() => ({
       hash: location.hash,
-      hasMap: document.querySelector('.leaflet-container') !== null,
+      hasMap: document.querySelector('.maplibregl-canvas') !== null,
     }))
     check('/ lands on the working screen', landed.hasMap, `hash: ${landed.hash}`)
 
