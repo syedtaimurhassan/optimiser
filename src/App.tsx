@@ -1,37 +1,54 @@
 import { useEffect } from 'react'
-import { Sidebar } from './components/Sidebar'
-import { MapComponent } from './components/MapComponent'
-import { CalculatingOverlay } from './components/CalculatingOverlay'
-import { CalculateFab } from './components/CalculateFab'
+import { AppRoutes } from './routes'
+import { ErrorBoundary } from './components/ErrorBoundary'
 import { useRouteStore } from './store/routeStore'
+import { useDeviceStore } from './store/deviceStore'
+import { useHydrated } from './hooks/useHydrated'
 
 /**
- * Responsive layout shell. Subscribes to no reactive state (only the stable
- * warm-up action), so it renders once. On phones the map fills the screen and
- * the sidebar is a draggable bottom sheet with a Calculate FAB; on md+ it's the
- * classic side-by-side with the sidebar's pinned Calculate footer.
+ * App shell: boundaries, boot, and the router.
+ *
+ * The layout itself now lives in screens/RouteWorkScreen — this component owns
+ * only the cross-cutting concerns.
  */
 function App() {
   const warmUp = useRouteStore((s) => s.warmUp)
+  const probe = useDeviceStore((s) => s.probe)
+  const hydrated = useHydrated()
+
+  // Capability probe also requests persistent storage, so run it early — but
+  // after first paint, since it awaits a permissions decision on some browsers.
+  useEffect(() => {
+    void probe()
+  }, [probe])
 
   useEffect(() => {
     const id = setTimeout(() => warmUp(), 3000)
     return () => clearTimeout(id)
   }, [warmUp])
 
+  // IndexedDB reads are async. Rendering before rehydration would flash an empty
+  // app at someone who has a full route loaded, then snap it back — so hold the
+  // first paint until the state is actually there.
+  if (!hydrated) return <BootSplash />
+
   return (
-    <div className="relative flex h-[100dvh] flex-col overflow-hidden bg-slate-100 md:flex-row">
-      {/* Map — full-screen on mobile (sheet floats over it); right column on desktop */}
-      <main className="relative h-[100dvh] w-full shrink-0 md:order-2 md:h-auto md:w-auto md:flex-1">
-        <MapComponent />
-        <CalculatingOverlay />
-      </main>
+    <ErrorBoundary name="root">
+      <AppRoutes />
+    </ErrorBoundary>
+  )
+}
 
-      {/* Sidebar: draggable bottom sheet on mobile, left column on desktop */}
-      <Sidebar />
-
-      {/* Calculate FAB — mobile only */}
-      <CalculateFab />
+function BootSplash() {
+  return (
+    <div className="flex h-[100dvh] items-center justify-center bg-slate-100" role="status" aria-live="polite">
+      <div className="flex items-center gap-3 text-sm text-slate-500">
+        <svg className="h-4 w-4 animate-spin text-blue-500" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+          <path className="opacity-90" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.4 0 0 5.4 0 12h4z" />
+        </svg>
+        Loading your route…
+      </div>
     </div>
   )
 }
