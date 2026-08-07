@@ -2,6 +2,98 @@
    needed; the @tailwindcss/vite plugin handles scanning and generation. */
 @import 'tailwindcss';
 
+/* ───────────────────────────────────────────────────────── design tokens
+ *
+ * The Spoke design system, as Tailwind v4 theme variables. There is no
+ * tailwind.config.js in this project, so @theme is the configuration: every
+ * key below generates utilities (`--color-primary` → `bg-primary`,
+ * `--text-row` → `text-row`, `--radius-sheet` → `rounded-sheet`,
+ * `--spacing-row` → `h-row`) AND stays available as a plain CSS variable for
+ * the imperative Leaflet styling further down this file.
+ *
+ * ── The semantic rule, which is not decorative ────────────────────────────
+ *
+ *   red    = failure or destruction. Nothing else. Ever.
+ *   green  = success. Nothing else.
+ *   blue   = the primary action, or the default group.
+ *
+ * A driver reads these colours at a glance while holding a parcel in the rain.
+ * If red ever means "warning" or "this row is emphasised", it stops meaning
+ * "this delivery failed", and the one glanceable signal in the app is gone.
+ * Anything that just needs to look demoted uses surface-variant.
+ */
+@theme {
+  /* ── Primary: the action colour, and the default group ── */
+  --color-primary: #1a5fd4;
+  --color-primary-pressed: #1650b4;
+  --color-on-primary: #ffffff;
+  /* The very light blue behind the account band and the active route row. */
+  --color-primary-container: #e3edfd;
+  --color-on-primary-container: #0b2e63;
+
+  /* ── Success: a delivered stop. Never anything else. ── */
+  --color-success: #12823c;
+  --color-success-container: #e2f4e8;
+  --color-on-success-container: #0a4a22;
+
+  /* ── Danger: a failed stop, or a destructive action. Never anything else. ── */
+  --color-danger: #c62828;
+  --color-danger-container: #fdeaea;
+  --color-on-danger-container: #7a1b1b;
+
+  /* ── Surfaces ── */
+  --color-surface: #ffffff;
+  /* The grey that demotes a secondary action without shouting. */
+  --color-surface-variant: #f1f3f6;
+  --color-on-surface: #1a1c1e;
+  --color-on-surface-variant: #5c6470;
+  --color-outline: #d3d8df;
+
+  /* ── Group palette. Blue is the default, and is the same blue as primary. ── */
+  --color-group-blue: #1a5fd4;
+  --color-group-purple: #7b3fe4;
+  --color-group-teal: #0e8a8a;
+  --color-group-green: #12823c;
+  --color-group-pink: #d6296e;
+  --color-group-amber: #c77700;
+
+  /* ── Type scale ──
+   * Named by role, not by size, so a row title stays a row title when the
+   * scale is retuned. The `--…--line-height` suffix is Tailwind v4's way of
+   * pairing a leading with a size. */
+  --text-display: 1.75rem; /* screen titles: "Create route" */
+  --text-display--line-height: 2.125rem;
+  --text-title: 1.25rem; /* section / sheet titles */
+  --text-title--line-height: 1.625rem;
+  --text-row: 1rem; /* list row title */
+  --text-row--line-height: 1.375rem;
+  --text-body: 0.9375rem;
+  --text-body--line-height: 1.25rem;
+  --text-label: 0.8125rem; /* buttons, chips, section headers */
+  --text-label--line-height: 1.125rem;
+  --text-meta: 0.75rem; /* the subtle third line on a route row */
+  --text-meta--line-height: 1rem;
+
+  /* ── Row metrics ──
+   * Spoke's two list-row heights. `row` is a two-line row, `row-lg` a
+   * three-line one (the route row, once it carries a summary). */
+  --spacing-row: 4.5rem; /* 72dp */
+  --spacing-row-lg: 6rem; /* 96dp */
+  /* WCAG 2.5.5 minimum touch target. Anything tappable is at least this tall. */
+  --spacing-touch: 2.75rem; /* 44dp */
+
+  /* ── Shape ── */
+  --radius-sheet: 1.5rem; /* 24dp — the sheet corner */
+  --radius-row: 0.75rem;
+  --radius-pill: 9999px;
+}
+
+/* The scrim behind any sheet or modal. Not a Tailwind colour token: it is
+   always a full-bleed overlay, never a `bg-*` on a component. */
+:root {
+  --scrim: rgb(0 0 0 / 0.45);
+}
+
 html,
 body,
 #root {
