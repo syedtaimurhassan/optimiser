@@ -30,6 +30,16 @@ export interface PlanInput {
 const sameCoord = (a: LatLng, b: LatLng) => a.lat === b.lat && a.lng === b.lng
 
 /**
+ * What the pipeline can produce on its own.
+ *
+ * `orderedStopIds` and `arrivalSec` are M2 fields this pipeline cannot fill: it
+ * is handed bare coordinates and never sees stop identity. The caller joins the
+ * result back to stops and supplies them. Teaching the pipeline about stops is
+ * M7's job, alongside the solver work — M2 deliberately leaves it alone.
+ */
+export type PlannedRoute = Omit<OptimizedRoute, 'orderedStopIds' | 'arrivalSec'>
+
+/**
  * Full pipeline (all in-browser):
  *   1. OSRM Table -> integer cost matrix (time or distance) over the point list
  *   2. OR-Tools   -> pick the best K candidates + order them, with fixed OR free
@@ -48,7 +58,7 @@ export async function planSelectiveRoute({
   objective,
   timeBudgetMs,
   onStatus,
-}: PlanInput): Promise<OptimizedRoute> {
+}: PlanInput): Promise<PlannedRoute> {
   // Candidates = uploaded stops, minus any that coincide with a chosen endpoint.
   const candidates = waypoints.filter(
     (w) =>
