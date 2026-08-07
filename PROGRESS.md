@@ -310,3 +310,141 @@ worse than an honest one.
 5. M3's route list should read `useRoutesStore.listRoutes()` /
    `listRoutesByDate()`, and delete the placeholder redirect in
    `RoutesListScreen` plus `CURRENT_ROUTE_ID` in `src/routeIds.ts`.
+
+---
+
+## M3 — The outer shell: design tokens, primitives, routes drawer, create route
+
+**Date:** 2026-08-07 · **Branch:** `m3-outer-shell`
+
+⚠️ The commits were made on `m2-data-model` (from `47adb75`) before I noticed
+the branch, and `m3-outer-shell` was cut at the end. Both names point at the
+same commit; nothing was rewritten. `m2-data-model` is still unmerged, so
+merging it now brings M3 with it.
+
+First milestone where the app looks like the target. No solver, map or
+persistence behaviour changed.
+
+### What changed
+
+**Added**
+
+- `src/index.css` — the design tokens, as a Tailwind v4 `@theme` block
+- `src/components/ui/*` — 12 primitives + the icon set + `useScrollLock`
+- `src/components/routes/*` — `RoutesDrawer`, `RouteListRow`,
+  `RouteOverflowSheet`, `CreateRouteModal`, `DrawerTrigger`
+- `src/lib/routeGrouping.ts` + tests — dates, sections, stop summaries
+- `src/screens/UiGalleryScreen.tsx` — dev-only `/__ui`
+- `bench/m3-smoke.mjs` — 50 acceptance checks (`npm run smoke:m3`)
+
+**Modified:** `routesStore` (duplicate, metadata edits, safer delete),
+`uiStore` (drawer/editor/overflow/confirm state), `RouteWorkScreen` (honours
+`:routeId`), `RoutesListScreen` (real redirect), `routes.tsx`, `verify-seam.mjs`
+
+**Removed:** `src/routeIds.ts` — `CURRENT_ROUTE_ID` is gone, as M2 asked.
+
+**No dependencies added.**
+
+### Verified
+
+- **50/50 M3 browser checks**, driving the whole definition of done: create a
+  named dated route → right section header → open → rename → duplicate →
+  delete, with cancel actually keeping the route
+- **42/42 M1+M2 checks still pass** — no regression from deleting the
+  placeholder route id
+- **97 unit tests** (73 from M2 + 24 new), and the new ones pass under
+  `TZ=America/Los_Angeles`, `Pacific/Kiritimati` and `UTC`
+- Drawer geometry asserted, not eyeballed: 384px panel in a 390px viewport, a
+  full-width scrim, and the exposed strip dismisses
+- Every thumb target measured ≥ 44dp; verified on a 390×844 viewport and at
+  1280×800
+- `npm run lint`, `npm run build`, `npm run bench:verify-seam` clean; `lib/`
+  still imports neither React nor the store
+
+### Decisions worth knowing
+
+**The drawer and the create modal are overlays, not routes.** A route for
+either would unmount `RouteWorkScreen` and tear down the Leaflet map on every
+open — expensive now, worse after M4. The cost is no deep link and no
+hardware-back dismissal; Escape, the scrim and the exposed strip all close
+them. Back-button handling belongs with M5's PWA navigation work.
+
+**The overflow menu is a bottom sheet, not a popover.** It is a list of demoted
+actions ending in a destructive one, which is precisely `DemotedActionGroup`,
+and a sheet puts all three inside thumb reach rather than anchoring them beside
+a row near the top of the screen.
+
+**`DemotedActionGroup` takes its destructive action as a separate required
+prop.** "The last item is always red" is then a fact about the type, not a
+convention a caller has to remember: you cannot build one with the delete in
+the middle, or with two red rows.
+
+**Deviations from the brief** (all deliberate):
+
+- **An "Upcoming" section.** The create flow offers "Tomorrow", so future-dated
+  routes exist the moment anyone uses it, and "Earlier this week" is a false
+  statement about a route that hasn't happened yet.
+- **The name placeholder tracks the selected date's weekday**, not today's, so
+  picking Tomorrow shows "Thursday" — the name that route will actually get.
+  Identical to the brief when the date is today.
+- **The account band says "This device"**, not an email. There is no account
+  and never will be; the honest local equivalent is where the data lives. One
+  line to change when M4's Settings owns an identity.
+- **The drawer caps at 384px on desktop.** 90% of a 1440px window is not a side
+  sheet.
+- **`deleteRoute` never leaves the app with nothing.** Deleting the active
+  route falls through to the newest remaining one; deleting the last creates a
+  blank route for today. Every screen assumes an active route exists, and that
+  invariant has to survive deletion, not just first run.
+
+### What surprised me
+
+1. **`todayISO()` was UTC.** `new Date().toISOString().slice(0, 10)` — so east
+   of Greenwich every route created after ~22:00 was dated tomorrow. It had
+   been harmless for two milestones because nothing displayed a date; the
+   moment routes are filed into dated sections it becomes "I created today's
+   route and it appeared under Upcoming". Fixed with a local-time helper, and
+   the test that catches it constructs 23:30 local deliberately.
+
+2. **Adjacent flex children leave no whitespace in `textContent`.** "Today
+   Fri 07 Aug" is two spans separated by `gap-2`, so the accessible name was
+   "TodayFri 07 Aug". The smoke test caught it, not the browser. The fix is an
+   explicit space, which costs nothing visually because whitespace-only text
+   nodes between flex children aren't rendered.
+
+3. **Class order in JSX does not decide which utility wins.** `ListRow` emits
+   `bg-surface` for an outlined row, and the caller's `bg-primary-container`
+   silently lost — Tailwind's stylesheet order decides, not the order they are
+   written. The selected date option rendered white for one build. Variant
+   props on the primitive, not background classes from the caller.
+
+Runner-up: the drawer trigger landed exactly on Leaflet's zoom control, hiding
+the "+". Screenshots showed it; the geometry probe proved the fix.
+
+### Deferred
+
+- **"Pick past stops to carry over" does nothing.** Wired to state with a
+  TODO(M6), as specified — it needs M6's stop copying.
+- Settings and Help are still M1 stubs.
+- Dropping cross-origin isolation (M0) and the unminified-bundle finding (M1)
+  are both still open.
+- The legacy sidebar, `HeaderPanel` and the rest of the M1 UI are untouched
+  behind the drawer. M4/M5 replace them, and the `routeStore` facade with them.
+
+### What the next session needs to know
+
+1. **Assemble M4 from `src/components/ui`.** If a screen needs a new visual
+   treatment, it goes in the primitive first. `Stepper`, `SegmentedControl`,
+   `StatusPill`, `IdChip` and `ActionRow3Up` are built and unused on purpose —
+   see them all at `#/__ui` in a bench build.
+2. **`npm run smoke:m3` is the M3 regression net**, and `npm run smoke` still
+   covers M1/M2. Both need a bench build, which their `pre` scripts handle.
+3. **The route screen reads `:routeId` from the URL.** Anything that changes
+   which route is open must set the active route *before* navigating, or the
+   first frame shows the previous route's stops. `RoutesDrawer.openRoute` is
+   the pattern.
+4. **`SCHEMA_VERSION` is still 4.** M3 added no persisted field. M4+ bumps to 5
+   and adds a `4 → 5` branch if it does.
+5. **The semantic colour rule is enforceable and worth enforcing**: red only
+   for failure or destruction, green only for success. If M4 needs a warning
+   colour, add an amber token — do not reach for `danger`.
