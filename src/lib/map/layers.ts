@@ -49,6 +49,22 @@ export const CLUSTER_MAX_ZOOM = 11
 export const CLUSTER_RADIUS = 48
 
 /**
+ * Below this zoom, markers are chips only — no address block.
+ *
+ * Found by measuring, not by taste. A chip plus its two-line label occupies
+ * roughly five times the collision area of a bare chip, and with labels on at
+ * every zoom only 2 of 6 test stops survived placement at z12. A driver
+ * looking at their whole round would see a handful of 300 stops and conclude
+ * the map was broken.
+ *
+ * The address is also the least useful thing at that zoom — you cannot read a
+ * street name you are 10 km above, and the chip alone still says "a stop is
+ * here". Dropping the text shrinks the collision box back to the chip and
+ * lets far more of the route show at once.
+ */
+export const LABEL_MIN_ZOOM = 14
+
+/**
  * The stop markers.
  *
  * ── The one property that matters most ────────────────────────────────────
@@ -77,18 +93,29 @@ export const stopsLayer = (): LayerSpecification => ({
     // Placement is decided by sort key, not by proximity to the viewport
     // centre, so the selected stop wins wherever it happens to be on screen.
     'symbol-z-order': 'source',
+    // Zoomed out: chips only. Zoomed in: chip plus the address block.
+    //
+    // The empty string below LABEL_MIN_ZOOM is doing real work — with no text
+    // box, a symbol's collision area shrinks to the chip alone, so far more of
+    // the route survives placement at a zoom where you want to see its shape.
     'text-field': [
-      'case',
-      ['==', ['get', 'line2'], ''],
-      ['format', ['get', 'line1'], { 'text-font': ['literal', ['Noto Sans Bold']] }],
+      'step',
+      ['zoom'],
+      '',
+      LABEL_MIN_ZOOM,
       [
-        'format',
-        ['get', 'line1'],
-        { 'text-font': ['literal', ['Noto Sans Bold']] },
-        '\n',
-        {},
-        ['get', 'line2'],
-        { 'text-font': ['literal', ['Noto Sans Regular']], 'font-scale': 0.92 },
+        'case',
+        ['==', ['get', 'line2'], ''],
+        ['format', ['get', 'line1'], { 'text-font': ['literal', ['Noto Sans Bold']] }],
+        [
+          'format',
+          ['get', 'line1'],
+          { 'text-font': ['literal', ['Noto Sans Bold']] },
+          '\n',
+          {},
+          ['get', 'line2'],
+          { 'text-font': ['literal', ['Noto Sans Regular']], 'font-scale': 0.92 },
+        ],
       ],
     ],
     'text-font': ['Noto Sans Regular'],
