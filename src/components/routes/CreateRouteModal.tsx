@@ -169,6 +169,12 @@ export function CreateRouteModal() {
             title={
               <span className="flex items-baseline gap-2">
                 <span>Pick a date</span>
+                {/* An explicit space: the visual gap comes from `gap-2`, which
+                    leaves no whitespace in textContent, so the accessible name
+                    would otherwise be read as one run — "Pick a dateSat 08 Aug".
+                    Whitespace-only text nodes between flex children are not
+                    rendered, so this costs nothing visually. */}
+                {isCustomDate && ' '}
                 {isCustomDate && (
                   <span className="text-body font-normal text-on-surface-variant">
                     {formatDayLabel(dateISO)}
@@ -258,7 +264,7 @@ function DateOption({
       leading={<CalendarIcon className="h-5 w-5 text-on-surface-variant" />}
       title={
         <span className="flex items-baseline gap-2">
-          <span>{relative}</span>
+          <span>{relative}</span>{' '}
           <span className="text-body font-normal text-on-surface-variant">{absolute}</span>
         </span>
       }

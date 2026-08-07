@@ -31,7 +31,7 @@ export function RouteListRow({ route, active, onOpen, onOverflow }: RouteListRow
       onClick={onOpen}
       title={
         <span className="flex items-baseline gap-2 text-primary">
-          <span className="shrink-0 font-normal tabular-nums">{formatShortDate(route.dateISO)}</span>
+          <span className="shrink-0 font-normal tabular-nums">{formatShortDate(route.dateISO)}</span>{' '}
           <span className="truncate font-bold">{route.name}</span>
         </span>
       }
