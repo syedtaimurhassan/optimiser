@@ -128,7 +128,10 @@ export default function UiGalleryScreen() {
           </div>
         </Section>
 
-        <Section title="Demoted actions">
+        {/* On white, because both of these are surface-variant and would be
+            invisible against a surface-variant page — which is exactly the
+            kind of thing this screen exists to catch. */}
+        <Section title="Demoted actions" onSurface>
           <DemotedActionGroup
             actions={[
               { label: 'Set name and date', icon: <PencilIcon className="h-5 w-5" />, onSelect: () => {} },
@@ -142,7 +145,7 @@ export default function UiGalleryScreen() {
           />
         </Section>
 
-        <Section title="Buttons and sheets">
+        <Section title="Buttons and sheets" onSurface>
           <div className="space-y-2">
             <FullWidthButton onClick={() => setSheetOpen(true)}>Open a sheet</FullWidthButton>
             <FullWidthButton variant="demoted">Demoted</FullWidthButton>
@@ -176,13 +179,21 @@ export default function UiGalleryScreen() {
   )
 }
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+function Section({
+  title,
+  children,
+  onSurface = false,
+}: {
+  title: string
+  children: React.ReactNode
+  onSurface?: boolean
+}) {
   return (
     <section>
       <h2 className="mb-2 text-label font-semibold uppercase tracking-wide text-on-surface-variant">
         {title}
       </h2>
-      {children}
+      <div className={onSurface ? 'rounded-row bg-surface p-3' : ''}>{children}</div>
     </section>
   )
 }
