@@ -93,7 +93,11 @@ async function main() {
       return {
         stores: [...db.objectStoreNames],
         routeCount: routes.length,
-        routeStops: routes[0]?.payload?.waypoints?.length ?? 0,
+        routeStops: routes[0]?.payload?.stops?.length ?? 0,
+        stopIds: (routes[0]?.payload?.stops ?? []).map((st) => st.stopId),
+        stopStatuses: (routes[0]?.payload?.stops ?? []).map((st) => st.status),
+        originalPositions: (routes[0]?.payload?.stops ?? []).map((st) => st.originalPosition),
+        routesBlobPresent: typeof metaMap['route-optimiser:routes:v4'] === 'string',
         routeDateISO: routes[0]?.dateISO ?? null,
         favoriteCount: favorites.length,
         schemaVersion: metaMap.schemaVersion ?? null,
@@ -107,12 +111,30 @@ async function main() {
 
     const expectedStores = ['routes', 'matrices', 'photos', 'favorites', 'meta']
     check('all 5 object stores created', expectedStores.every((s) => state.stores.includes(s)), state.stores.join(', '))
-    check('schemaVersion is 3', state.schemaVersion === 3, `got ${state.schemaVersion}`)
+    check('schemaVersion is 4', state.schemaVersion === 4, `got ${state.schemaVersion}`)
     check('one route row created', state.routeCount === 1, `got ${state.routeCount}`)
     check('route carries all 3 stops', state.routeStops === 3, `got ${state.routeStops}`)
     check('route dated today', state.routeDateISO === new Date().toISOString().slice(0, 10), String(state.routeDateISO))
     check('favorite migrated', state.favoriteCount === 1, `got ${state.favoriteCount}`)
-    check('state blob relocated to IndexedDB', state.statePersisted)
+    check('v4 routes blob written', state.routesBlobPresent)
+    check('legacy v2 state blob preserved', state.statePersisted)
+
+    // The point of M2: a stop that was #37 is labelled D7, and keeps it.
+    check(
+      'stop ids allocated in letter blocks',
+      JSON.stringify(state.stopIds) === JSON.stringify(['A1', 'A2', 'A3']),
+      `got ${JSON.stringify(state.stopIds)}`,
+    )
+    check(
+      'originalPosition preserved from num',
+      JSON.stringify(state.originalPositions) === JSON.stringify([1, 2, 3]),
+      `got ${JSON.stringify(state.originalPositions)}`,
+    )
+    check(
+      'delivered mapped to status',
+      JSON.stringify(state.stopStatuses) === JSON.stringify(['pending', 'delivered', 'pending']),
+      `got ${JSON.stringify(state.stopStatuses)}`,
+    )
     check('legacy localStorage key preserved', state.legacyStillPresent)
     check('backup copy written', state.backupWritten)
     // 3 stops, one delivered → the UI should report 2 active.
@@ -173,8 +195,193 @@ async function main() {
         hasMap: document.querySelector('.leaflet-container') !== null,
       }
     })
-    check('schemaVersion stamped on fresh install', fresh.schemaVersion === 3, `got ${fresh.schemaVersion}`)
+    check('schemaVersion stamped on fresh install', fresh.schemaVersion === 4, `got ${fresh.schemaVersion}`)
     check('app renders the map', fresh.hasMap)
+    await context.close()
+  }
+
+  // ------------------------------------------- v3 → v4 upgrade (M1 → M2 user)
+  //
+  // The path a user who already ran the deployed M1 build takes. Their data is
+  // in IndexedDB at schemaVersion 3, NOT in localStorage — so the v2 path above
+  // does not exercise this at all.
+  console.log('\n━━━ schemaVersion 3 → 4 upgrade ━━━\n')
+  {
+    const context = await browser.newContext()
+    const page = await context.newPage()
+
+    // Land on the app once so the database exists, then rewrite it to look
+    // exactly like an M1 install and reload.
+    await page.goto(server.url, { waitUntil: 'load', timeout: 60_000 })
+    await page.waitForFunction(
+      () => !document.body.innerText.includes('Loading your route'),
+      null,
+      { timeout: 30_000 },
+    )
+
+    await page.evaluate(async () => {
+      const db = await new Promise((res, rej) => {
+        const r = indexedDB.open('route-optimiser')
+        r.onsuccess = () => res(r.result)
+        r.onerror = () => rej(r.error)
+      })
+      const put = (store, value) =>
+        new Promise((res, rej) => {
+          const r = db.transaction(store, 'readwrite').objectStore(store).put(value)
+          r.onsuccess = () => res()
+          r.onerror = () => rej(r.error)
+        })
+      const clear = (store) =>
+        new Promise((res, rej) => {
+          const r = db.transaction(store, 'readwrite').objectStore(store).clear()
+          r.onsuccess = () => res()
+          r.onerror = () => rej(r.error)
+        })
+
+      await clear('routes')
+      await clear('meta')
+
+      // Exactly what M1 wrote: a routes row whose payload is the legacy session.
+      await put('routes', {
+        id: 'm1-route',
+        dateISO: '2026-08-01',
+        name: 'Imported session',
+        createdAt: 1,
+        updatedAt: 1,
+        payload: {
+          migratedFrom: 'route-optimiser:v2',
+          startLocation: { lat: 55.6761, lng: 12.5683 },
+          endLocation: null,
+          waypoints: [
+            { id: 'x1', num: 37, lat: 55.68, lng: 12.59, delivered: false },
+            { id: 'x2', num: 38, lat: 55.681, lng: 12.591, delivered: true },
+            { id: 'x3', num: 43, lat: 55.682, lng: 12.592, delivered: false },
+          ],
+          targetK: null,
+          objective: 'distance',
+          optimizedRoute: null,
+          routeMode: 'fixed',
+          searchQuality: 'maximum',
+        },
+      })
+      await put('meta', { key: 'schemaVersion', value: 3 })
+    })
+
+    await page.reload({ waitUntil: 'load' })
+    await page.waitForFunction(
+      () => !document.body.innerText.includes('Loading your route'),
+      null,
+      { timeout: 30_000 },
+    )
+
+    const upgraded = await page.evaluate(() => {
+      const s = window.__bench.routesStore.getState()
+      const route = Object.values(s.routes)[0]
+      return {
+        version: null,
+        routeCount: Object.keys(s.routes).length,
+        stopIds: route?.stops.map((st) => st.stopId) ?? [],
+        originalPositions: route?.stops.map((st) => st.originalPosition) ?? [],
+        statuses: route?.stops.map((st) => st.status) ?? [],
+        optimizeBy: route?.optimizeBy,
+        searchTierSec: route?.searchTierSec,
+        hasStart: route?.start !== null,
+      }
+    })
+
+    check('v3 payload upgraded into one route', upgraded.routeCount === 1, `got ${upgraded.routeCount}`)
+    // The headline cases, end to end through a real browser and a real database.
+    check(
+      'positions 37/38/43 become D7/D8/E3',
+      JSON.stringify(upgraded.stopIds) === JSON.stringify(['D7', 'D8', 'E3']),
+      JSON.stringify(upgraded.stopIds),
+    )
+    check(
+      'originalPosition carried from num',
+      JSON.stringify(upgraded.originalPositions) === JSON.stringify([37, 38, 43]),
+      JSON.stringify(upgraded.originalPositions),
+    )
+    check(
+      'delivered flag became a status',
+      JSON.stringify(upgraded.statuses) === JSON.stringify(['pending', 'delivered', 'pending']),
+      JSON.stringify(upgraded.statuses),
+    )
+    check('settings carried across', upgraded.optimizeBy === 'distance' && upgraded.searchTierSec === 5,
+      `optimizeBy=${upgraded.optimizeBy} tier=${upgraded.searchTierSec}`)
+    check('endpoint carried across', upgraded.hasStart)
+
+    await context.close()
+  }
+
+  // ------------------------------------------------------- multi-route model
+  console.log('\n━━━ multi-route model ━━━\n')
+  {
+    const context = await browser.newContext()
+    const page = await context.newPage()
+    await page.goto(server.url, { waitUntil: 'load', timeout: 60_000 })
+    await page.waitForFunction(
+      () => !document.body.innerText.includes('Loading your route'),
+      null,
+      { timeout: 30_000 },
+    )
+
+    const model = await page.evaluate(async () => {
+      const store = window.__bench.routesStore
+      const s = () => store.getState()
+
+      // A fresh install auto-creates one route so the app is usable.
+      const initialCount = Object.keys(s().routes).length
+
+      const a = s().createRoute({ name: 'Monday', dateISO: '2026-08-10' })
+      const b = s().createRoute({ name: 'Tuesday', dateISO: '2026-08-11' })
+
+      s().setActiveRoute(a)
+      s().addStops(Array.from({ length: 12 }, (_, i) => ({ lat: 55 + i / 1000, lng: 12 + i / 1000 })))
+      const stopsA = s().routes[a].stops
+
+      // Insert beside the 7th stop: takes a decimal suffix, renumbers nothing.
+      s().insertStopNear('A7', { lat: 56, lng: 13 })
+      const afterInsert = s().routes[a].stops.map((st) => st.stopId)
+
+      // Status transition then undo, both timestamped.
+      const target = s().routes[a].stops[0]
+      s().setStopStatus(target.id, 'delivered')
+      const delivered = s().routes[a].stops[0]
+      s().undoStopStatus(target.id)
+      const undone = s().routes[a].stops[0]
+
+      return {
+        initialCount,
+        routeCount: Object.keys(s().routes).length,
+        names: Object.values(s().routes).map((r) => r.name).sort(),
+        byDate: s().listRoutesByDate('2026-08-10').map((r) => r.name),
+        idsA: stopsA.map((st) => st.stopId),
+        afterInsert,
+        routeBIsEmpty: s().routes[b].stops.length === 0,
+        deliveredStatus: delivered.status,
+        deliveredHasTimestamp: delivered.statusHistory.length === 1 && typeof delivered.statusHistory[0].atMs === 'number',
+        undoneStatus: undone.status,
+        undoneHistoryEmpty: undone.statusHistory.length === 0,
+      }
+    })
+
+    check('a fresh install auto-creates one usable route', model.initialCount === 1, `got ${model.initialCount}`)
+    check('multiple routes can be created', model.routeCount === 3, `got ${model.routeCount}`)
+    check('routes are listable by date', JSON.stringify(model.byDate) === JSON.stringify(['Monday']), JSON.stringify(model.byDate))
+    check('routes hold independent stops', model.routeBIsEmpty)
+    check(
+      '12 stops span two letter blocks (A1..A10, B1, B2)',
+      JSON.stringify(model.idsA) === JSON.stringify(['A1','A2','A3','A4','A5','A6','A7','A8','A9','A10','B1','B2']),
+      JSON.stringify(model.idsA),
+    )
+    check(
+      'insert beside A7 yields A7.1 and renumbers nothing',
+      JSON.stringify(model.afterInsert) === JSON.stringify(['A1','A2','A3','A4','A5','A6','A7','A7.1','A8','A9','A10','B1','B2']),
+      JSON.stringify(model.afterInsert),
+    )
+    check('status transition records a timestamp', model.deliveredStatus === 'delivered' && model.deliveredHasTimestamp)
+    check('undo returns the stop to pending', model.undoneStatus === 'pending' && model.undoneHistoryEmpty)
+
     await context.close()
   }
 

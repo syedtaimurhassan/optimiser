@@ -91,7 +91,7 @@ function buildGrid() {
 async function solveInPage(payload) {
   const seam = window.__bench
   if (!seam) throw new Error('bench seam missing — was the bundle built with VITE_BENCH_SEAM=1?')
-  if (seam.version !== 1) throw new Error(`bench seam version ${seam.version}, expected 1`)
+  if (seam.version !== 2) throw new Error(`bench seam version ${seam.version}, expected 2`)
   const engine = seam.engines[payload.engine]
   if (!engine) throw new Error(`unknown engine "${payload.engine}"`)
 
