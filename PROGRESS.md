@@ -204,3 +204,109 @@ offline cost.
    replaces it with real ids and deletes the redirect in `RoutesListScreen`.
 5. **Run `npm run smoke` after touching persistence, routing or boot.** It is
    fast and it has already caught two shipped-quality bugs.
+
+---
+
+## M2 — The data model: many routes, addressed stops, immutable stop IDs
+
+**Date:** 2026-08-07 · **Branch:** `m2-data-model` (from `main` @ `3b87512`)
+
+The spine. No new screens; the existing UI still works, now on top of the new model.
+
+### What changed
+
+**Added**
+
+- `src/lib/stopIds.ts` + tests — the immutable ID allocator
+- `src/lib/persistence/migrateV4.ts` + tests — pure 3→4 transform
+- `src/store/{routesStore,uiStore,solverStore}.ts`
+- `npm test` (node:test, native TS stripping, **no test dependency**)
+
+**Rewritten:** `src/types.ts`, `src/store/routeStore.ts` (now a compat facade),
+`src/lib/persistence/migrate.ts` (version-aware chain)
+
+**No dependencies added.**
+
+### Verified
+
+- **73 unit tests** pass, including the specified D7 / D8 / E3 / A10 / B1 cases
+- **42 browser checks** pass, including the 3→4 upgrade driven through a real
+  IndexedDB, multi-route creation, an A7→A7.1 insert renumbering nothing, and
+  timestamped status transitions with undo
+- Both migration entry paths covered: v2 localStorage **and** a deployed-M1
+  IndexedDB at version 3 — a real upgrader takes the second, which the v2 test
+  does not exercise at all
+- `npm run lint`, `npm run build`, seam verification all clean; `lib/` still
+  imports neither React nor the store
+
+### Decisions worth knowing
+
+**Task 5 — compatibility facade, not a rewrite.** M3–M8 replace every one of
+these components, so porting ~20 of them now would be throwaway work with real
+regression risk. The facade projects the new model into the old shape.
+
+The hard part was **referential stability**: Zustand re-renders when a selector's
+result changes identity, so a facade that rebuilt its view each call would return
+fresh arrays and closures every time — every selector would look changed and
+every component would re-render on every write, destroying the narrow-selector
+discipline right before M4 makes the map expensive. Actions are module-level
+constants; the legacy stop projection is memoised against the stops array by
+WeakMap. **This layer is scaffolding — if it still exists after M8, something
+went wrong.**
+
+**Deviations from the brief** (all flagged, none silent):
+- `Route.start`/`end` are `LatLng | null` with an explicit `endpointMode`, not
+  optional fields. Open routes already exist and null is the honest shape.
+- Added `targetK` to `Route` — the existing K control would otherwise break.
+- `planSelectiveRoute` returns `PlannedRoute` (OptimizedRoute minus the two new
+  fields). The pipeline gets bare coordinates and never sees stop identity, so
+  it cannot honestly fill them. The caller joins them back. M7's job.
+
+**Decimal inserts allocate off the ROOT, not the neighbour.** Inserting beside
+D7.1 gives D7.2, not D7.1.1 — nesting would deepen without bound as a driver
+worked down a street, and nobody wants "D7.1.2.1" on a box. Suffixes are also
+never reused after a delete, because someone may still be holding a parcel
+marked D7.1.
+
+**Migrated delivery timestamps are the migration time, and say so.** The old
+model stored only a boolean. Inventing a plausible past time would have been
+worse than an honest one.
+
+### What surprised me
+
+1. **Node runs `.ts` tests natively with zero dependencies** — `node --test` plus
+   type stripping, which the project's existing `erasableSyntaxOnly` setting
+   already guaranteed would work. No Vitest, no Jest. The one catch: Node's ESM
+   resolver needs explicit `.ts` extensions in import specifiers, which Vite
+   accepts happily.
+
+2. **Two migration entry paths, not one.** I nearly shipped a migration that only
+   handled v2 localStorage — which would have done nothing for anyone already
+   running the deployed M1 build, silently starting them empty. Their data is in
+   IndexedDB at version 3. The smoke test now covers that path explicitly.
+
+3. **The favorites object store quietly stopped being populated.** The v4 blob
+   held them, so the app worked, and only the smoke test noticed the database
+   had stopped being a truthful index of what exists.
+
+### Deferred
+
+- Groups, breaks, time windows, pending changes: modelled and stored, no UI yet
+- `arrivalSec` is always `[]` — the pipeline can't compute arrivals yet (M7)
+- `markDeliveredByCoord` still exists for old callers; deleted when the last
+  legacy component goes
+- Dropping cross-origin isolation (M0) and the unminified-bundle finding (M1)
+
+### What the next session needs to know
+
+1. **`useRouteStore` is now a facade, not a store.** It has no `.persist` and no
+   `setState`. Reach for `useRoutesStore` / `useUiStore` / `useSolverStore`
+   directly in anything new — do not extend the facade.
+2. **`SCHEMA_VERSION` is 4.** M3+ bumps to 5 and adds a `4 → 5` branch in
+   `migrateLegacyIfNeeded`. Keep `db.ts`'s `upgrade` purely structural.
+3. **Never write `stopId` or `originalPosition` outside the allocator.**
+   `updateStop` strips them on purpose. Only "Reset Stop IDs" changes them.
+4. **`npm test` is fast (~0.1s) and `npm run smoke` is thorough.** Run both.
+5. M3's route list should read `useRoutesStore.listRoutes()` /
+   `listRoutesByDate()`, and delete the placeholder redirect in
+   `RoutesListScreen` plus `CURRENT_ROUTE_ID` in `src/routeIds.ts`.
