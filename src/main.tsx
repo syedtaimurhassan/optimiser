@@ -10,6 +10,19 @@ if (import.meta.env.VITE_BENCH_SEAM) {
   void import('./benchSeam')
 }
 
+/**
+ * React error boundaries do NOT catch errors thrown from event handlers, async
+ * callbacks, or timers — only from render and lifecycle. Those would otherwise
+ * vanish into the console. Capture them here so the diagnostics panel can show
+ * them and a logging sink can consume them later.
+ */
+window.addEventListener('error', (e) => {
+  console.error('[window.onerror]', e.error ?? e.message)
+})
+window.addEventListener('unhandledrejection', (e) => {
+  console.error('[unhandledrejection]', e.reason)
+})
+
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <App />
