@@ -1,16 +1,31 @@
+import { useEffect } from 'react'
 import { Redirect } from 'wouter'
-import { CURRENT_ROUTE_ID } from '../routeIds'
+import { useRoutesStore } from '../store/routesStore'
 
 /**
- * The routes list — a Spoke-style "your days" index. Arrives in M2, when the
- * data model actually supports more than one route.
+ * The app's landing path.
  *
- * Until then this redirects straight to the working screen. There is exactly one
- * implicit session, so showing a list of it would be both a lie and a
- * regression: M1 is infrastructure, and the app must land where it always did.
+ * There is no separate routes *screen*: the list is a drawer that slides over
+ * the route you are working on, so "/" resolves to whichever route is active
+ * and the drawer is opened from there. That is Spoke's model, and it is why
+ * this file is a redirect rather than a list.
  *
- * M2 replaces this whole component with the real list.
+ * M1's placeholder redirected to a hardcoded `CURRENT_ROUTE_ID`; now that real
+ * route ids exist, it redirects to the real one.
  */
 export function RoutesListScreen() {
-  return <Redirect to={`/route/${CURRENT_ROUTE_ID}`} replace />
+  const activeRouteId = useRoutesStore((s) => s.activeRouteId)
+  const createRoute = useRoutesStore((s) => s.createRoute)
+
+  // Hydration guarantees an active route, and so does deleteRoute. This is the
+  // recovery path if that invariant is ever broken — self-healing rather than
+  // a blank screen. It runs in an effect because creating a route during
+  // render is a side effect, and React is entitled to call render twice.
+  useEffect(() => {
+    if (!activeRouteId) createRoute()
+  }, [activeRouteId, createRoute])
+
+  if (!activeRouteId) return null
+
+  return <Redirect to={`/route/${activeRouteId}`} replace />
 }
