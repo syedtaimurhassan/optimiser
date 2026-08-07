@@ -7,6 +7,7 @@ import { CalculateFab } from '../components/CalculateFab'
 import { ErrorBoundary } from '../components/ErrorBoundary'
 import { CreateRouteModal } from '../components/routes/CreateRouteModal'
 import { DrawerTrigger } from '../components/routes/DrawerTrigger'
+import { RouteOverflowSheet } from '../components/routes/RouteOverflowSheet'
 import { RoutesDrawer } from '../components/routes/RoutesDrawer'
 import { useRoutesStore } from '../store/routesStore'
 
@@ -71,6 +72,7 @@ export function RouteWorkScreen() {
           order here is not their stacking order — see each one's zIndex. */}
       <DrawerTrigger />
       <RoutesDrawer />
+      <RouteOverflowSheet />
       <CreateRouteModal />
     </div>
   )
