@@ -27,19 +27,16 @@
   },
   "dependencies": {
     "idb": "^8.0.3",
-    "leaflet": "^1.9.4",
     "maplibre-gl": "5.24.0",
     "or-tools-wasm": "^0.9.1",
     "papaparse": "^5.5.4",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
-    "react-leaflet": "^5.0.0",
     "wouter": "^3.10.0",
     "zustand": "^5.0.14"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.3.3",
-    "@types/leaflet": "^1.9.21",
     "@types/node": "^24.13.2",
     "@types/papaparse": "^5.5.2",
     "@types/react": "^19.2.17",
