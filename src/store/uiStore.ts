@@ -22,6 +22,15 @@ export interface CameraIntent {
   nonce: number
 }
 
+/**
+ * What the route editor modal is doing.
+ *
+ * One modal serves both jobs because they edit exactly the same two fields;
+ * a separate "Set name and date" screen would be the same form with a
+ * different title and a second copy of the date logic to keep in step.
+ */
+export type RouteEditorTarget = { mode: 'create' } | { mode: 'edit'; routeId: string }
+
 interface UiState {
   sheetSnap: SheetSnap
   selectedStopId: string | null
@@ -31,6 +40,21 @@ interface UiState {
   cameraIntent: CameraIntent | null
   searchQuery: string
   searchOpen: boolean
+
+  // ── The routes drawer and its overlays ──
+  /** The left side sheet listing every route. */
+  drawerOpen: boolean
+  routeEditor: RouteEditorTarget | null
+  /** The route whose 3-dot overflow sheet is open. */
+  overflowRouteId: string | null
+  /** The route awaiting a delete confirmation. */
+  confirmDeleteRouteId: string | null
+
+  setDrawerOpen: (open: boolean) => void
+  openRouteEditor: (target: RouteEditorTarget) => void
+  closeRouteEditor: () => void
+  setOverflowRouteId: (routeId: string | null) => void
+  setConfirmDeleteRouteId: (routeId: string | null) => void
 
   setSheetSnap: (snap: SheetSnap) => void
   setSelectedStopId: (id: string | null) => void
@@ -52,6 +76,19 @@ export const useUiStore = create<UiState>()((set) => ({
   cameraIntent: null,
   searchQuery: '',
   searchOpen: false,
+
+  drawerOpen: false,
+  routeEditor: null,
+  overflowRouteId: null,
+  confirmDeleteRouteId: null,
+
+  setDrawerOpen: (drawerOpen) => set({ drawerOpen }),
+  // Opening the editor closes the overflow sheet it was launched from —
+  // leaving both up would stack two modals over the same route.
+  openRouteEditor: (routeEditor) => set({ routeEditor, overflowRouteId: null }),
+  closeRouteEditor: () => set({ routeEditor: null }),
+  setOverflowRouteId: (overflowRouteId) => set({ overflowRouteId }),
+  setConfirmDeleteRouteId: (confirmDeleteRouteId) => set({ confirmDeleteRouteId, overflowRouteId: null }),
 
   setSheetSnap: (sheetSnap) => set({ sheetSnap }),
   setSelectedStopId: (selectedStopId) => set({ selectedStopId }),

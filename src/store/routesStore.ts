@@ -24,13 +24,22 @@ import {
 import { indexedDbStorage } from '../lib/persistence/zustandStorage'
 import { ROUTES_PERSIST_KEY } from '../lib/persistence/db'
 import { bootPersistence } from '../lib/persistence/boot'
+import { toISODate, weekdayName } from '../lib/routeGrouping'
 
 export const newId = (): string =>
   typeof crypto !== 'undefined' && crypto.randomUUID
     ? crypto.randomUUID()
     : `${Date.now()}-${Math.random().toString(16).slice(2)}`
 
-export const todayISO = (): string => new Date().toISOString().slice(0, 10)
+/**
+ * Today, in the device's own timezone.
+ *
+ * This used to be `new Date().toISOString().slice(0, 10)`, which is UTC: east
+ * of Greenwich every route created after ~22:00 was dated tomorrow. Harmless
+ * while nothing displayed the date; not harmless now that the drawer files
+ * routes into dated sections and the create flow offers "Today".
+ */
+export const todayISO = (): string => toISODate(new Date())
 
 /** Search tiers, in seconds — the model stores seconds, the solver wants ms. */
 export const SEARCH_TIERS_SEC = [1, 3, 5] as const
@@ -45,9 +54,11 @@ interface RoutesState {
 
   // ── Route CRUD ──
   createRoute: (init?: Partial<Pick<Route, 'name' | 'dateISO'>>) => string
+  duplicateRoute: (routeId: string) => string | null
   deleteRoute: (routeId: string) => void
   setActiveRoute: (routeId: string | null) => void
   renameRoute: (routeId: string, name: string) => void
+  updateRouteMeta: (routeId: string, patch: Partial<Pick<Route, 'name' | 'dateISO'>>) => void
   setRouteStatus: (routeId: string, status: Route['status']) => void
   listRoutes: () => Route[]
   listRoutesByDate: (dateISO: string) => Route[]
@@ -93,13 +104,21 @@ interface RoutesState {
   resetActiveRoute: () => void
 }
 
-/** A blank route for `dateISO`. */
+/**
+ * A blank route for `dateISO`.
+ *
+ * An unnamed route is named after its weekday — "Wednesday". That is the
+ * placeholder the create flow shows, and it is genuinely the most useful
+ * default for someone who runs a round every day: it needs no typing and it
+ * still distinguishes one route from the next.
+ */
 function makeRoute(init?: Partial<Pick<Route, 'name' | 'dateISO'>>): Route {
   const now = Date.now()
+  const dateISO = init?.dateISO ?? todayISO()
   return {
     id: newId(),
-    name: init?.name ?? 'Untitled route',
-    dateISO: init?.dateISO ?? todayISO(),
+    name: init?.name?.trim() || weekdayName(dateISO),
+    dateISO,
     status: 'draft',
     start: null,
     end: null,
@@ -175,13 +194,88 @@ export const useRoutesStore = create<RoutesState>()(
         return route.id
       },
 
+      /**
+       * Copy a route as a fresh round for today.
+       *
+       * The point of duplicating is "same addresses, do it again", so what
+       * carries over is everything about WHERE the driver goes and what the
+       * stops are, and what does not carry over is everything about what
+       * happened last time:
+       *
+       *  - statuses reset to pending, history cleared. A duplicate that
+       *    arrived pre-delivered would be a lie, and an unfixable one.
+       *  - photo refs dropped. They are proof of a specific delivery, and
+       *    sharing the keys would let deleting one route destroy the other's
+       *    evidence.
+       *  - the optimisation, staged changes and matrix key are cleared: they
+       *    describe a solve that hasn't been run for this route.
+       *
+       * Stop `id`s are new (they are internal join keys and must be unique),
+       * but `stopId` LABELS are copied verbatim — D7 is D7 again, because it
+       * is the same address in the same round and the label's whole value is
+       * that it means one thing.
+       *
+       * Does not switch the active route: duplicating from the drawer should
+       * not yank the driver out of the round they currently have open.
+       */
+      duplicateRoute: (routeId) => {
+        const source = get().routes[routeId]
+        if (!source) return null
+
+        const now = Date.now()
+        const copy: Route = {
+          ...source,
+          id: newId(),
+          name: `${source.name} (copy)`,
+          dateISO: todayISO(),
+          status: 'draft',
+          stops: source.stops.map((stop) => ({
+            ...stop,
+            id: newId(),
+            status: 'pending',
+            statusHistory: [],
+            photoRefs: undefined,
+            etaSec: undefined,
+          })),
+          // Group ids are route-scoped, so copying them verbatim keeps every
+          // stop's groupId pointing at the right group in the new route.
+          groups: source.groups.map((group) => ({ ...group })),
+          breaks: source.breaks.map((brk) => ({ ...brk, taken: undefined })),
+          optimized: undefined,
+          pending: undefined,
+          matrixCacheKey: undefined,
+          createdAt: now,
+          updatedAt: now,
+        }
+
+        set((s) => ({ routes: { ...s.routes, [copy.id]: copy } }))
+        return copy.id
+      },
+
+      /**
+       * Delete a route, leaving the app with something to show.
+       *
+       * Every screen assumes there is an active route, so deleting the active
+       * one falls through to the newest remaining route — and deleting the
+       * last one creates a blank route for today rather than leaving the app
+       * pointing at nothing. Same invariant `hydrateRoutesStore` establishes
+       * on a first run; it has to survive deletion too.
+       */
       deleteRoute: (routeId) =>
         set((s) => {
+          if (!s.routes[routeId]) return {}
           const routes = { ...s.routes }
           delete routes[routeId]
-          const activeRouteId =
-            s.activeRouteId === routeId ? (Object.keys(routes)[0] ?? null) : s.activeRouteId
-          return { routes, activeRouteId }
+
+          if (s.activeRouteId !== routeId) return { routes, activeRouteId: s.activeRouteId }
+
+          const newest = Object.values(routes).sort(
+            (a, b) => b.dateISO.localeCompare(a.dateISO) || b.updatedAt - a.updatedAt,
+          )[0]
+          if (newest) return { routes, activeRouteId: newest.id }
+
+          const replacement = makeRoute()
+          return { routes: { [replacement.id]: replacement }, activeRouteId: replacement.id }
         }),
 
       setActiveRoute: (routeId) => set({ activeRouteId: routeId }),
@@ -191,6 +285,25 @@ export const useRoutesStore = create<RoutesState>()(
           const route = s.routes[routeId]
           if (!route) return {}
           return { routes: { ...s.routes, [routeId]: { ...route, name, updatedAt: Date.now() } } }
+        }),
+
+      /** Name and date together — the two fields "Set name and date" edits. */
+      updateRouteMeta: (routeId, patch) =>
+        set((s) => {
+          const route = s.routes[routeId]
+          if (!route) return {}
+          const dateISO = patch.dateISO ?? route.dateISO
+          // An omitted name leaves the name alone; a name the user CLEARED
+          // falls back to the weekday of whatever date the route now has, so
+          // a route is never nameless and the fallback tracks the date.
+          const name =
+            patch.name === undefined ? route.name : patch.name.trim() || weekdayName(dateISO)
+          return {
+            routes: {
+              ...s.routes,
+              [routeId]: { ...route, name, dateISO, updatedAt: Date.now() },
+            },
+          }
         }),
 
       setRouteStatus: (routeId, status) =>
@@ -502,7 +615,9 @@ export function hydrateRoutesStore(): Promise<void> {
       if (!state.activeRouteId || !state.routes[state.activeRouteId]) {
         const existing = Object.keys(state.routes)[0]
         if (existing) state.setActiveRoute(existing)
-        else state.createRoute({ name: "Today's route" })
+        // Unnamed: makeRoute names it after its weekday, which is the same
+        // default the create-route flow offers.
+        else state.createRoute()
       }
     })().catch((e) => {
       console.error('[routes] hydration failed; continuing with an empty store', e)
