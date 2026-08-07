@@ -25,10 +25,11 @@ interface State {
  * Catches render/lifecycle errors in its subtree and shows a recoverable UI.
  *
  * Two boundaries wrap this app: one at the root, and one around the map. The map
- * gets its own because Leaflet fails in ways React can't anticipate — a bad
+ * gets its own because MapLibre fails in ways React can't anticipate — a bad
  * geometry or a container sized 0×0 throws from inside an imperative callback,
- * and without a local boundary that takes down the entire app including the
- * sidebar the user needs in order to fix the input that caused it.
+ * a device with no usable WebGL throws at construction, and without a local
+ * boundary any of those take down the entire app including the sidebar the
+ * user needs in order to fix the input that caused it.
  *
  * Note the standing limitation: React error boundaries do NOT catch errors in
  * event handlers, async callbacks, or effects that have already returned. Those

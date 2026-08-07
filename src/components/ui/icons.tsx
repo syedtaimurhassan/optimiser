@@ -110,3 +110,53 @@ export const TrashIcon = (props: IconProps) => (
     <path d="M4 7h16M10 4h4M6 7l1 13h10l1-13M10 11v6M14 11v6" />
   </Icon>
 )
+
+export const ChevronLeftIcon = (props: IconProps) => (
+  <Icon {...props}>
+    <path d="M15 5l-7 7 7 7" />
+  </Icon>
+)
+
+// ─────────────────────────────────────────────────────────── map chrome
+
+/** Basemap switch. Always the top FAB, so it is worth being unmistakable. */
+export const LayersIcon = (props: IconProps) => (
+  <Icon {...props}>
+    <path d="M12 3.5 3 8l9 4.5L21 8z" />
+    <path d="M3 12.5 12 17l9-4.5" />
+    <path d="M3 17 12 21.5 21 17" />
+  </Icon>
+)
+
+/** "Where am I" — the contextual FAB on a route with nothing planned yet. */
+export const CrosshairIcon = (props: IconProps) => (
+  <Icon {...props}>
+    <circle cx="12" cy="12" r="6.5" />
+    <circle cx="12" cy="12" r="1.6" fill="currentColor" stroke="none" />
+    <path d="M12 2v3M12 19v3M2 12h3M19 12h3" />
+  </Icon>
+)
+
+/** A folded map — "frame the whole route". */
+export const FitRouteIcon = (props: IconProps) => (
+  <Icon {...props}>
+    <path d="M9 4.5 3.5 6.8v12.7L9 17.2l6 2.3 5.5-2.3V4.5L15 6.8z" />
+    <path d="M9 4.5v12.7M15 6.8v12.7" />
+  </Icon>
+)
+
+/** A map pin — "take me back to the stop I selected". */
+export const PinIcon = (props: IconProps) => (
+  <Icon {...props}>
+    <path d="M12 21.5c4.2-4.6 6.3-8 6.3-10.5a6.3 6.3 0 1 0-12.6 0c0 2.5 2.1 5.9 6.3 10.5z" />
+    <circle cx="12" cy="10.8" r="2.4" />
+  </Icon>
+)
+
+/** Finish time. A plain flag, distinct from the map's checkered end marker. */
+export const FlagIcon = (props: IconProps) => (
+  <Icon {...props}>
+    <path d="M6 21V4" />
+    <path d="M6 4.5h11.5l-2.2 4 2.2 4H6z" />
+  </Icon>
+)

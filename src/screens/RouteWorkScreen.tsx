@@ -49,11 +49,12 @@ export function RouteWorkScreen() {
       {/* Map — full-screen on mobile (sheet floats over it); right column on desktop */}
       <main className="relative h-[100dvh] w-full shrink-0 md:order-2 md:h-auto md:w-auto md:flex-1">
         {/*
-          The map gets its own boundary because Leaflet fails in ways React
+          The map gets its own boundary because MapLibre fails in ways React
           can't see coming — a malformed geometry or a 0×0 container throws from
-          inside an imperative callback. Without this, one bad polyline would
-          take down the sidebar too, removing the very controls the user needs
-          to correct the input that caused it.
+          inside an imperative callback, and a device with no usable WebGL
+          throws at construction. Without this, one bad polyline would take
+          down the sidebar too, removing the very controls the user needs to
+          correct the input that caused it.
         */}
         <ErrorBoundary name="map" label="map">
           <MapComponent />

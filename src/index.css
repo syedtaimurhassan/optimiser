@@ -9,7 +9,10 @@
  * key below generates utilities (`--color-primary` → `bg-primary`,
  * `--text-row` → `text-row`, `--radius-sheet` → `rounded-sheet`,
  * `--spacing-row` → `h-row`) AND stays available as a plain CSS variable for
- * the imperative Leaflet styling further down this file.
+ * the map styling further down this file.
+ *
+ * These values are mirrored as hex in lib/map/palette.ts, because a canvas
+ * cannot read a CSS variable. palette.test.ts fails if the two drift.
  *
  * ── The semantic rule, which is not decorative ────────────────────────────
  *
@@ -104,66 +107,30 @@ body {
   margin: 0;
 }
 
-/* The routes-drawer trigger floats in the map's top-left corner, which is
-   where Leaflet stacks its zoom control by default — the "+" ended up
-   underneath it. Push the whole top-left control stack clear rather than
-   moving the trigger: the corner is where the menu belongs, and this stays
-   correct if more controls are added to that stack later. */
-.leaflet-top.leaflet-left {
-  margin-top: 3.5rem;
-}
+/* ─────────────────────────────────────────────────────────────── the map
+ *
+ * M4 replaced Leaflet with MapLibre GL. Almost all of the old marker CSS went
+ * with it: stop markers are now canvas-drawn bitmaps in a WebGL symbol layer,
+ * so their appearance is decided in lib/map/chipImage.ts, not here. There is
+ * no `.ro-marker` any more and nothing should reintroduce one — a DOM marker
+ * would sit outside MapLibre's collision detection, which is the whole reason
+ * for the migration.
+ *
+ * MapLibre also ships no controls unless you add them, so the old rule that
+ * pushed Leaflet's zoom stack clear of the routes-drawer trigger is gone too.
+ */
 
-/* Leaflet's default zoom buttons ship at 30px; bump to a 44px WCAG 2.5.5
-   touch target. (Attribution links are inline text and exempt.) */
-.leaflet-control-zoom a {
-  width: 44px !important;
-  height: 44px !important;
-  line-height: 44px !important;
-  font-size: 20px !important;
+/* Attribution is a licence requirement (ODbL), not decoration — this styles
+   it to match the design system, and must never hide it. */
+.maplibregl-ctrl-attrib {
+  font-size: 11px;
+  border-radius: var(--radius-pill);
 }
-
-/* --- Map marker interactions (M2) --- */
-/* Base circular marker; smooth scale on hover-sync. */
-.ro-marker {
-  position: relative;
-  transition: transform 0.12s ease;
-}
-/* Hover highlight, mirrored from the list ↔ map via `hoveredStopId`. */
-.ro-marker.is-hovered {
-  transform: scale(1.3);
-  outline: 3px solid rgba(37, 99, 235, 0.65);
-  outline-offset: 2px;
-  z-index: 1000;
-}
-/* The next (current) stop pulses to draw the eye. */
-.ro-marker--next::after {
-  content: '';
-  position: absolute;
-  inset: -4px;
-  border-radius: 50%;
-  border: 2px solid #059669;
-  pointer-events: none;
-  animation: ro-pulse 1.4s ease-out infinite;
-}
-@keyframes ro-pulse {
-  0% {
-    transform: scale(0.85);
-    opacity: 0.9;
-  }
-  100% {
-    transform: scale(1.9);
-    opacity: 0;
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .ro-marker--next::after {
-    animation: none;
-    opacity: 0.6;
-  }
+.maplibregl-ctrl-attrib a {
+  color: var(--color-on-surface-variant);
 }
 
 /* "Set on map" placement mode: the whole map reads as a target. */
-.leaflet-container.ro-placing,
-.leaflet-container.ro-placing .leaflet-interactive {
-  cursor: crosshair !important;
+.ro-placing .maplibregl-canvas {
+  cursor: crosshair;
 }

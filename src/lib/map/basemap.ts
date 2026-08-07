@@ -54,15 +54,15 @@ export const FALLBACK_STYLE: Record<BasemapId, string> = {
 export const DEFAULT_BASEMAP: BasemapId = 'streets'
 
 /**
- * Attribution.
+ * ── Attribution ───────────────────────────────────────────────────────────
  *
- * MapLibre reads `attribution` out of the style's own sources and shows it
- * automatically, so this constant is not what satisfies the licence — it is a
- * belt-and-braces string for the one case MapLibre cannot cover, a style that
- * failed to load at all. Never remove the attribution control to tidy the UI:
- * OpenStreetMap's ODbL requires it and OpenFreeMap asks for it by name.
+ * There is no constant here on purpose. MapLibre reads the credit off the
+ * style's own sources and renders it in the AttributionControl, and
+ * OpenFreeMap's style already declares "© OpenMapTiles Data from
+ * OpenStreetMap". Passing the same string as `customAttribution` renders it
+ * twice — which it did, until a browser check caught it.
+ *
+ * What matters is that the AttributionControl is never removed to tidy the
+ * UI. OpenStreetMap's ODbL requires the credit, and it is the licence, not a
+ * style choice.
  */
-export const ATTRIBUTION =
-  '<a href="https://openfreemap.org" target="_blank" rel="noopener">OpenFreeMap</a> ' +
-  '© <a href="https://openmaptiles.org" target="_blank" rel="noopener">OpenMapTiles</a> ' +
-  'Data from <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>'

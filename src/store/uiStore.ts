@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { DEFAULT_BASEMAP, type BasemapId } from '../lib/map/basemap'
 
 /**
  * Transient UI state. Never persisted — reopening the app should not restore a
@@ -12,7 +13,11 @@ import { create } from 'zustand'
 export type SheetSnap = 'peek' | 'half' | 'full'
 
 /** A request for the map to move. The map consumes it and clears it — state
- *  describes intent, not the camera's actual position, which Leaflet owns. */
+ *  describes intent, not the camera's actual position, which MapLibre owns.
+ *
+ *  For callers INSIDE the map's subtree there is a better route: read the
+ *  MapController off its context and call it directly. This exists for the
+ *  ones outside it — the itinerary, search — which have no such access. */
 export interface CameraIntent {
   center?: { lat: number; lng: number }
   zoom?: number
@@ -40,6 +45,15 @@ interface UiState {
   cameraIntent: CameraIntent | null
   searchQuery: string
   searchOpen: boolean
+  /**
+   * Which basemap the layers FAB has selected.
+   *
+   * Not persisted, like everything else here — but note the asymmetry with
+   * the rest of this store: a basemap preference is arguably a SETTING rather
+   * than transient UI, and if it ever wants to survive a reload it belongs in
+   * routesStore's persisted slice, not here.
+   */
+  basemap: BasemapId
 
   // ── The routes drawer and its overlays ──
   /** The left side sheet listing every route. */
@@ -64,6 +78,7 @@ interface UiState {
   clearCameraIntent: () => void
   setSearchQuery: (q: string) => void
   setSearchOpen: (open: boolean) => void
+  setBasemap: (basemap: BasemapId) => void
 }
 
 let cameraNonce = 0
@@ -76,6 +91,7 @@ export const useUiStore = create<UiState>()((set) => ({
   cameraIntent: null,
   searchQuery: '',
   searchOpen: false,
+  basemap: DEFAULT_BASEMAP,
 
   drawerOpen: false,
   routeEditor: null,
@@ -98,4 +114,5 @@ export const useUiStore = create<UiState>()((set) => ({
   clearCameraIntent: () => set({ cameraIntent: null }),
   setSearchQuery: (searchQuery) => set({ searchQuery }),
   setSearchOpen: (searchOpen) => set({ searchOpen }),
+  setBasemap: (basemap) => set({ basemap }),
 }))
