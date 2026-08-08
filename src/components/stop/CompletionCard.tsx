@@ -20,10 +20,19 @@ export interface CompletionCardProps {
   at: string | null
   /** The captured failure reason, when there is one. */
   reason?: string | null
+  /** Offered on a failure with no reason yet. Absent on a delivery. */
+  onAddReason?: () => void
   onUndo: () => void
 }
 
-export function CompletionCard({ status, label, at, reason, onUndo }: CompletionCardProps) {
+export function CompletionCard({
+  status,
+  label,
+  at,
+  reason,
+  onAddReason,
+  onUndo,
+}: CompletionCardProps) {
   const delivered = status === 'delivered'
 
   return (
@@ -67,10 +76,33 @@ export function CompletionCard({ status, label, at, reason, onUndo }: Completion
         </button>
       </div>
 
-      {reason && (
-        <p className="mt-3 border-t border-outline/60 pt-3 text-body text-on-surface-variant">
+      {/*
+        The reason, or the offer of one. Skipping the reason sheet is a
+        legitimate outcome, so a failure with nothing recorded must still have
+        a way back to recording it — otherwise the one dismissible step in the
+        flow is also the only chance to take it.
+      */}
+      {reason ? (
+        <button
+          type="button"
+          onClick={onAddReason}
+          disabled={!onAddReason}
+          data-testid="failure-reason-line"
+          className="mt-3 w-full border-t border-outline/60 pt-3 text-left text-body text-on-surface-variant disabled:opacity-100"
+        >
           {reason}
-        </p>
+        </button>
+      ) : (
+        onAddReason && (
+          <button
+            type="button"
+            onClick={onAddReason}
+            data-testid="add-failure-reason"
+            className="mt-3 min-h-touch w-full border-t border-outline/60 pt-3 text-left text-label font-semibold text-primary"
+          >
+            Add a reason
+          </button>
+        )
       )}
     </div>
   )

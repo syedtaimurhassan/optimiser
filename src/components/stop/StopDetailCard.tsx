@@ -1,5 +1,6 @@
 import type { AddressedStop, StopGroup } from '../../types'
 import { stopDetailModel, type DemotedActionId } from '../../lib/stopDetail'
+import { describeFailure } from '../../lib/failureReasons'
 import { ActionRow3Up, DemotedActionGroup, IdChip, ListRow, StatusPill } from '../ui'
 import { GroupDot } from '../ui/GroupDot'
 import {
@@ -34,6 +35,8 @@ export interface StopDetailCardProps {
   onNavigate: () => void
   onSetStatus: (status: 'delivered' | 'failed') => void
   onUndo: () => void
+  /** Open the reason sheet again — only ever offered on a failure. */
+  onAddReason: () => void
   onEdit: () => void
   onDuplicate: () => void
   onRemove: () => void
@@ -49,6 +52,7 @@ export function StopDetailCard({
   onNavigate,
   onSetStatus,
   onUndo,
+  onAddReason,
   onEdit,
   onDuplicate,
   onRemove,
@@ -138,7 +142,8 @@ export function StopDetailCard({
             status={model.primary.status}
             label={model.primary.label}
             at={model.primary.at}
-            reason={stop.failureReason ?? null}
+            reason={describeFailure(stop)}
+            onAddReason={model.primary.status === 'failed' ? onAddReason : undefined}
             onUndo={onUndo}
           />
         )}

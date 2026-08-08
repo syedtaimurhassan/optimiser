@@ -1,4 +1,4 @@
-import { useCallback } from 'react'
+import { useCallback, useState } from 'react'
 import { useLocation } from 'wouter'
 import type { Route } from '../../types'
 import type { StopPage } from '../../lib/stopPages'
@@ -6,7 +6,9 @@ import { formatLatLng } from '../../lib/coordinates'
 import { googleMapsSearchUrl } from '../../lib/googleMaps'
 import { useRoutesStore } from '../../store/routesStore'
 import { useUiStore } from '../../store/uiStore'
+import { titleFor } from '../../lib/routeList'
 import { StopCarousel } from './StopCarousel'
+import { FailureReasonSheet } from './FailureReasonSheet'
 import { StopDetailCard } from './StopDetailCard'
 import { EndLocationCard } from './EndLocationCard'
 
@@ -34,7 +36,16 @@ export interface StopPagesProps {
 
 export function StopPages({ route, pages, index }: StopPagesProps) {
   const [, navigate] = useLocation()
+  /**
+   * The stop whose reason sheet is open.
+   *
+   * Local, not in the store: it is opened by exactly one interaction on this
+   * screen and closed by dismissing it, and nothing outside the carousel has
+   * any business asking whether it is up.
+   */
+  const [reasonStopId, setReasonStopId] = useState<string | null>(null)
   const setStopStatus = useRoutesStore((s) => s.setStopStatus)
+  const updateStop = useRoutesStore((s) => s.updateStop)
   const undoStopStatus = useRoutesStore((s) => s.undoStopStatus)
   const duplicateStop = useRoutesStore((s) => s.duplicateStop)
   const removeStop = useRoutesStore((s) => s.removeStop)
@@ -94,8 +105,14 @@ export function StopPages({ route, pages, index }: StopPagesProps) {
           etaMs={null}
           onClose={close}
           onNavigate={() => openNavigation({ lat: page.stop.lat, lng: page.stop.lng })}
-          onSetStatus={(status) => setStopStatus(page.stop.id, status)}
+          onSetStatus={(status) => {
+            // Mark first, ask second. The tap always does the thing it says;
+            // the reason is a follow-up that can be dismissed.
+            setStopStatus(page.stop.id, status)
+            if (status === 'failed') setReasonStopId(page.stop.id)
+          }}
           onUndo={() => undoStopStatus(page.stop.id)}
+          onAddReason={() => setReasonStopId(page.stop.id)}
           onEdit={() => setStopEditorId(page.stop.id)}
           onDuplicate={() => {
             const created = duplicateStop(page.stop.id)
@@ -110,6 +127,7 @@ export function StopPages({ route, pages, index }: StopPagesProps) {
       route,
       close,
       setStopStatus,
+      setReasonStopId,
       undoStopStatus,
       duplicateStop,
       removeAndMoveOn,
@@ -119,8 +137,24 @@ export function StopPages({ route, pages, index }: StopPagesProps) {
     ],
   )
 
+  const reasonStop = reasonStopId ? route.stops.find((s) => s.id === reasonStopId) : undefined
+
   return (
-    <StopCarousel pages={pages} index={index} onIndexChange={goToPage} renderPage={renderPage} />
+    <>
+      <StopCarousel pages={pages} index={index} onIndexChange={goToPage} renderPage={renderPage} />
+
+      <FailureReasonSheet
+        open={reasonStop !== undefined}
+        stopTitle={reasonStop ? titleFor(reasonStop) : ''}
+        initialReason={reasonStop?.failureReason}
+        initialNote={reasonStop?.failureNote}
+        onSave={(failureReason, failureNote) => {
+          if (reasonStopId) updateStop(reasonStopId, { failureReason, failureNote })
+          setReasonStopId(null)
+        }}
+        onClose={() => setReasonStopId(null)}
+      />
+    </>
   )
 }
 

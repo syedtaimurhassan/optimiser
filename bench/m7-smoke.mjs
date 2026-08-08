@@ -395,6 +395,54 @@ async function main() {
     (await page.getAttribute(CURRENT + '[data-testid="stop-detail"]', 'data-status')) === 'pending',
   )
 
+  // ────────────────────────────────────────────── the failure reason
+  console.log('\n━━━ failing a stop, and saying why ━━━\n')
+
+  await page.tap(CURRENT + '[data-testid="action-failed"]')
+  await page.waitForSelector('[data-testid="failure-reason-nobody-home"]', { timeout: 5_000 })
+
+  check(
+    'the stop is ALREADY failed while the sheet is still asking why',
+    (await page.getAttribute(CURRENT + '[data-testid="stop-detail"]', 'data-status')) === 'failed',
+  )
+
+  await page.tap('[data-testid="failure-skip"]')
+  await page.waitForTimeout(400)
+  check(
+    'skipping leaves the failure standing, with a way back to the reason',
+    (await page.getAttribute(CURRENT + '[data-testid="stop-detail"]', 'data-status')) === 'failed' &&
+      (await page.$(CURRENT + '[data-testid="add-failure-reason"]')) !== null,
+  )
+
+  await page.tap(CURRENT + '[data-testid="add-failure-reason"]')
+  await page.waitForSelector('[data-testid="failure-reason-nobody-home"]', { timeout: 5_000 })
+  await page.tap('[data-testid="failure-reason-nobody-home"]')
+  await page.fill('[data-testid="failure-note"]', 'tried the back door too')
+  await page.tap('text=Save reason')
+  await page.waitForTimeout(400)
+
+  check(
+    'a saved reason and note read as one line on the completion card',
+    (await page.textContent(CURRENT + '[data-testid="failure-reason-line"]'))?.trim() ===
+      'Nobody home — tried the back door too',
+    (await page.textContent(CURRENT + '[data-testid="failure-reason-line"]'))?.trim(),
+  )
+
+  await page.tap(CURRENT + '[data-testid="undo-status"]')
+  await page.waitForSelector(CURRENT + '[data-testid="action-failed"]', { timeout: 5_000 })
+  await page.tap(CURRENT + '[data-testid="action-failed"]')
+  await page.waitForSelector('[data-testid="failure-reason-nobody-home"]', { timeout: 5_000 })
+  await page.tap('[data-testid="failure-skip"]')
+  await page.waitForTimeout(400)
+  check(
+    'undoing a failure discards its reason — it cannot outlive the failure',
+    (await page.$(CURRENT + '[data-testid="failure-reason-line"]')) === null &&
+      (await page.$(CURRENT + '[data-testid="add-failure-reason"]')) !== null,
+  )
+
+  await page.tap(CURRENT + '[data-testid="undo-status"]')
+  await page.waitForSelector(CURRENT + '[data-testid="action-failed"]', { timeout: 5_000 })
+
   // ─────────────────────────────────────── the dot is the GROUP colour
   console.log('\n━━━ the two colours never cross ━━━\n')
 
