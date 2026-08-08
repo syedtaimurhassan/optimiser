@@ -117,7 +117,9 @@ describe('objectiveValue', () => {
   test('a mandatory node left out costs nothing extra — it is invalid, not dear', () => {
     const req = request()
     req.constraints.optional[3] = 0
-    assert.equal(objectiveValue(req, [0, 1, 2]), 1 + 12 + SKIP_PENALTY * 0)
+    // Arcs only — a missing mandatory node adds no penalty, because "expensive"
+    // is not what is wrong with it.
+    assert.equal(objectiveValue(req, [0, 1, 2]), 1 + 12)
     assert.deepEqual(validateOrder(req, [0, 1, 2]), ['mandatory node 3 was skipped'])
   })
 

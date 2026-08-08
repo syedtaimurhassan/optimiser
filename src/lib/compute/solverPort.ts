@@ -151,6 +151,16 @@ export interface SolveRequest {
   budgetMs: number
   /** Seeds the engine's PRNG, so a run is reproducible. */
   seed?: number
+  /**
+   * A hint at a good starting order — in practice a space-filling-curve sort.
+   * An engine may ignore it.
+   *
+   * It is a hint rather than coordinates because a cost matrix cannot produce a
+   * spatial ordering and this module refuses to learn what a coordinate is:
+   * only the caller knows where the stops are, so only the caller can sort them
+   * geographically. See `hilbertOrder` in hilbert.ts.
+   */
+  seedOrder?: Int32Array
 }
 
 // ──────────────────────────────────────────────────────────────── result
@@ -270,6 +280,23 @@ export function resolveEndpoints(request: SolveRequest): SolveEndpoints {
   return { start, end }
 }
 
+/**
+ * `optional`, with the pinned endpoints forced mandatory.
+ *
+ * A node the route is required to start at cannot also be a node the route may
+ * skip. Callers are expected to mark endpoints mandatory themselves, but if the
+ * two ever disagree then the engine, the K cap and the validator must at least
+ * disagree IDENTICALLY — otherwise a solve is rejected by the very rule it was
+ * solved under. So every one of them reads the flags through here.
+ */
+export function effectiveOptional(request: SolveRequest): Uint8Array {
+  const optional = Uint8Array.from(request.constraints.optional)
+  const { start, end } = resolveEndpoints(request)
+  if (start !== null) optional[start] = 0
+  if (end !== null) optional[end] = 0
+  return optional
+}
+
 /** The matrix an objective is measured in. */
 export function costMatrixFor(matrix: SolveMatrix, objective: Objective): Int32Array {
   if (objective === 'distance') {
@@ -305,16 +332,17 @@ export function arcSum(cells: Int32Array, n: number, order: ArrayLike<number>): 
  * is what catches.
  */
 export function objectiveValue(request: SolveRequest, order: ArrayLike<number>): number {
-  const { matrix, constraints, skipPenalty } = request
+  const { matrix, skipPenalty } = request
   const cells = costMatrixFor(matrix, request.objective)
   const n = matrix.n
+  const optional = effectiveOptional(request)
 
   const inRoute = new Uint8Array(n)
   for (let i = 0; i < order.length; i++) inRoute[order[i]] = 1
 
   let skipped = 0
   for (let i = 0; i < n; i++) {
-    if (constraints.optional[i] === 1 && inRoute[i] === 0) skipped++
+    if (optional[i] === 1 && inRoute[i] === 0) skipped++
   }
 
   return arcSum(cells, n, order) + skipPenalty * skipped
@@ -329,7 +357,7 @@ export function objectiveValue(request: SolveRequest, order: ArrayLike<number>):
 export function validateOrder(request: SolveRequest, order: ArrayLike<number>): string[] {
   const problems: string[] = []
   const n = request.matrix.n
-  const { optional } = request.constraints
+  const optional = effectiveOptional(request)
   const { start, end } = resolveEndpoints(request)
 
   if (order.length === 0) {
@@ -379,7 +407,7 @@ export function validateOrder(request: SolveRequest, order: ArrayLike<number>): 
  * "visit up to 50" of 12 stops is a coherent thing to ask.
  */
 export function capacityFor(request: SolveRequest): number {
-  const { optional } = request.constraints
+  const optional = effectiveOptional(request)
   let optionalCount = 0
   for (let i = 0; i < optional.length; i++) optionalCount += optional[i]
   const k = request.selectK
