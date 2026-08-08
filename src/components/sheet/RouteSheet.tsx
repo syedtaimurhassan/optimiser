@@ -26,6 +26,9 @@ import { ChevronDownIcon } from '../ui/icons'
 import { SheetHeader } from './SheetHeader'
 import { RouteList } from './RouteList'
 import { SearchScreen } from '../search/SearchScreen'
+import { EmptyRouteState } from './EmptyRouteState'
+import { CopyStopsSheet } from '../routes/CopyStopsSheet'
+import { copySourceRoutes } from '../../lib/copyStops'
 import { useAddStops } from '../../hooks/useAddStops'
 
 /**
@@ -89,6 +92,9 @@ export function RouteSheet() {
   const setAddByPinOpen = useUiStore((s) => s.setAddByPinOpen)
   const setSetupOpen = useUiStore((s) => s.setSetupOpen)
   const { addSuggestion, addFromClipboard } = useAddStops()
+  const addStops = useRoutesStore((s) => s.addStops)
+  const allRoutes = useRoutesStore((s) => s.routes)
+  const [copyOpen, setCopyOpen] = useState(false)
 
   const sheetRef = useRef<HTMLElement>(null)
   const headerBlockRef = useRef<HTMLDivElement>(null)
@@ -102,6 +108,14 @@ export function RouteSheet() {
   // 300 rows twice.
   const rows = useMemo(() => (route ? buildRouteRows({ route }) : []), [route])
   const nextIndex = useMemo(() => nextStopRowIndex(rows), [rows])
+
+  // Routes worth offering as a copy source. Computed here rather than inside
+  // the sheet because the empty state needs the COUNT to decide whether to
+  // offer the button at all.
+  const copySources = useMemo(
+    () => copySourceRoutes(Object.values(allRoutes), route?.id),
+    [allRoutes, route?.id],
+  )
 
   const [viewportHeight, setViewportHeight] = useState(() => readViewportHeight())
   const [collapsedHeight, setCollapsedHeight] = useState(112)
@@ -156,6 +170,25 @@ export function RouteSheet() {
     observer.observe(block)
     return () => observer.disconnect()
   }, [])
+
+  /**
+   * Leaving the expanded detents exits search.
+   *
+   * Search only has a field to type into at `expanded` and `full`. Below them
+   * the header shows the summary strip instead — so without this, dragging the
+   * sheet down mid-search left `searchOpen` true and the route list replaced by
+   * a search screen the driver could no longer see the field for. The way out
+   * was a control that was no longer on screen.
+   *
+   * The header already blurs the input on the same transition; this is the
+   * state half of that same rule.
+   */
+  useEffect(() => {
+    if (snap === 'expanded' || snap === 'full') return
+    if (!searchOpen && searchQuery === '') return
+    setSearchOpen(false)
+    setSearchQuery('')
+  }, [snap, searchOpen, searchQuery, setSearchOpen, setSearchQuery])
 
   /**
    * Publish the collapsed height so anything floating over the map can clear
@@ -447,6 +480,21 @@ export function RouteSheet() {
               }
             }}
           />
+        ) : route.stops.length === 0 ? (
+          /*
+            An empty route gets the empty state instead of a list of one
+            header, one break row, a start and an end — which is what
+            `buildRouteRows` produces for zero stops, and which reads as a
+            broken list rather than a new route.
+          */
+          <EmptyRouteState
+            canCopy={copySources.length > 0}
+            onAddStops={() => {
+              setSnap('full')
+              setSearchOpen(true)
+            }}
+            onCopyFromPast={() => setCopyOpen(true)}
+          />
         ) : (
           <RouteList
             route={route}
@@ -488,6 +536,14 @@ export function RouteSheet() {
           </button>,
           document.body,
         )}
+
+      <CopyStopsSheet
+        open={copyOpen}
+        onClose={() => setCopyOpen(false)}
+        routes={copySources}
+        destinationRouteId={route.id}
+        onCopy={(copied) => addStops(copied)}
+      />
     </aside>
   )
 }

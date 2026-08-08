@@ -114,7 +114,12 @@ async function seedAndReload(page, route) {
   await page.evaluate(
     ([key, routeData]) =>
       new Promise((resolve, reject) => {
-        const request = indexedDB.open('route-optimiser', 4)
+        // No version argument on purpose. The seeder runs AFTER the app has
+        // booted, so the database already exists at whatever SCHEMA_VERSION
+        // this build ships; naming a version here pins the harness to one
+        // release and fails with a VersionError the moment the app migrates
+        // past it — which is exactly what M6's geocache store did.
+        const request = indexedDB.open('route-optimiser')
         request.onerror = () => reject(request.error)
         request.onsuccess = () => {
           const db = request.result
@@ -696,29 +701,79 @@ async function main() {
     }),
   )
 
-  // ─────────────────────────────────────────────── search stays inert
-  console.log('\n━━━ search is present and deliberately does nothing (M6) ━━━\n')
+  // ─────────────────────────────────────────────── search (M6)
+  console.log('\n━━━ search answers two questions in one field ━━━\n')
 
   /**
-   * Asserted on the list's TOTAL height, not on the number of rows in the DOM.
+   * M5 asserted that typing did NOT filter the list. M6 owns search, so that
+   * contract is deliberately replaced rather than deleted: search now swaps
+   * the route list for a screen with two sections.
    *
-   * The rendered window is not a measure of list length — it grows and shrinks
-   * with scrolling and with the virtualiser's overscan, so comparing it before
-   * and after typing reports noise. The total scroll height is the honest
-   * proxy for "how many rows does this list have", and filtering would shrink
-   * it immediately.
+   * Only the existing-stops half is asserted here. The "Add a new stop" half
+   * calls a live geocoder over the network, which is neither offline-safe nor
+   * deterministic, and a smoke test that spends someone's API quota on every
+   * run is a bad trade.
    */
-  const heightBeforeSearch = await page.evaluate(
-    () => document.querySelector('[data-testid="route-list"]').getBoundingClientRect().height,
-  )
   await page.fill('[data-testid="sheet-search"]', 'Elmekrogen 200')
-  await page.waitForTimeout(400)
+  await page.waitForTimeout(250)
+
   check(
-    'typing does not filter the list',
-    ...(await page.evaluate((before) => {
-      const now = document.querySelector('[data-testid="route-list"]').getBoundingClientRect().height
-      return [Math.abs(now - before) < 1, `list height ${Math.round(before)} → ${Math.round(now)}px`]
-    }, heightBeforeSearch)),
+    'typing replaces the route list with the search screen',
+    ...(await page.evaluate(() => {
+      const search = document.querySelector('[data-testid="search-screen"]')
+      const list = document.querySelector('[data-testid="route-list"]')
+      return [!!search && !list, `search=${!!search} list=${!!list}`]
+    })),
+  )
+
+  check(
+    'an existing stop appears under "From this route"',
+    ...(await page.evaluate(() => {
+      const section = document.querySelector('[data-testid="section-existing"]')
+      const heading = section?.querySelector('h2')?.textContent ?? ''
+      const rows = section?.querySelectorAll('[data-testid="stop-row"]') ?? []
+      return [rows.length === 1 && heading.includes('(1)'), `${heading} — ${rows.length} row(s)`]
+    })),
+  )
+
+  /**
+   * The workflow the whole screen exists for: a driver holding a parcel
+   * with "D7" written on it types D7 and gets that stop, rendered with the
+   * same ID chip they are reading off the box.
+   */
+  await page.fill('[data-testid="sheet-search"]', 'D7')
+  await page.waitForTimeout(250)
+  check(
+    'searching a stop ID finds that parcel, ID chip and all',
+    ...(await page.evaluate(() => {
+      const row = document.querySelector('[data-testid="section-existing"] [data-testid="stop-row"]')
+      const chip = row?.textContent?.includes('D7')
+      const title = row?.textContent?.includes('Rundgården') ?? false
+      return [Boolean(chip && title), row ? row.textContent.slice(0, 60) : 'no row']
+    })),
+  )
+
+  // Danish folding: "ø" and "æ" have no canonical decomposition, so an ASCII
+  // query only works because searchScreen.ts maps them explicitly.
+  await page.fill('[data-testid="sheet-search"]', 'rundgarden')
+  await page.waitForTimeout(250)
+  check(
+    'an ASCII query finds a Danish address',
+    ...(await page.evaluate(() => {
+      const rows = document.querySelectorAll('[data-testid="section-existing"] [data-testid="stop-row"]')
+      return [rows.length >= 1, `${rows.length} row(s)`]
+    })),
+  )
+
+  await page.tap('[data-testid="header-search-cancel"]')
+  await page.waitForTimeout(250)
+  check(
+    'Cancel restores the route list',
+    ...(await page.evaluate(() => {
+      const list = document.querySelector('[data-testid="route-list"]')
+      const search = document.querySelector('[data-testid="search-screen"]')
+      return [!!list && !search, `list=${!!list} search=${!!search}`]
+    })),
   )
 
   // ─────────────────────────────────────────── the map chrome clears it

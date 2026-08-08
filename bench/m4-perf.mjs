@@ -109,7 +109,12 @@ async function main() {
   await page.evaluate(
     ([key, route]) =>
       new Promise((resolve, reject) => {
-        const request = indexedDB.open('route-optimiser', 4)
+        // No version argument on purpose. The seeder runs AFTER the app has
+        // booted, so the database already exists at whatever SCHEMA_VERSION
+        // this build ships; naming a version here pins the harness to one
+        // release and fails with a VersionError the moment the app migrates
+        // past it — which is exactly what M6's geocache store did.
+        const request = indexedDB.open('route-optimiser')
         request.onerror = () => reject(request.error)
         request.onsuccess = () => {
           const db = request.result
