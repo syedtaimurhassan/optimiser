@@ -1186,3 +1186,259 @@ failed in a way that looked like a timing flake:
    and "Done" only closes. When staged changes arrive, that is the layer to put
    them in — a form with its own draft on top would give the app two levels of
    uncommitted state.
+
+## M8 — Staged changes: nothing moves until you say so
+
+The milestone the whole app was building towards. Mid-route edits are the
+highest-stakes moment in a delivery app, because the driver has PHYSICALLY
+SORTED PARCELS to match the sequence on their screen. An app that silently
+reoptimises destroys that; one that silently appends produces a stupid route.
+
+### What changed
+
+- **Staged mode.** Adding, removing or editing a stop on an OPTIMISED route
+  accumulates in `PendingChangeSet` instead of writing through.
+- **A live preview** — order and ETAs — computed from a cached matrix, so the
+  cost of a change is visible before committing it.
+- **The review screen**, at `/route/:routeId/review`, with three sections and
+  a deliberately asymmetric bottom bar.
+- **The commit sheet**: two models, one line of consequence each.
+- **Two commit algorithms** — cheapest-insert into a frozen sequence, and a
+  full re-solve.
+- **The cost-matrix cache**, which had been declared since M2 and written by
+  nothing.
+- **Decimal stop IDs on insert**, from where the stop actually lands.
+
+`SCHEMA_VERSION` is still 5 and the zustand persist version is still 4.
+`PendingChange` changed shape, but nothing had ever written one — `stageChange`
+existed since M2 with zero callers — so there is no data in the old shape
+anywhere. The `matrices` store gains an optional `keys` field; a row without it
+is treated as a miss rather than migrated, and there are no such rows.
+
+### The decision the milestone turns on
+
+**Staged stops live in the change set, not in `route.stops`.**
+
+The alternative — write the stop in and flag it — looks tidier and makes
+Discard an UNWIND: delete the added stops, resurrect the removed ones, release
+the labels, put back the edited fields. Every one of those is a place to get it
+wrong, and getting it wrong loses a driver's work silently.
+
+Holding the whole `AddressedStop` inside the `add` change makes Discard a single
+assignment: `pending = undefined`. There is nothing to unwind because nothing
+was ever done. The cost is a pure `stagedStops(route)` merge that the map, the
+carousel, the edit form and the sheet all read, and that cost is paid once in
+`lib/staging.ts` rather than at every call site.
+
+### Where the line between staged and direct is drawn
+
+**Staging engages only when the route has been optimised.** An unsolved route
+has no sequence to protect and no parcels sorted against it, so putting a review
+screen in front of building a round would be a review of nothing — and would
+break every M6 flow at once.
+
+**Only plan-affecting fields stage**: `lat`, `lng`, `address`, `twOpenSec`,
+`twCloseSec`, `serviceTimeSec`. That list is defined by what `lib/provisional.ts`
+actually reads, not by what sounds route-ish.
+
+🟡 **`order` and `kind` were in that list and came out**, and the reason is worth
+recording. Both sound like they belong. Neither reaches the plan: the planner
+takes its endpoints from the route's own anchors and never looks at `order`, and
+nothing anywhere honours pickup-before-delivery. Staging them would have put
+changes on the review screen that provably move nothing — the exact "diff full
+of noise" the split exists to prevent — and `kind` also drives the automatic
+purple/teal group rule, which operates on the committed stop and would have been
+left reading a value the driver had already changed. **M9–M11 should move them
+back in when the solver learns to read them.**
+
+**Bulk removals bypass staging.** `removeStopNow` exists for the Remove-stops
+sheet, which already confirms by name and count. Two gates in a row teaches a
+driver to clear both without reading. Bulk ADDS — import, copy stops — do stage,
+because a batch appended silently to an optimised route with no diff is the
+failure this milestone exists to remove.
+
+### The two commit models
+
+**Update route** — the preview already IS the answer. `lib/provisional.ts` froze
+the sequence and cheapest-inserted the new stops into it; committing takes that
+exact order and makes it real. No solver call, no second insertion pass. Running
+the arithmetic again at commit time would let the committed route differ from the
+one the driver read and agreed to, which is the single thing this screen exists
+to prevent. The only network is one OSRM route request for the real polyline.
+
+**Reoptimise route** — apply the changes, then run the existing pipeline. The
+solver's internals are untouched, as specified.
+
+The insertion cost is the DETOUR, not the two new legs:
+
+    d(prev, new) + d(new, next) − d(prev, next)
+
+🔴 **At an open end there is no displaced leg to subtract**, and the first
+version subtracted one anyway. A `d(prev, next)` that does not exist evaluates
+to nothing, which made an open end cost zero and win every gap — every stop got
+appended, and the route looked plausible enough that only a fixture on a
+straight line caught it.
+
+Feasibility is a forward pass with waiting: arriving early is not a violation
+(the driver waits, and the wait propagates downstream); arriving late is,
+because no amount of waiting fixes late. When no gap is feasible the stop is
+**still placed**, at the cheapest one, and the result says so. A parcel with
+nowhere to go is worse than a route that admits one window will be missed.
+
+### The matrix cache, which is what makes the insert cheap
+
+`db.ts` has had a `matrices` object store since M1 and `Route.matrixCacheKey`
+has been declared since M2. Nothing had ever written to either. Without it,
+inserting one stop into a 44-stop round means refetching 1,936 cells to learn 88
+new ones.
+
+**Rows and columns are labelled with the stop's UUID, never with its index.** An
+index means "the nth point of the list that was solved", so deleting one stop
+shifts every index after it and every later lookup silently reads the wrong pair
+— producing a route that is merely a bit worse than it should be, which is the
+hardest kind of defect to ever notice.
+
+`fetchCostBand` makes the extension two requests regardless of route length:
+`sources = the new points` gives every new→old cell, `destinations = the new
+points` gives every old→new, and the new→new block falls out of the first. OSRM
+documents both parameters as accepting a subset of the input locations, which is
+what makes the asymmetric request legal.
+
+### 🔴 The two bugs the acceptance suite caught, and both were mine
+
+Both came from the same root cause — **giving two halves of one screen different
+plans to read** — and neither would have been visible in a screenshot.
+
+1. **Staging anything made handled stops vanish.** The provisional plan follows
+   `calculateRoute`'s "pending stops only" convention, and `stagedRoute` swapped
+   it in wholesale for display. A driver twenty stops into a round who staged one
+   add would have watched twenty delivered rows disappear from their list.
+   Handled stops now come back into the ORDER at zero cost while staying out of
+   the PLAN — spliced in where the committed plan had them, with an arrival that
+   collapses forward so every array stays the same length and every total stays
+   intact.
+
+   A stop staged for REMOVAL deliberately does *not* come back with them. It is
+   absent from the plan for a different reason, and putting it in the order would
+   make `liveEta` count it as still to come — so the preview's finish time would
+   include a stop the driver is removing, which is the one number the whole
+   screen exists to get right. The map still draws it, wearing its red trash
+   chip, from `stagedStops` rather than from the order.
+
+2. **The end card read 07:26 while the finish pill read 07:25.** M7 recorded
+   this exact failure and solved it by computing the ETAs once per tick; staging
+   reintroduced it by moving the map to the provisional plan and leaving the
+   sheet on the committed one. The whole sheet now reads `stagedRoute`.
+
+### Where we deliberately diverge from Spoke
+
+- **"2 changes", not "2 stops".** Spoke's header count is ambiguous in the one
+  place it cannot afford to be — it could mean two stops changed or that the
+  route has two stops — and a driver at a kerb has to open the screen to find
+  out which. Ours names the unit it counts.
+- **The count is the way back.** Spoke's review header has no exit except the
+  system back gesture, which on iOS is an edge swipe that competes with the
+  sheet's own drag. Making the count itself the back control costs no extra
+  chrome and puts the exit where the eye already is.
+- **Added stops appear TWICE**, once in their own section and once inline in the
+  existing route. The first version left them out of the route, which looked
+  tidier and was wrong twice over: the numbering came out 1, 2, 4, 5 with a hole
+  where the new stop goes — which reads as a rendering bug — and the added row's
+  "goes in at 3" then sat above another row also claiming 3. The top section is
+  the actionable summary, where undo and the run colour live; the inline row is
+  the consequence.
+- **Every change is individually undoable** from its own row. A review screen you
+  can only accept or abandon wholesale makes Discard the only way to fix one
+  mistaken tap.
+
+### The "times are counted from now" hint
+
+ETAs are anchored to NOW rather than to the route's planned start — M7's
+decision, and the only anchor a driver keeps believing. The consequence is that
+a stale route poked at 19:23 reports a finish of 19:56, which is arithmetically
+correct and looks like a bug.
+
+`planIsStale` decides when to say so: a plan touched more than an hour ago, or
+made on an earlier day. The threshold is a whole hour on purpose — a round
+running forty minutes late is the normal case, and a hint that appeared then
+would become wallpaper.
+
+### Verified
+
+- 526 unit tests, `lint` and `build` clean.
+- **35/35 M8 checks** in Chromium, including the zero-network proof, the
+  insertion position on a fixture where cheapest-insert has exactly one right
+  answer, and a REORDER check run against a deliberately scrambled committed
+  order — because "Update" preserves a scramble by definition, so an order that
+  comes back monotonic can only have come from the other model.
+- 65/65 M7 (after the suite was updated — see below), 58/58 M5, 41/41 M4,
+  42/42 M1. M3 is 51/52 for the reason that predates M7.
+- `bench:verify-seam` passes; `__ui`, `__bench` and `__crash` still absent from
+  production.
+
+**The zero-network proof.** Marking a stop delivered re-anchors every arrival on
+the route — the anchor moves to the next pending stop, so all seven ETAs, the
+finish pill and the summary strip change. The suite asserts the finish time
+actually moved AND that the request count did not. The row is SWIPED rather than
+tapped so the camera never moves; basemap tiles are excluded from the count and
+nothing else is, because the basemap is a different host and a different
+subsystem that fetches whenever the camera moves and has no opinion about
+arrival times.
+
+### What the M7 suite had to absorb
+
+`addStops` now returns the ids it created, and on an optimised route that is the
+ONLY way to find them — the stop is staged and never lands in `stops`. M7's
+sticky-settings check reached in for `stops[stops.length - 1]`, got stop 300,
+and reported its missing door code as a failure of the address-defaults feature.
+The same pattern was fixed in `MapComponent`'s "add and edit" flow.
+
+### Deferred
+
+- 🟡 **The move GESTURE.** The `move` change kind is fully implemented — pinned
+  position, provisional route, both commit algorithms, `applyMove` with its
+  tests — and nothing in the UI produces one. Long-press drag-to-reorder against
+  a virtualiser that measures rows dynamically is a milestone-sized feature, and
+  the M7 note about pointer capture applies to it in full. The model is ready
+  the day someone builds the gesture.
+- **The review screen's magnifier** is announced and disabled. Searching a diff
+  of two rows is not a thing anyone needs, and it stops being true somewhere
+  north of twenty.
+- 🟡 **A solve drops handled stops from `orderedStopIds`.** `calculateRoute`
+  passes only pending stops to the planner, so after a real optimisation the
+  route list and carousel show only what is left. Pre-existing, not introduced
+  here, and masked in every suite by hand-seeded fixtures that list all 300.
+  M8 works around it in the provisional (see the bug note above) rather than
+  fixing it, because fixing it means changing what a solve produces.
+- **Photo capture**, **Navigate**, **Share route copy**, **Transfer stops**,
+  **Scan route manifest**, **Change address** — all still as M7 left them.
+- **Real-device FPS and the thumb tests** — §15–17, now four milestones old.
+- **`labelLinesFor` still reads `stop.etaSec`**, which nothing sets, so map
+  marker labels carry no ETA.
+- M3's drawer-dismissal defect; amber/teal chip contrast; cross-origin
+  isolation; desktop is still the M1 sidebar.
+
+### What the next session needs to know
+
+1. **`lib/staging.ts` is the only place that knows what "staged" means.**
+   `stagedRoute(route)` is what every surface reads — map, carousel, edit form,
+   sheet. Anything that reads `route.stops` directly on a screen will be wrong
+   the moment something is staged, and wrong invisibly.
+2. **The preview is an OUTPUT, and `useProvisionalRoute`'s signature must never
+   include one.** Publishing the preview writes to the route, which re-runs the
+   effect; the guard is a signature over the changes, the frozen order and the
+   statuses, and it deliberately excludes both the preview itself and the labels
+   it hands the added stops. Include either and every staged add recomputes
+   forever, fetching two OSRM rows each time round.
+3. **Commit takes the preview's order verbatim.** `useApplyChanges.update` does
+   not re-run the insertion. If it did, the committed route could differ from the
+   one the driver read and agreed to.
+4. **Matrix rows are keyed by stop uuid.** Any future work on the matrix layer
+   (M12) must preserve that. Index-keyed rows are wrong the first time a stop is
+   deleted, and wrong silently.
+5. **`joinOrderedStopIds` is now shared** between `calculateRoute` and M8's
+   commit path, and it consumes each coordinate match as it is used. The old
+   hand-rolled copy kept only the first stop at a shared coordinate, which
+   dropped the second delivery to a building from the itinerary entirely.
+6. **`PLAN_FIELDS` is a claim about the solver, not about the domain.** When
+   M9–M11 teach it pinned order and pickups, `order` and `kind` go back in.
