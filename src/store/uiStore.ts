@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { DEFAULT_BASEMAP, type BasemapId } from '../lib/map/basemap'
+import type { SheetSnap } from '../lib/sheetSnap'
 
 /**
  * Transient UI state. Never persisted — reopening the app should not restore a
@@ -9,8 +10,12 @@ import { DEFAULT_BASEMAP, type BasemapId } from '../lib/map/basemap'
  * cannot possibly invalidate a route selector, and vice versa.
  */
 
-/** Bottom-sheet detents. */
-export type SheetSnap = 'peek' | 'half' | 'full'
+/**
+ * Bottom-sheet detents. Defined in `lib/sheetSnap.ts` alongside the maths that
+ * decides which one a gesture lands on, and re-exported here because the store
+ * is where components reach for it.
+ */
+export type { SheetSnap }
 
 /** A request for the map to move. The map consumes it and clears it — state
  *  describes intent, not the camera's actual position, which MapLibre owns.
@@ -84,7 +89,7 @@ interface UiState {
 let cameraNonce = 0
 
 export const useUiStore = create<UiState>()((set) => ({
-  sheetSnap: 'peek',
+  sheetSnap: 'collapsed',
   selectedStopId: null,
   hoveredStopId: null,
   mapPlacementMode: null,
