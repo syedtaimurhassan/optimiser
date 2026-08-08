@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { useLocation, useParams } from 'wouter'
 import { useShallow } from 'zustand/react/shallow'
 import 'maplibre-gl/dist/maplibre-gl.css'
 import type { LatLng } from '../types'
@@ -67,6 +68,21 @@ export function MapComponent() {
     placementRef.current = placementMode
   }, [placementMode])
 
+  /**
+   * Navigation, behind the same ref trick, and for the same reason.
+   *
+   * A tap on a marker OPENS that stop — it does not just tint it — because the
+   * URL is what decides which carousel page is showing. The controller's click
+   * handler is registered once for the life of the map, so it reads `navigate`
+   * and the current route id from refs rather than closing over them.
+   */
+  const params = useParams<{ routeId: string; stopId?: string }>()
+  const [, navigate] = useLocation()
+  const navRef = useRef({ navigate, routeId: params.routeId, onStopPage: Boolean(params.stopId) })
+  useEffect(() => {
+    navRef.current = { navigate, routeId: params.routeId, onStopPage: Boolean(params.stopId) }
+  }, [navigate, params.routeId, params.stopId])
+
   // ── Lifecycle ──────────────────────────────────────────────────────────
 
   useEffect(() => {
@@ -75,10 +91,14 @@ export function MapComponent() {
       container: containerRef.current,
       basemap: useUiStore.getState().basemap,
       onStopClick: (stopId) => {
-        // Tapping the selected stop again clears it, which is the only way
-        // back to the route overview without hunting for empty map.
+        // Tapping the marker of the stop already open closes its card, which
+        // is the only way back to the route overview without hunting for empty
+        // map. Both directions are a navigation: the URL owns which stop is
+        // open, and writing the selection here instead would immediately be
+        // overwritten by the mirror in RouteWorkScreen.
+        const { navigate, routeId } = navRef.current
         const current = useUiStore.getState().selectedStopId
-        useUiStore.getState().setSelectedStopId(current === stopId ? null : stopId)
+        navigate(current === stopId ? `/route/${routeId}` : `/route/${routeId}/stop/${stopId}`)
       },
       onMapClick: (point) => {
         const mode = placementRef.current
@@ -89,6 +109,10 @@ export function MapComponent() {
           useUiStore.getState().setMapPlacementMode(null)
           return
         }
+        // With a card open the selection belongs to the URL, and clearing it
+        // here would un-highlight the marker of the stop still on screen.
+        // Dismissing is what the card's own X is for.
+        if (navRef.current.onStopPage) return
         useUiStore.getState().setSelectedStopId(null)
       },
     })

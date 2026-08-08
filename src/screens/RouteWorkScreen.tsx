@@ -1,5 +1,5 @@
-import { useEffect } from 'react'
-import { Link, useParams } from 'wouter'
+import { useEffect, useMemo } from 'react'
+import { Link, useLocation, useParams } from 'wouter'
 import { Sidebar } from '../components/Sidebar'
 import { RouteSheet } from '../components/sheet/RouteSheet'
 import { RouteSetupSheet } from '../components/sheet/RouteSetupSheet'
@@ -12,22 +12,66 @@ import { DrawerTrigger } from '../components/routes/DrawerTrigger'
 import { RouteOverflowSheet } from '../components/routes/RouteOverflowSheet'
 import { RoutesDrawer } from '../components/routes/RoutesDrawer'
 import { useRoutesStore } from '../store/routesStore'
+import { useUiStore } from '../store/uiStore'
+import { buildStopPages, pageIndexById } from '../lib/stopPages'
 
 /**
  * The route working screen: map + controls, for the route named in the URL.
  *
- * The contents are still the app's original single-screen layout — M4 and M5
- * replace them. What M3 adds is that the screen is now genuinely about a
- * specific route: `/route/:routeId` selects it, so a deep link, a bookmark or
- * the back button all land on the right one.
+ * Serves BOTH `/route/:routeId` and `/route/:routeId/stop/:stopId`, because
+ * stop detail is a state of this screen rather than a screen of its own: the
+ * map keeps panning behind it, the finish pill stays up, and the sheet holds
+ * its height. See the note in routes.tsx for why one component serving two
+ * paths is what keeps the map from being rebuilt on every stop.
+ *
+ * ── The URL is the source of truth ────────────────────────────────────────
+ *
+ * `selectedStopId` MIRRORS the URL and is never the other way round. That is
+ * what makes a deep link, a tapped row, a tapped marker and the peek pill all
+ * one code path — they navigate, and everything downstream follows. It also
+ * means the map camera comes for free: MapComponent already flies to the
+ * selected stop in 400ms, which is exactly the lockstep the carousel wants.
  */
 export function RouteWorkScreen() {
-  const params = useParams<{ routeId: string }>()
+  const params = useParams<{ routeId: string; stopId?: string }>()
   const routeId = params.routeId
+  const pageId = params.stopId ?? null
 
-  const exists = useRoutesStore((s) => Boolean(s.routes[routeId]))
+  const [, navigate] = useLocation()
+  // Keyed on the URL's id, not the active one: during a deep link the active
+  // route is still the previous one for a frame, and pages built from it would
+  // resolve this URL's stop against the wrong route.
+  const route = useRoutesStore((s) => s.routes[routeId] ?? null)
+  const exists = route !== null
   const activeRouteId = useRoutesStore((s) => s.activeRouteId)
   const setActiveRoute = useRoutesStore((s) => s.setActiveRoute)
+  const setSelectedStopId = useUiStore((s) => s.setSelectedStopId)
+
+  const pages = useMemo(() => (route ? buildStopPages(route) : []), [route])
+  const pageIndex = pageIndexById(pages, pageId)
+  const page = pageIndex === -1 ? null : pages[pageIndex]
+
+  /**
+   * Mirror the open page onto the selection.
+   *
+   * Only a real stop is a selection: the end page highlights no marker, so
+   * writing "end" here would leave `contextualFab` promising to focus a stop
+   * that does not exist. The end page moves the camera itself.
+   */
+  const selectedStopId = page?.kind === 'stop' ? page.id : null
+  useEffect(() => {
+    setSelectedStopId(selectedStopId)
+  }, [selectedStopId, setSelectedStopId])
+
+  // A stop that no longer exists — deleted since the link was shared, or since
+  // the back button put it in history. Falling back to the route is better
+  // than an empty carousel, and `replace` keeps the dead URL out of history so
+  // Back does not walk straight into it again.
+  useEffect(() => {
+    if (exists && pageId !== null && pageIndex === -1) {
+      navigate(`/route/${routeId}`, { replace: true })
+    }
+  }, [exists, pageId, pageIndex, routeId, navigate])
 
   // The URL is the source of truth for which route is open. The drawer also
   // sets the active route before navigating, so this is the fallback path —

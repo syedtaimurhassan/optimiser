@@ -3,7 +3,6 @@ import { Route, Switch, Router } from 'wouter'
 import { useHashLocation } from 'wouter/use-hash-location'
 import { RoutesListScreen } from './screens/RoutesListScreen'
 import { RouteWorkScreen } from './screens/RouteWorkScreen'
-import { StopDetailScreen } from './screens/StopDetailScreen'
 import { SettingsScreen } from './screens/SettingsScreen'
 import { HelpScreen } from './screens/HelpScreen'
 import { NotFoundScreen } from './screens/NotFoundScreen'
@@ -71,8 +70,22 @@ export function AppRoutes() {
       <Switch>
         <Route path="/" component={RoutesListScreen} />
 
-        {/* Order matters: the more specific stop route must be tried first. */}
-        <Route path="/route/:routeId/stop/:stopId" component={StopDetailScreen} />
+        {/*
+          Order matters: the more specific stop route must be tried first.
+
+          Both paths render the SAME component, and that is load-bearing rather
+          than tidy. Stop detail is not a screen — it is the working screen with
+          the sheet showing a carousel over a map that is still panning, so
+          opening a stop must not tear the map down and build it again.
+
+          Wouter's Switch returns `cloneElement(matched, { match })`, and its
+          `flattenChildren` is a plain flatMap that injects no keys. Two Routes
+          with the same `component` therefore reconcile as ONE element: same
+          type, same (absent) key, same position — React updates props and
+          nothing unmounts. Point the two paths at different components and the
+          map is destroyed and rebuilt on every stop you open.
+        */}
+        <Route path="/route/:routeId/stop/:stopId" component={RouteWorkScreen} />
         <Route path="/route/:routeId" component={RouteWorkScreen} />
 
         <Route path="/settings" component={SettingsScreen} />

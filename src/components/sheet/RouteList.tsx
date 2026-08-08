@@ -1,4 +1,5 @@
 import { useCallback, useEffect, type RefObject } from 'react'
+import { useLocation } from 'wouter'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import type { Route } from '../../types'
 import type { RouteRow } from '../../lib/routeList'
@@ -62,8 +63,8 @@ function estimateFor(row: RouteRow): number {
 }
 
 export function RouteList({ route, rows, scrollElementRef, scrollToIndexRef }: RouteListProps) {
+  const [, navigate] = useLocation()
   const selectedStopId = useUiStore((s) => s.selectedStopId)
-  const setSelectedStopId = useUiStore((s) => s.setSelectedStopId)
   const setSetupOpen = useUiStore((s) => s.setSetupOpen)
   const setRouteStatus = useRoutesStore((s) => s.setRouteStatus)
 
@@ -95,9 +96,16 @@ export function RouteList({ route, rows, scrollElementRef, scrollToIndexRef }: R
     }
   }, [virtualizer, scrollToIndexRef])
 
+  /**
+   * A row opens that stop's card. It does not merely tint the marker.
+   *
+   * Navigating rather than writing `selectedStopId` is what makes the row, the
+   * marker, the peek pill and a shared link one code path — the URL decides
+   * which page the carousel is on, and the selection mirrors it.
+   */
   const onSelect = useCallback(
-    (id: string) => setSelectedStopId(selectedStopId === id ? null : id),
-    [selectedStopId, setSelectedStopId],
+    (id: string) => navigate(`/route/${route.id}/stop/${id}`),
+    [navigate, route.id],
   )
 
   /**

@@ -9,6 +9,7 @@ import {
   type KeyboardEvent as ReactKeyboardEvent,
 } from 'react'
 import { createPortal } from 'react-dom'
+import { useLocation } from 'wouter'
 import {
   clampOffset,
   listScrolls,
@@ -81,6 +82,7 @@ const SETTLE_MS = 260
 const EASE = 'cubic-bezier(0.2, 0, 0, 1)'
 
 export function RouteSheet() {
+  const [, navigate] = useLocation()
   const route = useRoutesStore(selectActiveRoute)
   const snap = useUiStore((s) => s.sheetSnap)
   const setSnap = useUiStore((s) => s.setSheetSnap)
@@ -89,7 +91,6 @@ export function RouteSheet() {
   const setSearchQuery = useUiStore((s) => s.setSearchQuery)
   const searchOpen = useUiStore((s) => s.searchOpen)
   const setSearchOpen = useUiStore((s) => s.setSearchOpen)
-  const setSelectedStopId = useUiStore((s) => s.setSelectedStopId)
   const setAddByPinOpen = useUiStore((s) => s.setAddByPinOpen)
   const setSetupOpen = useUiStore((s) => s.setSetupOpen)
   const { addSuggestion, addFromClipboard } = useAddStops()
@@ -458,9 +459,11 @@ export function RouteSheet() {
             // returns a list from the other side of the country.
             near={route.start ?? route.stops[0] ?? undefined}
             onSelectStop={(id) => {
-              setSelectedStopId(id)
               setSearchOpen(false)
               setSearchQuery('')
+              // Same rule as a list row: finding a stop opens its card, and
+              // the URL is what says which card is open.
+              navigate(`/route/${route.id}/stop/${id}`)
             }}
             onAddSuggestion={(suggestion) => {
               addSuggestion(suggestion)
