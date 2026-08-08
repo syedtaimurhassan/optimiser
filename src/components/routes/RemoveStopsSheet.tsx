@@ -32,7 +32,10 @@ const LABEL: Record<Target, string> = {
 
 export function RemoveStopsSheet({ open, route, onClose }: RemoveStopsSheetProps) {
   const [pending, setPending] = useState<Target | null>(null)
-  const removeStop = useRoutesStore((s) => s.removeStop)
+  // `removeStopNow`, not `removeStop`: on an optimised route the latter stages
+  // for review, and a bulk action that has already been confirmed by name and
+  // count does not want a second gate. See the note on it in routesStore.
+  const removeStop = useRoutesStore((s) => s.removeStopNow)
   const clearStops = useRoutesStore((s) => s.clearStops)
 
   const counts: Record<Target, number> = {

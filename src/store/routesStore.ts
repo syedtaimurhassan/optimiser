@@ -7,8 +7,9 @@ import type {
   LatLng,
   Objective,
   OptimizedRoute,
+  NewPendingChange,
   PendingChange,
-  PendingChangeKind,
+  PendingChangeSet,
   Route,
   RouteBreak,
   StopGroup,
@@ -33,6 +34,7 @@ import {
   defaultsFromStop,
 } from '../lib/addressDefaults'
 import { presetFor, presetHex, retargetGroup } from '../lib/groups'
+import { dropChange, foldChange, splitPatch, stagedStop, stagedStops } from '../lib/staging'
 
 export const newId = (): string =>
   typeof crypto !== 'undefined' && crypto.randomUUID
@@ -91,10 +93,21 @@ interface RoutesState {
   setMatrixCacheKey: (cacheKey: string | null) => void
 
   // ── Stop CRUD ──
-  addStops: (points: NewStopInput[]) => void
+  /**
+   * Add stops. Returns the new stops' uuids, in order.
+   *
+   * On a route that has been optimised these are STAGED rather than appended —
+   * see lib/staging.ts — so the returned ids name stops that live in the
+   * change set and are not yet in `route.stops`. Callers that want to open
+   * what they just made must use the return value; reaching into the stops
+   * array for "the last one" no longer finds it.
+   */
+  addStops: (points: NewStopInput[]) => string[]
   insertStopNear: (nearStopId: string, point: LatLng) => string | null
   duplicateStop: (id: string) => string | null
   removeStop: (id: string) => void
+  /** Remove without staging — for the bulk sheet, which confirms by name and count. */
+  removeStopNow: (id: string) => void
   clearStops: () => void
   updateStop: (id: string, patch: Partial<AddressedStop>) => void
   resetStopIdsForActive: () => void
@@ -122,7 +135,21 @@ interface RoutesState {
   removeBreak: (breakId: string) => void
 
   // ── Staged changes ──
-  stageChange: (kind: PendingChangeKind, stopId?: string, payload?: unknown) => void
+  /** Pin a stop to a position without reoptimising. The model for M8's moves. */
+  moveStop: (id: string, toIndex: number) => void
+  /** Drop one staged change — the review screen's per-row undo. */
+  dropPendingChange: (changeId: string) => void
+  /**
+   * Publish a freshly computed preview, plus the labels the added stops earned
+   * from where they landed. One action rather than two so a row can never
+   * render a D7.1 that the provisional route does not place next to D7.
+   */
+  setProvisional: (
+    provisional: OptimizedRoute | null,
+    labels?: Record<string, { stopId: string; originalPosition: number }>,
+  ) => void
+  /** Commit the staged set: new stops, new plan, empty change set, one write. */
+  applyStagedChanges: (result: { stops: AddressedStop[]; optimized: OptimizedRoute }) => void
   clearPending: () => void
 
   // ── Favorites ──
@@ -187,6 +214,89 @@ function withActiveRoute(
 /** Highest original position used so far — appends continue from here. */
 const highestOriginalPosition = (stops: AddressedStop[]): number =>
   stops.reduce((max, s) => Math.max(max, s.originalPosition), 0)
+
+// ────────────────────────────────────────────────────────────── staging
+
+/**
+ * Is this route in a state where an edit has to be reviewed first?
+ *
+ * The line is `optimized`, and it is the only defensible one. A route that has
+ * never been solved has no sequence to protect and no parcels sorted against
+ * it — staging there would put a review screen in front of the ordinary act of
+ * building a round, which is most of what M6 is for. A solved route is the
+ * opposite: the order on screen is the order in the van.
+ */
+const staging = (route: Route): boolean => Boolean(route.optimized)
+
+/** Fold new changes into the route's set, dropping the now-stale preview. */
+function stage(route: Route, changes: readonly NewPendingChange[]): PendingChangeSet {
+  const at = Date.now()
+  let folded = route.pending?.changes ?? []
+  for (const change of changes) {
+    folded = foldChange(folded, { ...change, id: newId(), at } as PendingChange)
+  }
+  // The preview described the previous set and is now a lie. Clearing it here
+  // rather than letting it linger is what stops the review screen showing ETAs
+  // for a change the driver has already taken back.
+  return { changes: folded }
+}
+
+const stagedAddIds = (route: Route): Set<string> =>
+  new Set((route.pending?.changes ?? []).filter((c) => c.kind === 'add').map((c) => c.stopId))
+
+/**
+ * Purple follows pickups, teal follows multi-parcel stops.
+ *
+ * Lives in the store rather than in the edit form so that EVERY caller gets it
+ * — the form, an importer, a future bulk edit — and so the rule cannot be
+ * half-implemented in one of them. `retargetGroup` decides; this performs,
+ * because creating a group is a store write and lib/ never touches the store.
+ *
+ * A group the driver chose deliberately is never overwritten; see lib/groups.ts.
+ */
+function autoGroup(
+  route: Route,
+  updated: AddressedStop,
+  applied: Partial<AddressedStop>,
+): { patch: Partial<AddressedStop>; groups: StopGroup[] } {
+  const unchanged = { patch: {}, groups: route.groups }
+  const changesAuto = 'kind' in applied || 'parcelCount' in applied
+  // An explicit groupId in the patch IS the deliberate choice, and must not be
+  // second-guessed by the rule in the same breath.
+  if (!changesAuto || 'groupId' in applied) return unchanged
+
+  const retarget = retargetGroup(updated, route.groups)
+  if (retarget === null) return unchanged
+  if ('clear' in retarget) return { patch: { groupId: undefined }, groups: route.groups }
+
+  const preset = presetFor(retarget.auto)
+  const hex = presetHex(preset)
+  const existing = route.groups.find((g) => g.name === preset.name && g.colorHex === hex)
+  const group: StopGroup = existing ?? { id: newId(), name: preset.name, colorHex: hex }
+  return {
+    patch: { groupId: group.id },
+    groups: existing ? route.groups : [...route.groups, group],
+  }
+}
+
+/** Take a stop off the route for real, releasing any endpoint it anchored. */
+function removeStopFrom(route: Route, id: string): Route | null {
+  const stop = route.stops.find((st) => st.id === id)
+  if (!stop) return null
+  const sameCoord = (p: LatLng | null) => !!p && p.lat === stop.lat && p.lng === stop.lng
+  return {
+    ...route,
+    stops: route.stops.filter((st) => st.id !== id),
+    // A change naming a stop that no longer exists would be an unreviewable
+    // diff — and one that the review screen could not render a row for.
+    pending: route.pending
+      ? { changes: route.pending.changes.filter((c) => c.stopId !== id) }
+      : undefined,
+    // Removing the stop that was an endpoint releases that anchor.
+    start: sameCoord(route.start) ? null : route.start,
+    end: sameCoord(route.end) ? null : route.end,
+  }
+}
 
 /** A new stop with sensible defaults. */
 /**
@@ -415,21 +525,42 @@ export const useRoutesStore = create<RoutesState>()(
 
       // ── Stop CRUD ──
 
-      addStops: (points) =>
+      addStops: (points) => {
+        const created: string[] = []
         set((s) =>
           withActiveRoute(s, (r) => {
             if (points.length === 0) return null
-            const taken = new Set(r.stops.map((st) => st.stopId))
-            let highest = highestOriginalPosition(r.stops)
+            const taken = new Set(stagedStops(r).map((st) => st.stopId))
+            let highest = highestOriginalPosition(stagedStops(r))
             const added = points.map((p) => {
               const { stopId, originalPosition } = allocateAppendedStopId(highest, taken, s.stopIdMode)
               taken.add(stopId)
               highest = originalPosition
               return makeStop(p, stopId, originalPosition, s.addressDefaults)
             })
-            return { ...r, stops: [...r.stops, ...added] }
+            created.push(...added.map((st) => st.id))
+
+            /*
+              On an optimised route this STAGES rather than appends.
+
+              The label allocated here is provisional: it continues the
+              original numbering (E1, E2…) because that is all an appended stop
+              can be told at this point. `setProvisional` relabels it to a
+              decimal off whichever stop it actually lands beside once the
+              preview knows where that is — see lib/insertStops.ts.
+            */
+            if (!staging(r)) return { ...r, stops: [...r.stops, ...added] }
+            return {
+              ...r,
+              pending: stage(
+                r,
+                added.map((stop) => ({ kind: 'add' as const, stopId: stop.id, stop })),
+              ),
+            }
           }),
-        ),
+        )
+        return created
+      },
 
       /**
        * Insert a stop beside an existing one. The new stop takes a decimal
@@ -469,13 +600,14 @@ export const useRoutesStore = create<RoutesState>()(
         let created: string | null = null
         set((s) =>
           withActiveRoute(s, (r) => {
-            const index = r.stops.findIndex((st) => st.id === id)
+            const all = stagedStops(r)
+            const index = all.findIndex((st) => st.id === id)
             if (index === -1) return null
-            const source = r.stops[index]
+            const source = all[index]
             const copy: AddressedStop = {
               ...source,
               id: newId(),
-              stopId: allocateInsertedStopId(source.stopId, r.stops.map((st) => st.stopId)),
+              stopId: allocateInsertedStopId(source.stopId, all.map((st) => st.stopId)),
               status: 'pending',
               statusHistory: [],
               failureReason: undefined,
@@ -486,6 +618,9 @@ export const useRoutesStore = create<RoutesState>()(
               etaSec: undefined,
             }
             created = copy.id
+            if (staging(r)) {
+              return { ...r, pending: stage(r, [{ kind: 'add', stopId: copy.id, stop: copy }]) }
+            }
             const stops = [...r.stops]
             stops.splice(index + 1, 0, copy)
             return { ...r, stops }
@@ -494,66 +629,95 @@ export const useRoutesStore = create<RoutesState>()(
         return created
       },
 
+      /**
+       * Remove a stop.
+       *
+       * On an optimised route this STAGES: the stop stays put, wearing a red
+       * chip, keeping its sequence number and its ETA, until the driver
+       * applies. That the number is retained is the point — a removal that
+       * renumbered the rest of the round on the spot would invalidate the
+       * order the parcels are sorted in, which is the thing this milestone
+       * exists to protect.
+       */
       removeStop: (id) =>
         set((s) =>
           withActiveRoute(s, (r) => {
-            const stop = r.stops.find((st) => st.id === id)
+            if (!staging(r)) return removeStopFrom(r, id)
+            const stop = stagedStops(r).find((st) => st.id === id)
             if (!stop) return null
-            const sameCoord = (p: LatLng | null) => !!p && p.lat === stop.lat && p.lng === stop.lng
-            return {
-              ...r,
-              stops: r.stops.filter((st) => st.id !== id),
-              // Removing the stop that was an endpoint releases that anchor.
-              start: sameCoord(r.start) ? null : r.start,
-              end: sameCoord(r.end) ? null : r.end,
-            }
+            return { ...r, pending: stage(r, [{ kind: 'remove', stopId: id }]) }
           }),
         ),
 
-      clearStops: () => set((s) => withActiveRoute(s, (r) => ({ ...r, stops: [] }))),
+      /**
+       * Remove now, no staging.
+       *
+       * The bulk sheet's path. It already confirms by name and count, and
+       * routing a confirmed destructive action through a second review is one
+       * gate too many — the driver would learn to clear both without reading.
+       */
+      removeStopNow: (id) => set((s) => withActiveRoute(s, (r) => removeStopFrom(r, id))),
 
+      clearStops: () => set((s) => withActiveRoute(s, (r) => ({ ...r, stops: [], pending: undefined }))),
+
+      /**
+       * Edit a stop.
+       *
+       * ── Not every edit is a change to the ROUTE ─────────────────────────
+       *
+       * The patch is split: fields the plan depends on — the coordinates, the
+       * time window, the service time, the order constraint, the type — stage
+       * for review, and everything else writes straight through as it always
+       * has. `lib/staging.ts` owns which is which.
+       *
+       * A door code cannot move a stop or shift an ETA, and a review screen
+       * that filled up with door codes would teach the driver to apply without
+       * reading — which is the single behaviour this whole milestone exists to
+       * prevent. The split is here rather than in the form so an importer or a
+       * bulk edit gets it too, for the same reason `retargetGroup` is here.
+       */
       updateStop: (id, patch) =>
         set((s) =>
           withActiveRoute(s, (r) => {
-            const index = r.stops.findIndex((st) => st.id === id)
-            if (index === -1) return null
-            const stops = [...r.stops]
             // stopId and originalPosition are immutable by design: the only way
             // to change them is an explicit "Reset Stop IDs".
-            const { stopId: _s, originalPosition: _o, id: _i, ...safe } = patch
-            const updated = { ...stops[index], ...safe }
-            stops[index] = updated
+            const { stopId: _s, originalPosition: _o, id: _i, ...all } = patch
 
             /*
-              Purple follows pickups, teal follows multi-parcel stops.
-
-              Applied here rather than in the edit form so that EVERY caller
-              gets it — the form, an importer, a future bulk edit — and so the
-              rule cannot be half-implemented in one of them. `retargetGroup`
-              decides; this performs, because creating a group is a store
-              write and lib/ never touches the store.
-
-              A group the driver chose deliberately is never overwritten; see
-              lib/groups.ts.
+              A stop that is ITSELF staged is edited in place inside its own
+              `add`, whatever the field. There is no row in `stops` to write to
+              and no diff worth showing: "added a stop, then set its door code"
+              is one change to the route, not two.
             */
-            const changesAuto = 'kind' in safe || 'parcelCount' in safe
-            // An explicit groupId in the patch IS the deliberate choice, and
-            // must not be second-guessed by the rule in the same breath.
-            if (!changesAuto || 'groupId' in safe) return { ...r, stops }
-
-            const retarget = retargetGroup(updated, r.groups)
-            if (retarget === null) return { ...r, stops }
-            if ('clear' in retarget) {
-              stops[index] = { ...updated, groupId: undefined }
-              return { ...r, stops }
+            if (stagedAddIds(r).has(id)) {
+              const merged = { ...stagedStop(r, id)!, ...all }
+              const auto = autoGroup(r, merged, all)
+              return {
+                ...r,
+                groups: auto.groups,
+                pending: stage(r, [
+                  { kind: 'edit', stopId: id, patch: { ...all, ...auto.patch } },
+                ]),
+              }
             }
 
-            const preset = presetFor(retarget.auto)
-            const hex = presetHex(preset)
-            const existing = r.groups.find((g) => g.name === preset.name && g.colorHex === hex)
-            const group: StopGroup = existing ?? { id: newId(), name: preset.name, colorHex: hex }
-            stops[index] = { ...updated, groupId: group.id }
-            return { ...r, stops, groups: existing ? r.groups : [...r.groups, group] }
+            const { planned, direct } = staging(r)
+              ? splitPatch(all)
+              : { planned: {}, direct: all }
+
+            const index = r.stops.findIndex((st) => st.id === id)
+            if (index === -1) return null
+
+            const pending =
+              Object.keys(planned).length > 0
+                ? stage(r, [{ kind: 'edit', stopId: id, patch: planned }])
+                : r.pending
+
+            const stops = [...r.stops]
+            const updated = { ...stops[index], ...direct }
+            const auto = autoGroup(r, updated, direct)
+            stops[index] = { ...updated, ...auto.patch }
+            return { ...r, stops, groups: auto.groups, pending }
           }),
         ),
 
@@ -714,16 +878,57 @@ export const useRoutesStore = create<RoutesState>()(
 
       // ── Staged changes ──
 
-      stageChange: (kind, stopId, payload) =>
+      /**
+       * Pin a stop to a position.
+       *
+       * A move is a remove plus an insert at a pinned index — the optimiser is
+       * not consulted and nothing else shifts until commit. The model is here
+       * and both commit algorithms honour it; the drag gesture that would
+       * produce one is deferred, because reordering by drag against a
+       * dynamically-measured virtualiser is a milestone of its own.
+       */
+      moveStop: (id, toIndex) =>
         set((s) =>
           withActiveRoute(s, (r) => {
-            const change: PendingChange = { id: newId(), kind, stopId, payload }
-            return {
-              ...r,
-              pending: { changes: [...(r.pending?.changes ?? []), change], provisional: r.pending?.provisional },
-            }
+            if (!staging(r)) return null
+            if (!stagedStops(r).some((st) => st.id === id)) return null
+            return { ...r, pending: stage(r, [{ kind: 'move', stopId: id, toIndex }]) }
           }),
         ),
+
+      dropPendingChange: (changeId) =>
+        set((s) =>
+          withActiveRoute(s, (r) => {
+            if (!r.pending) return null
+            const changes = dropChange(r.pending.changes, changeId)
+            if (changes.length === r.pending.changes.length) return null
+            // Down to nothing is out of staged mode entirely, not an empty set
+            // — otherwise the review screen stays reachable with nothing in it.
+            return { ...r, pending: changes.length === 0 ? undefined : { changes } }
+          }),
+        ),
+
+      setProvisional: (provisional, labels) =>
+        set((s) =>
+          withActiveRoute(s, (r) => {
+            if (!r.pending) return null
+            const changes = labels
+              ? r.pending.changes.map((c) =>
+                  c.kind === 'add' && labels[c.stopId]
+                    ? { ...c, stop: { ...c.stop, ...labels[c.stopId] } }
+                    : c,
+                )
+              : r.pending.changes
+            return { ...r, pending: { changes, provisional: provisional ?? undefined } }
+          }),
+        ),
+
+      /**
+       * Commit. One write, so the route is never momentarily a new plan over
+       * old stops — which is exactly the frame in which every ETA is wrong.
+       */
+      applyStagedChanges: ({ stops, optimized }) =>
+        set((s) => withActiveRoute(s, (r) => ({ ...r, stops, optimized, pending: undefined }))),
 
       clearPending: () => set((s) => withActiveRoute(s, (r) => ({ ...r, pending: undefined }))),
 

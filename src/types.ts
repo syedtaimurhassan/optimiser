@@ -157,21 +157,66 @@ export interface RouteBreak {
 
 export type PendingChangeKind = 'add' | 'remove' | 'move' | 'edit'
 
-export interface PendingChange {
+interface PendingChangeBase {
   id: string
-  kind: PendingChangeKind
-  stopId?: string
-  payload?: unknown
+  /**
+   * The stop's UUID — its `id`, never its `stopId` display label.
+   *
+   * The field name is M2's and is kept for continuity, but the meaning is
+   * fixed here: two stops can share a label after a "Reset Stop IDs", and
+   * joining on one is the identity bug M2 spent a milestone removing.
+   */
+  stopId: string
+  /** When it was staged. Orders the review screen's sections stably. */
+  at: number
 }
 
 /**
- * Edits made since the last optimisation, held back so the driver can see
- * "3 changes — reoptimise?" rather than having the route silently rearrange
- * itself while they are holding a parcel.
+ * One staged edit.
+ *
+ * An `add` carries the WHOLE stop rather than a reference to one, because a
+ * staged stop does not exist on the route yet. That is what makes Discard a
+ * single assignment — drop the change set and there is nothing to unwind, no
+ * stop to delete, no label to release, no removal to resurrect. The
+ * alternative, writing the stop in and flagging it, turns Discard into an
+ * unwind, and an unwind is where the bugs live.
+ */
+export type PendingChange =
+  | (PendingChangeBase & { kind: 'add'; stop: AddressedStop })
+  | (PendingChangeBase & { kind: 'remove' })
+  | (PendingChangeBase & { kind: 'move'; toIndex: number })
+  | (PendingChangeBase & { kind: 'edit'; patch: Partial<AddressedStop> })
+
+/**
+ * A change as a caller supplies it — the store assigns `id` and `at`.
+ *
+ * Written as a distributive conditional rather than a plain `Omit`, which over
+ * a union keeps only the keys every member shares and would silently reduce
+ * this to "kind and stopId".
+ */
+export type NewPendingChange =
+  PendingChange extends infer C ? (C extends PendingChange ? Omit<C, 'id' | 'at'> : never) : never
+
+/**
+ * Edits made since the last optimisation, held back so the driver can review
+ * "2 changes" before the route rearranges itself under a parcel they are
+ * already holding.
+ *
+ * The driver has PHYSICALLY SORTED the van to match the sequence on screen. An
+ * app that silently reoptimises destroys that; one that silently appends
+ * produces a stupid route. So nothing moves until they say so, and when they
+ * do it is a choice between two models — see `lib/insertStops.ts`.
  */
 export interface PendingChangeSet {
   changes: PendingChange[]
-  /** A preview route computed from the staged changes, not yet committed. */
+  /**
+   * A preview route computed from the staged changes, not yet committed.
+   *
+   * Follows the "Update route" model, because that is the one the review
+   * screen is previewing the consequences of: the other model's whole promise
+   * is that everything moves, which no per-row ETA can usefully show in
+   * advance.
+   */
   provisional?: OptimizedRoute
 }
 

@@ -284,20 +284,18 @@ export function MapComponent() {
               setAddByPinOpen(false)
             }}
             onAddAndEdit={(point, address) => {
-              addStops([{ ...point, address: address ?? undefined }])
+              // The id comes back from the action rather than being fished out
+              // of the stops array: on an optimised route the stop is STAGED
+              // and never lands in `stops` at all, so "the last appended one"
+              // finds the wrong stop, or none.
+              const [created] = addStops([{ ...point, address: address ?? undefined }])
               setAddByPinOpen(false)
-              // The stop the driver just made is the one they want to edit,
-              // and it is always the last appended.
-              const stops = useRoutesStore.getState().routes[
-                useRoutesStore.getState().activeRouteId ?? ''
-              ]?.stops
-              const created = stops?.[stops.length - 1]
               // Open its card AND its edit form: "add and edit" promised the
               // form, and landing on the card behind it means dismissing the
               // form leaves the driver looking at the stop they just made.
               if (created) {
-                navigate(`/route/${params.routeId}/stop/${created.id}`)
-                useUiStore.getState().setStopEditorId(created.id)
+                navigate(`/route/${params.routeId}/stop/${created}`)
+                useUiStore.getState().setStopEditorId(created)
               }
             }}
             onCancel={() => setAddByPinOpen(false)}
