@@ -5,10 +5,15 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>optimiser</title>
-    <!-- Makes the page crossOriginIsolated on a static host (GitHub Pages) so
-         OR-Tools' threaded WebAssembly can use SharedArrayBuffer. Must load
-         before the app. Absolute path matches the Pages base '/optimiser/'. -->
-    <script src="/optimiser/coi-serviceworker.js"></script>
+    <!-- coi-serviceworker used to be loaded here, to make the page
+         crossOriginIsolated on a static host so OR-Tools' threaded WebAssembly
+         could use SharedArrayBuffer. It cost every visitor a forced reload on
+         first load and effectively limited the app to Chromium.
+
+         M9 removed OR-Tools from the production bundle, so nothing users
+         download needs isolation any more. Bench builds still get the script —
+         vite.config.ts injects it when VITE_BENCH_SEAM is set — because the
+         OR-Tools oracle the benchmark grades against does still need it. -->
   </head>
   <body>
     <div id="root"></div>
