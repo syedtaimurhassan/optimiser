@@ -299,3 +299,89 @@ WebGL keeps the GPU busy in a way Leaflet did not.
 > Idle should be nearly free — MapLibre stops rendering when nothing moves. A
 > warm phone on a *static* map means something is animating that shouldn't be,
 > and that is a bug worth reporting back.
+
+---
+
+# M5 — the route sheet and its list
+
+Everything below is a phone-only design. Do not do it on a tablet or a desktop
+window narrowed to phone width: the sheet is `md:hidden`, and a narrow desktop
+window has no touch input, which is the entire subject of §16.
+
+## 15. Scrolling 300 rows 🎯
+
+**This is the definition-of-done measurement**, and the same caveat as §11
+applies: `npm run list:perf` reports 60fps median at 4× CPU throttle on a
+desktop, and that rig models a slow processor and nothing else.
+
+- [ ] Load a route with ~300 stops and drag the sheet fully open.
+- [ ] Fling the list from the top to the bottom in one gesture. Does it track
+      your thumb, or does it stutter and catch up? ▸ ______
+- [ ] Scroll slowly through a stretch with notes and tags on it. Do rows
+      visibly resize or jump as they come into view? ▸ ______
+- [ ] Get a number, the same way as §11 — `chrome://inspect` → Performance, or
+      Rendering → Frame Rendering Stats on the device.
+
+**Record:** ▸ FPS while flinging ______ · while scrolling slowly ______
+**Record:** ▸ device model and Android version ______
+
+| Result | What it means |
+|---|---|
+| Sustained ≥ 50 fps | Definition of done met |
+| 30–50 fps | Look at the row itself before the virtualiser — the id chip and status badge are the only non-text elements per row |
+| < 30 fps | Reduce `overscan` in `RouteList.tsx` first (it is 6), then check whether the map underneath is still rendering |
+
+> Rows jumping as they scroll into view means the estimates in `estimateFor`
+> are too far from the truth on this device's font metrics. That is a tuning
+> problem, not a virtualiser problem.
+
+## 16. The sheet, by thumb 🎯
+
+The nested-scroll behaviour cannot be checked any other way. A mouse drag over
+a list does not scroll it, so a desktop browser will report all of this as
+working whether it does or not.
+
+- [ ] Drag the handle slowly up and down. Does the sheet follow your thumb
+      exactly, with no lag? ▸ ______
+- [ ] Can you reach all four positions by dragging — summary strip, about half,
+      full list, and full-screen? ▸ ______
+- [ ] Flick up sharply from collapsed. Does it stop at the second position
+      rather than flying to the top? ▸ ______
+- [ ] Tap the handle repeatedly. Does it step up one position at a time and
+      then return to collapsed? ▸ ______
+- [ ] **The one that matters:** open the sheet fully, scroll the list halfway
+      down, then drag DOWN in the middle of the list. Does the list scroll back
+      up — leaving the sheet completely still? ▸ ______
+- [ ] Now with the list at the very top, drag down again. Does the sheet close
+      this time? ▸ ______
+- [ ] Does the sheet ever judder or hand the gesture back and forth mid-drag?
+      ▸ ______  *(this is the failure this design exists to prevent)*
+- [ ] At the half-open position, try to scroll the list. It should not scroll —
+      the drag should move the sheet instead. ▸ ______
+- [ ] Tap the search field. Does the keyboard come up with the sheet filling
+      the space above it, rather than the field hiding behind the keyboard?
+      ▸ ______
+
+> The last one is the only check here that exercises `visualViewport`. If the
+> field ends up behind the keyboard, that listener is not firing on this
+> device and the `full` detent is being computed against the wrong height.
+
+## 17. The rows, at a glance
+
+Use `#/__ui` in a bench build to see every variant at once, then compare
+against a real route.
+
+- [ ] Do all the addresses start at the same left edge, whatever their number?
+      ▸ ______
+- [ ] Is the vertical connector unbroken from the start row to the end row,
+      with no gaps at the rows that have notes? ▸ ______
+- [ ] Find a **failed** stop in a **coloured group**. Is the id chip still the
+      group's colour, with a red ✗ beside it — *not* a red chip? ▸ ______
+- [ ] Do ordinary stops show no tags at all? ▸ ______
+- [ ] Does the end row look like an ending rather than another stop? ▸ ______
+- [ ] Is "Mark route as completed" clearly not the thing you are meant to press
+      all day? ▸ ______
+- [ ] Scroll to the bottom, then press the ⌄ button. Does it take you to the
+      next undelivered stop? ▸ ______
+- [ ] Collapse the sheet. Do the map's floating buttons sit clear of it, and do
+      they all still respond to a tap? ▸ ______

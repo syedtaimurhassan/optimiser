@@ -634,3 +634,198 @@ sheet's subtree as intercepting every click.
    detector correctly suppressed.
 6. **`SCHEMA_VERSION` is still 4.** M4 persisted no new field; `basemap` lives
    in the transient `uiStore` deliberately.
+
+---
+
+## M5 — The persistent sheet, and the route list inside it
+
+**Date:** 2026-08-08 · **Branch:** `m4-maplibre` (continues from `4fb88b0`)
+
+The phone now has the structural surface everything after this hangs off: a
+four-detent sheet over the map, a header that morphs instead of swapping, and a
+virtualised route list. The M1 sidebar is desktop-only from here.
+
+### What changed
+
+**Dependencies:** `+@tanstack/react-virtual` 3.14.9 (one transitive dep,
+`virtual-core`). Nothing removed.
+
+**Added**
+
+- `src/lib/routeOrder.ts`, `routeSummary.ts`, `routeList.ts`, `sheetSnap.ts`
+  — the four pure modules, plus their tests
+- `src/components/sheet/*` — `RouteSheet`, `SheetHeader`, `SummaryStrip`,
+  `RouteList`, `StopRow`, `ListRows`, `Timeline`, `RouteSetupSheet`
+- `src/hooks/useNowTicker.ts`
+- `bench/m5-smoke.mjs` (54 checks, `npm run smoke:m5`), `bench/m5-perf.mjs`
+  (`npm run list:perf`)
+- `DEVICE-SMOKE-TEST.md` §15–17
+
+**Modified:** `index.css` (pastel group tokens, `--text-route-title`,
+`--sheet-peek`, `--fab-stack-height`), `IdChip` (+`pastel`), `Chip`
+(+`outlined`, +`disabled`), `FullWidthButton` (+`outlined`), `icons` (+9),
+`uiStore` (four detents, `setupOpen`), `RouteWorkScreen`, `Sidebar`
+(`hidden md:flex`), `FabStack`, `CalculateFab`, `DrawerTrigger`, `FinishPill`,
+`MapChrome`, `MapComponent`, `lib/map/features.ts`.
+
+**Removed:** nothing. The M1 panels are all still reachable.
+
+### Verified
+
+- **54/54 M5 browser checks**, driving every definition-of-done item
+- **42/42 M1+M2, 52/52 M3, 40/40 M4** — no regressions, though M3 and M4 each
+  needed a selector fixed (see below)
+- **248 unit tests** (180 from M4 + 68 new)
+- `npm run lint`, `npm run build`, `tsc -b`, `bench:verify-seam` clean; `lib/`
+  still imports neither React nor the store
+
+### The numbers
+
+**Bundle.** 486.3 kB gzip, up from 470.6 — **+15.7 kB gzip for all of M5**,
+measured against a build of `d7f9d27` in a scratch worktree rather than
+estimated. The virtualiser is a minority of that; most of it is ~1,100 lines of
+new components. M1's unminified-bundle finding is still open and still worth
+about 67 kB.
+
+**List performance — a proxy, not the definition of done.** 300 stops, 390×844,
+desktop Chromium, sustained scroll of the entire list:
+
+| | median frame | mean | p95 | p99 |
+|---|---|---|---|---|
+| unthrottled | 16.7 ms (60 fps) | 16.7 ms | 17.6 ms | 17.7 ms |
+| 4× CPU throttle | 16.7 ms (60 fps) | 17.7 ms | 17.7 ms | 65.7 ms |
+| 6× CPU throttle | 16.7 ms (60 fps) | 17.6 ms | 17.6 ms | 66.7 ms |
+
+**16 rows and 207 elements in the DOM** for a 305-row list, at every throttle
+level. Jump-to-next: ~50 ms. The p99 is a single hitch at the scroll
+direction reversal; the median sits on the vsync cap even at 6×, which is a
+much healthier profile than M4's map got.
+
+🔴 **Still no real-device number, and it is still the definition-of-done item.**
+This rig throttles the CPU and models nothing else — and unlike M4 there is now
+a second consumer of the main thread, because the map is live underneath the
+sheet the whole time. **Run DEVICE-SMOKE-TEST.md §15 and §16.** §16 especially:
+the nested-scroll behaviour is not testable with a mouse at all.
+
+### Decisions worth knowing
+
+**The header rows are IN the virtual list.** Title, action chips, break and
+start row are rows, not a static block above a scroller. That buys one scroll
+container (so there is one gesture question, not two), one measurement pass,
+and a timeline connector that is continuous by construction because the start
+and end rows are neighbours in the same array.
+
+**The connector is a segment per row, never one tall element.** Under windowing
+a single line would have to span rows that are not rendered; against variable
+heights it would drift. Adjacent rows touch, so their segments touch, whatever
+height either turns out to be. The smoke test asserts the largest gap between
+consecutive segments — it is 0.00px.
+
+**The gesture is classified once and never reclassified.** Below `expanded` the
+list does not scroll at all, so there is nothing to arbitrate. At `expanded` and
+`full` the sheet takes a drag only if the list is at the top AND the finger is
+moving down, decided on the first move past a 4px slop and held for the rest of
+the gesture. Re-deciding per move is what makes these sheets judder as
+`scrollTop` crosses zero.
+
+**The drag never enters React state.** The offset is a ref written straight to
+`style.transform`; React is told only the resulting detent. A pointermove that
+re-rendered would re-render the list with it.
+
+**A fling goes to the next detent past the RELEASE point**, not one from where
+the gesture started — otherwise a long drag ending in a flick snaps back behind
+the user's own thumb. That is a unit test, not a feeling.
+
+**Deviations from the brief, all deliberate:**
+
+- **Kilometres, not miles.** OSRM returns metres and every address in the
+  fixtures is Danish. One formatter to change if a units setting ever lands.
+- **The summary strip drops segments it cannot honestly fill.** An unsolved
+  route has no finish time and no distance, so it shows "12 stops" alone rather
+  than "Finish --:-- · 12 stops · -- km".
+- **The break row and both endpoint rows open Route setup.** They have no real
+  editors until M6/M7. A control that visibly does nothing teaches a driver to
+  stop trying it; one that lands somewhere useful does not.
+- **The floating drawer trigger hides at `expanded` and above**, because the
+  header's morph puts a hamburger in the sheet at exactly those detents. Two
+  identical controls, one of them floating on top of the sheet, was the
+  alternative.
+
+### What surprised me
+
+1. **My own guard swallowed every tap on the grab handle.** The drag handler
+   ignores pointerdowns that land on a control, so a tap on a button is that
+   button's — and the handle is itself a `role="button"`, because it is
+   operable and a bare div is invisible to a screen reader. So the handle
+   matched its own exclusion list, no drag ever started, and none of the four
+   detents was reachable by tap. Everything else about the sheet worked
+   perfectly, which is what made it convincing: dragging was fine, the morph
+   was fine, only tapping did nothing.
+
+2. **TanStack Virtual cannot smooth-scroll a dynamically measured list.** The
+   jump FAB asked for `behavior: 'smooth'` and landed 24 rows short of the stop
+   it was told to go to — the animation is chasing an offset that the two-pass
+   measurement is still correcting underneath it. It is documented, and it is
+   the kind of thing that reads as "the FAB is a bit inaccurate" rather than as
+   a constraint being violated.
+
+3. **My "flick" and my "slow drag" were the same speed.** Both are synthesised
+   through CDP, where every dispatch costs a round trip of ~20ms, so the speed
+   of a drag is set almost entirely by its distance per step. The 46px "flick"
+   came out at 0.46 px/ms — just under the fling threshold — while the 675px
+   "slow drag" came out at 1.4 px/ms and was correctly treated as a fling. Two
+   failures, opposite causes, same helper. They are separate profiles now.
+
+Runner-up: **the Calculate FAB landed exactly on the basemap button.** Both
+offsets were rewritten to clear the new sheet, independently, and they
+collided. Nothing looked wrong in a screenshot — the button simply stopped
+responding — and it was the M4 suite that found it, reporting "Calculate route
+intercepts pointer events". The stack's height is a token now and the M5 suite
+asserts non-overlap.
+
+### 🟡 Finding: the solid amber id chip fails contrast
+
+While computing the pastel pairs I checked the existing solid ones. White on
+`--color-group-amber` (#c77700) is **3.46:1**, below the 4.5:1 a 13px bold
+label needs. It affects the solid chip and the map marker, not the new pastel
+variant (which is 4.65:1). Left alone deliberately: changing a group colour
+means changing `palette.ts`, its drift test and every rendered chip bitmap, and
+that is a change worth making on purpose rather than as a side effect of this
+milestone. Teal is 4.18:1 and marginal for the same reason.
+
+### Deferred
+
+- 🔴 **Real-device FPS and the thumb tests** — §15, §16, §17
+- **Search does nothing.** The field is real, focuses to `full`, writes to
+  `uiStore.searchQuery`, and has no consumer. M6.
+- **Share live route / Load vehicle** are announced, disabled stubs, as specified
+- **ETAs are always absent** — `arrivalSec` is still empty. The gutter renders
+  the sequence alone, and the rendering for a real ETA is already there. M7.
+- **Route setup is scaffolding.** The M1 panels, unchanged, in a modal behind
+  the overflow. It goes in one commit when the last of them has a replacement.
+- **Desktop is untouched** — still the M1 sidebar column. The sheet is
+  `md:hidden` and the route list has no desktop presentation yet.
+- Amber/teal chip contrast (above); cross-origin isolation (M0) and
+  minification (M1) still open.
+
+### What the next session needs to know
+
+1. **`lib/sheetSnap.ts` and `lib/routeList.ts` are where the rules live.** If a
+   detent feels wrong, or a row shows a tag it shouldn't, the fix is a pure
+   function with a test — not a component.
+2. **`--sheet-peek` is measured and published by `RouteSheet`**; anything that
+   floats over the map must clear it by reading that variable. `--fab-stack-height`
+   is the other half of that agreement, and it IS a hand-maintained constant —
+   a third FAB means updating it.
+3. **Two controls now share the accessible name "Your routes"** — the floating
+   trigger and the sheet's hamburger. Only one is exposed at a time (the other
+   is inside an `inert` layer), which is correct, but it broke three
+   name-based selectors in the M3 and M4 suites. Use `[data-testid="drawer-trigger"]`.
+4. **M6 owns search.** The plumbing is done: `searchQuery` is in `uiStore`, the
+   field writes to it, and `buildRouteRows` is a pure function of a route — so
+   filtering is a `.filter()` between those two and nothing else has to move.
+5. **`estimateFor` in `RouteList.tsx` is the smoothness knob.** It decides how
+   far the two-pass measure has to correct. If rows visibly settle on a real
+   device, that function is wrong about that device's font metrics.
+6. **`SCHEMA_VERSION` is still 4.** M5 persisted no new field; `sheetSnap` and
+   `setupOpen` are transient `uiStore` state deliberately.
