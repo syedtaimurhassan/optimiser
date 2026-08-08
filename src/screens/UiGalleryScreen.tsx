@@ -6,6 +6,7 @@ import {
   ConfirmDialog,
   DemotedActionGroup,
   FullWidthButton,
+  GroupDot,
   IdChip,
   ListRow,
   SegmentedControl,
@@ -19,9 +20,15 @@ import {
   ChevronRightIcon,
   DuplicateIcon,
   MoreIcon,
+  NavigateIcon,
+  ParcelCheckIcon,
+  ParcelCrossIcon,
   PencilIcon,
+  PrinterIcon,
+  ShareIcon,
   TrashIcon,
 } from '../components/ui/icons'
+import { CompletionCard } from '../components/stop/CompletionCard'
 import { StopRow } from '../components/sheet/StopRow'
 import type { StopRowModel } from '../lib/routeList'
 import type { AddressedStop, StopStatus } from '../types'
@@ -155,6 +162,68 @@ export default function UiGalleryScreen() {
               ]}
             />
           </div>
+
+          {/*
+            The stop card's primary slot: 88dp, one filled action, two
+            outlined. The height is the point and it is the thing a screenshot
+            cannot check — this is the row a driver hits 44 times a day,
+            one-handed, possibly gloved, and it wants a thumb on a real phone.
+          */}
+          <div className="mt-3">
+            <ActionRow3Up
+              size="tall"
+              actions={[
+                {
+                  label: 'Navigate',
+                  icon: <NavigateIcon className="h-6 w-6" />,
+                  variant: 'filled',
+                  onSelect: () => {},
+                },
+                {
+                  label: 'Failed',
+                  icon: <ParcelCrossIcon className="h-6 w-6" />,
+                  variant: 'outlined',
+                  onSelect: () => {},
+                },
+                {
+                  label: 'Delivered',
+                  icon: <ParcelCheckIcon className="h-6 w-6" />,
+                  variant: 'outlined',
+                  onSelect: () => {},
+                },
+              ]}
+            />
+          </div>
+
+          {/* Group dots, at the size they appear beside a status counter. */}
+          <div className="mt-4 flex items-center gap-3">
+            {(['blue', 'purple', 'teal', 'green', 'pink', 'amber'] as const).map((color) => (
+              <span key={color} className="flex items-center gap-1.5 text-body text-on-surface-variant">
+                <GroupDot color={color} />
+                {color}
+              </span>
+            ))}
+          </div>
+        </Section>
+
+        {/* Both completion states, because the delivered/failed pair is the
+            one place green and red sit side by side in the same component. */}
+        <Section title="Completion card" onSurface>
+          <CompletionCard
+            status="delivered"
+            label="Marked as delivered"
+            at="16:13"
+            onUndo={() => {}}
+          />
+          <div className="mt-3">
+            <CompletionCard
+              status="failed"
+              label="Marked as failed"
+              at="16:40"
+              reason="Nobody home — tried the back door too"
+              onUndo={() => {}}
+            />
+          </div>
         </Section>
 
         {/* On white, because both of these are surface-variant and would be
@@ -172,6 +241,28 @@ export default function UiGalleryScreen() {
               onSelect: () => setConfirmOpen(true),
             }}
           />
+
+          {/*
+            The sectioned form, as the route menu uses it: blocks separated by
+            a gap, a trailing hint on the announced-but-unavailable items, and
+            the destructive one alone at the end.
+          */}
+          <div className="mt-4">
+            <DemotedActionGroup
+              sections={[
+                [
+                  { label: 'Share route copy', icon: <ShareIcon className="h-5 w-5" />, hint: 'Soon', disabled: true, onSelect: () => {} },
+                  { label: 'Copy stops…', icon: <DuplicateIcon className="h-5 w-5" />, onSelect: () => {} },
+                ],
+                [{ label: 'Print route', icon: <PrinterIcon className="h-5 w-5" />, onSelect: () => {} }],
+              ]}
+              destructive={{
+                label: 'Remove stops…',
+                icon: <TrashIcon className="h-5 w-5" />,
+                onSelect: () => setConfirmOpen(true),
+              }}
+            />
+          </div>
         </Section>
 
         <Section title="Buttons and sheets" onSurface>
