@@ -5,6 +5,13 @@ import type { AddressedStop, LatLng, Objective, OptimizedRoute, Favorite } from 
 import { planSelectiveRoute } from '../lib/planRoute'
 import { warmUpSolver } from '../lib/solver'
 import { cumulativeArrivals, serviceSecFor } from '../lib/arrivals'
+import {
+  END_KEY,
+  matrixCacheKey,
+  saveMatrix,
+  START_KEY,
+  toCachedMatrix,
+} from '../lib/costMatrix'
 
 /**
  * Compatibility facade over the M2 stores.
@@ -174,13 +181,40 @@ const ACTIONS = {
         return stop ? serviceSecFor(stop) : 0
       })
 
+      const { matrix, matrixWaypointIndex, ...planned } = result
       const optimized: OptimizedRoute = {
-        ...result,
+        ...planned,
         orderedStopIds,
         arrivalSec: cumulativeArrivals({ legSeconds: result.legSeconds, serviceSeconds }),
       }
 
+      /*
+        Keep the grid we just paid for.
+
+        M8's whole "Update route" model rests on this: inserting a stop into a
+        solved round costs one row and one column, but only if the other 1,936
+        cells are still lying around. The keys come from the planner's
+        positional index list, so a matrix row is labelled with the stop's
+        uuid rather than with where it happened to sit in this solve.
+
+        Best effort, deliberately: a failed cache write must not fail the
+        optimisation the driver actually asked for. The consequence of losing
+        it is a slower insert later, not a wrong one.
+      */
+      const matrixKeys = matrixWaypointIndex.map((index, i) =>
+        index === null
+          ? i === 0 && route.start
+            ? START_KEY
+            : END_KEY
+          : (pending[index]?.id ?? END_KEY),
+      )
+      const cacheKey = matrixCacheKey(route.id, route.optimizeBy)
+      await saveMatrix(cacheKey, toCachedMatrix(matrix, matrixKeys, route.optimizeBy)).catch(
+        (e: unknown) => console.warn('[routes] could not cache the cost matrix', e),
+      )
+
       state.setOptimized(optimized)
+      state.setMatrixCacheKey(cacheKey)
       state.clearPending()
       solver.succeed()
     } catch (e) {

@@ -87,6 +87,8 @@ interface RoutesState {
   setSearchTierSec: (seconds: number) => void
   setTargetK: (k: number | null) => void
   setOptimized: (optimized: OptimizedRoute | null) => void
+  /** Where the solve's cost matrix was cached. See lib/costMatrix.ts. */
+  setMatrixCacheKey: (cacheKey: string | null) => void
 
   // ── Stop CRUD ──
   addStops: (points: NewStopInput[]) => void
@@ -408,6 +410,8 @@ export const useRoutesStore = create<RoutesState>()(
       setTargetK: (k) => set((s) => withActiveRoute(s, (r) => ({ ...r, targetK: k }))),
       setOptimized: (optimized) =>
         set((s) => withActiveRoute(s, (r) => ({ ...r, optimized: optimized ?? undefined }))),
+      setMatrixCacheKey: (cacheKey) =>
+        set((s) => withActiveRoute(s, (r) => ({ ...r, matrixCacheKey: cacheKey ?? undefined }))),
 
       // ── Stop CRUD ──
 

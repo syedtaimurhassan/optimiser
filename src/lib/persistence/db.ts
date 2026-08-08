@@ -64,6 +64,14 @@ export interface MatrixRow {
   /** Flat integer cost matrix + its dimension, so it round-trips cheaply. */
   n: number
   costs: Int32Array | number[]
+  /**
+   * What each row and column IS — a stop's uuid, or an endpoint sentinel.
+   *
+   * Optional only because the store predates anything writing to it. A row
+   * without keys cannot be used: an index is meaningless once a stop has been
+   * deleted, because every index after it has shifted. See lib/costMatrix.ts.
+   */
+  keys?: string[]
   objective: 'duration' | 'distance'
 }
 

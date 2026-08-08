@@ -40,10 +40,22 @@ const sameCoord = (a: LatLng, b: LatLng) => a.lat === b.lat && a.lng === b.lng
  * `legSeconds` and `legMeters` ARE produced here — M7 stopped throwing away
  * what OSRM already returns, because per-leg times are what make an arrival
  * real rather than a share of a total.
+ *
+ * `matrix` and `matrixWaypointIndex` are M8's addition, and they keep this
+ * module's coordinate-only contract intact: the index list says which of the
+ * CALLER'S OWN `waypoints` each matrix row came from, positionally, with null
+ * for an endpoint that is not one of them. The caller can therefore label the
+ * matrix with its own stop ids without this module ever learning what a stop
+ * is. Handing back the point coordinates instead would invite a join on
+ * `lat,lng`, which is the identity bug M2 spent a milestone removing.
  */
 export type PlannedRoute = Omit<OptimizedRoute, 'orderedStopIds' | 'arrivalSec'> & {
   legSeconds: number[]
   legMeters: number[]
+  /** The N×N cost grid the solve ran on, worth caching rather than refetching. */
+  matrix: number[][]
+  /** Per matrix index: which `waypoints` entry it is, or null for an endpoint. */
+  matrixWaypointIndex: (number | null)[]
 }
 
 /**
@@ -66,18 +78,29 @@ export async function planSelectiveRoute({
   timeBudgetMs,
   onStatus,
 }: PlanInput): Promise<PlannedRoute> {
-  // Candidates = uploaded stops, minus any that coincide with a chosen endpoint.
-  const candidates = waypoints.filter(
-    (w) =>
-      !(startLocation && sameCoord(w, startLocation)) &&
-      !(endLocation && sameCoord(w, endLocation)),
-  )
+  // Candidates = uploaded stops, minus any that coincide with a chosen
+  // endpoint. Their positions in the caller's array are carried alongside, so
+  // the caller can name the matrix's rows without this module seeing an id.
+  const candidateIndices = waypoints
+    .map((w, i) => (
+      (startLocation && sameCoord(w, startLocation)) ||
+      (endLocation && sameCoord(w, endLocation))
+        ? -1
+        : i
+    ))
+    .filter((i) => i >= 0)
+  const candidates = candidateIndices.map((i) => waypoints[i])
 
   // Build the ordered point list: [start?, ...candidates, end?].
   const points: LatLng[] = [
     ...(startLocation ? [startLocation] : []),
     ...candidates,
     ...(endLocation ? [endLocation] : []),
+  ]
+  const matrixWaypointIndex: (number | null)[] = [
+    ...(startLocation ? [null] : []),
+    ...candidateIndices,
+    ...(endLocation ? [null] : []),
   ]
   if (points.length < 2) {
     throw new Error('Add at least two points (upload a file, or set start/end).')
@@ -130,6 +153,8 @@ export async function planSelectiveRoute({
       durationSeconds: road.durationSeconds,
       legSeconds: road.legSeconds,
       legMeters: road.legMeters,
+      matrix,
+      matrixWaypointIndex,
       candidatesVisited: orderedWaypoints.length - fixedCount,
       candidatesTotal: candidates.length,
       estimated: false,
@@ -159,6 +184,10 @@ export async function planSelectiveRoute({
       // pretending metres are seconds.
       legSeconds: objective === 'duration' ? matrixLegs : straightLegs.map((m) => m / 8),
       legMeters: objective === 'distance' ? matrixLegs : straightLegs,
+      // Still worth caching: the matrix came from OSRM Table and is real. Only
+      // the GEOMETRY leg of the pipeline failed.
+      matrix,
+      matrixWaypointIndex,
       candidatesVisited: orderedWaypoints.length - fixedCount,
       candidatesTotal: candidates.length,
       estimated: true,

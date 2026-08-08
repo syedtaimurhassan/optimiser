@@ -164,6 +164,73 @@ export async function fetchCostMatrix(
 }
 
 /**
+ * A BAND of the cost matrix: some rows against some columns.
+ *
+ * `fetchCostMatrix` above always wants the whole grid, so it bands purely to
+ * stay under the cell cap. This wants a band for its own sake — M8 inserts a
+ * stop into an already-solved route and needs exactly one new row and one new
+ * column, not a fresh N×N. On a 44-stop round that is 88 cells instead of
+ * 1,936, and on a 300-stop round it is the difference between two requests and
+ * nine.
+ *
+ * `sources` and `destinations` are indices into `points`; both default to all
+ * of them. OSRM documents them as accepting a subset of the input locations,
+ * which is what makes the asymmetric request legal.
+ *
+ * Returns `sources.length` rows of `destinations.length` cells, in the order
+ * the caller asked for them — NOT in `points` order.
+ */
+export async function fetchCostBand(
+  points: LatLng[],
+  objective: Objective,
+  band: { sources?: number[]; destinations?: number[] } = {},
+): Promise<number[][]> {
+  const n = points.length
+  if (n < 2) throw new Error('Need at least two points to build a route.')
+  if (n > MAX_TABLE_POINTS) {
+    throw new Error(`Too many points (${n}). This client supports up to ${MAX_TABLE_POINTS}.`)
+  }
+
+  const all = Array.from({ length: n }, (_, i) => i)
+  const sources = band.sources ?? all
+  const destinations = band.destinations ?? all
+  if (sources.length === 0 || destinations.length === 0) return []
+
+  const coords = points.map((p) => `${p.lng},${p.lat}`).join(';')
+  // Tile over SOURCES only. Either direction of band ends up here — a column
+  // band is just `destinations` of length one with every source — so one
+  // tiling rule covers both and there is no second cap to keep in step.
+  const rowsPerRequest = Math.max(1, Math.floor(OSRM_TABLE_MAX_CELLS / destinations.length))
+  const totalRequests = Math.ceil(sources.length / rowsPerRequest)
+
+  const out: number[][] = []
+  for (let req = 0; req < totalRequests; req++) {
+    const chunk = sources.slice(req * rowsPerRequest, (req + 1) * rowsPerRequest)
+    const url =
+      `${OSRM_TABLE_BASE}/${coords}?annotations=${objective}` +
+      `&sources=${chunk.join(';')}&destinations=${destinations.join(';')}`
+
+    const response = await fetchWithTimeout(url)
+    if (!response.ok) {
+      throw new Error(`OSRM table request failed: ${response.status} ${response.statusText}`)
+    }
+    const data = (await response.json()) as OsrmTableResponse
+    const rows = objective === 'distance' ? data.distances : data.durations
+    if (data.code !== 'Ok' || !rows) {
+      throw new Error(`OSRM could not build a ${objective} matrix (${data.message ?? data.code}).`)
+    }
+
+    for (const row of rows) {
+      out.push(row.map((value) => (value == null ? UNREACHABLE_COST : Math.round(value))))
+    }
+
+    if (req < totalRequests - 1) await sleep(OSRM_MIN_REQUEST_GAP_MS)
+  }
+
+  return out
+}
+
+/**
  * Fetch the driving route (road geometry + distance + duration) that follows a
  * fixed, already-ordered list of points in the given order. Used to draw the
  * chosen route on real roads after OR-Tools has decided the visiting order — so
