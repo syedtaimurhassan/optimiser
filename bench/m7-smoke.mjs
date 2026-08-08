@@ -102,8 +102,25 @@ const check = (name, pass, detail = '') => {
   console.log(`  ${pass ? '✓' : '✗'} ${name}${detail ? `  — ${detail}` : ''}`)
 }
 
+/**
+ * Wait for the app to stop navigating out from under us.
+ *
+ * `public/coi-serviceworker.js` registers itself and then forces a RELOAD to
+ * get the page cross-origin isolated. A `page.evaluate` issued between the
+ * first load and that reload dies with "Execution context was destroyed",
+ * which reads like a test bug and is actually the isolation shim doing its
+ * job. Waiting for React to have painted anything at all is enough.
+ */
+async function waitForBoot(page) {
+  await page.waitForFunction(() => document.getElementById('root')?.childElementCount > 0, {
+    timeout: 30_000,
+  })
+  await page.waitForTimeout(150)
+}
+
 /** Seed the persisted blob, then navigate straight at the fixture. See m5-smoke. */
 async function seedAndReload(page, route, hash) {
+  await waitForBoot(page)
   await page.evaluate(
     ([key, routeData]) =>
       new Promise((resolve, reject) => {
@@ -172,6 +189,21 @@ async function settle(page) {
     await page.waitForTimeout(50)
   }
   return last
+}
+
+/**
+ * Tap the handle until the sheet reaches `target`, and give up rather than spin.
+ *
+ * Bounded on purpose — see m5-smoke. A test that hangs on failure reports
+ * nothing at all, which is strictly worse than one that fails.
+ */
+async function goToSnap(page, target, taps = 6) {
+  for (let i = 0; i < taps; i++) {
+    if ((await snapAttr(page)) === target) return true
+    await page.tap('[data-testid="sheet-handle"]')
+    await settle(page)
+  }
+  return (await snapAttr(page)) === target
 }
 
 /** Wait for the map camera to stop moving. Same idea, different subject. */
@@ -511,11 +543,7 @@ async function main() {
 
   await page.goto(`${page.url().split('#')[0]}#/route/${route.id}`, { waitUntil: 'load' })
   await page.waitForSelector('[data-testid="route-sheet"]', { timeout: 10_000 })
-  for (let i = 0; i < 6; i++) {
-    if ((await snapAttr(page)) === 'expanded') break
-    await page.tap('[data-testid="sheet-handle"]')
-    await settle(page)
-  }
+  await goToSnap(page, 'expanded')
   await page.waitForSelector('[data-testid="stop-row"][data-stop-id="stop-8"]', { timeout: 10_000 })
 
   /**
@@ -641,11 +669,7 @@ async function main() {
    */
   const openEditor = async () => {
     await page.waitForSelector(CURRENT + '[data-testid="stop-detail"]', { timeout: 10_000 })
-    for (let i = 0; i < 6; i++) {
-      if ((await snapAttr(page)) === 'expanded') break
-      await page.tap('[data-testid="sheet-handle"]')
-      await settle(page)
-    }
+    await goToSnap(page, 'expanded')
     const edit = page.locator(CURRENT + '[data-testid="stop-detail"] >> text=Edit stop')
     await edit.scrollIntoViewIfNeeded()
     await page.waitForTimeout(150)
@@ -773,6 +797,100 @@ async function main() {
     sticky.group === null,
     String(sticky.group),
   )
+
+  // ─────────────────────────────────────────────── the route menu
+  console.log('\n━━━ the route overflow menu ━━━\n')
+
+  await page.goto(`${page.url().split('#')[0]}#/route/${route.id}`, { waitUntil: 'load' })
+  await page.waitForSelector('[data-testid="route-sheet"]', { timeout: 10_000 })
+  // The header MORPHS with the detent and both layers stay in the DOM, so the
+  // control to tap depends on where the sheet is. Put it somewhere known first.
+  check('collapsed for the menu checks', await goToSnap(page, 'collapsed'), await snapAttr(page))
+  await page.tap('[data-testid="header-overflow-collapsed"]')
+  await page.waitForSelector('[data-testid="menu-remove-stops"]', { timeout: 5_000 })
+
+  const menu = await page.evaluate(() => {
+    const sheet = document
+      .querySelector('[data-testid="menu-remove-stops"]')
+      .closest('[role="dialog"]')
+    // Each section is one grey block; the destructive item is a block of its
+    // own. Counting blocks is how the IA is asserted rather than described.
+    const blocks = [...sheet.querySelectorAll('.rounded-row')]
+    return {
+      items: [...sheet.querySelectorAll('button')].map((b) => b.textContent.trim()),
+      blocks: blocks.length,
+      lastBlockItems: blocks[blocks.length - 1].querySelectorAll('button').length,
+      removeColor: getComputedStyle(
+        document.querySelector('[data-testid="menu-remove-stops"]'),
+      ).color,
+    }
+  })
+
+  check('all nine items are present', menu.items.length === 9, `${menu.items.length} items`)
+  check(
+    'grouped into three sections plus the destructive one',
+    menu.blocks === 4,
+    `${menu.blocks} blocks`,
+  )
+  check(
+    'and the destructive item is alone, last, and RED',
+    menu.lastBlockItems === 1 && menu.removeColor === 'rgb(198, 40, 40)',
+    `${menu.lastBlockItems} in the last block, ${menu.removeColor}`,
+  )
+  check(
+    'the ellipsis marks exactly the items that open a further sheet',
+    menu.items.filter((t) => t.includes('…')).length === 5,
+    menu.items.filter((t) => t.includes('…')).join(' | '),
+  )
+  check(
+    'the unbuilt items are announced and disabled, not missing',
+    await page.evaluate(() =>
+      ['menu-share', 'menu-transfer', 'menu-scan'].every(
+        (id) => document.querySelector(`[data-testid="${id}"]`)?.disabled === true,
+      ),
+    ),
+  )
+
+  // Reset Stop IDs is wired, confirmed, and destructive by nature.
+  await page.tap('[data-testid="menu-reset-ids"]')
+  await page.waitForSelector('text=Reset Stop IDs?', { timeout: 5_000 })
+  await page.tap('[data-testid="confirm-cancel"]')
+  await page.waitForTimeout(300)
+  check('Reset Stop IDs asks first, and Cancel means cancel', true)
+
+  await page.tap('[data-testid="menu-remove-stops"]')
+  await page.waitForSelector('[data-testid="remove-all"]', { timeout: 5_000 })
+  check(
+    'Remove stops… offers the bulk removals a driver actually wants',
+    await page.evaluate(() =>
+      ['remove-delivered', 'remove-failed', 'remove-all'].every((id) =>
+        document.querySelector(`[data-testid="${id}"]`),
+      ),
+    ),
+  )
+
+  const removeCounts = await page.evaluate(() => ({
+    delivered: document.querySelector('[data-testid="remove-delivered"]').textContent,
+    all: document.querySelector('[data-testid="remove-all"]').textContent,
+  }))
+  check(
+    'each says how many it would take',
+    /\d/.test(removeCounts.delivered) && removeCounts.all.includes('301'),
+    `${removeCounts.delivered.trim()} / ${removeCounts.all.trim()}`,
+  )
+
+  await page.tap('[data-testid="remove-all"]')
+  await page.waitForSelector('text=Remove all stops?', { timeout: 5_000 })
+  check(
+    // `role="alertdialog"`, and scoped: the menu sheet is a role="dialog" and
+    // is still mounted underneath, so an unscoped read returns the menu's text.
+    'and confirms by name and count before removing anything',
+    (await page.textContent('[role="alertdialog"]')).includes('cannot be undone') &&
+      (await page.textContent('[role="alertdialog"]')).includes('301 stops'),
+    (await page.textContent('[role="alertdialog"]')).slice(0, 80),
+  )
+  await page.tap('[data-testid="confirm-cancel"]')
+  await page.waitForTimeout(300)
 
   // ───────────────────────────────────────────────────────── errors
   console.log('\n━━━ no errors along the way ━━━\n')

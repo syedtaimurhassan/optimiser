@@ -29,6 +29,7 @@ import { RouteList } from './RouteList'
 import { SearchScreen } from '../search/SearchScreen'
 import { EmptyRouteState } from './EmptyRouteState'
 import { CopyStopsSheet } from '../routes/CopyStopsSheet'
+import { RouteMenuSheet } from '../routes/RouteMenuSheet'
 import { ImportStopsSheet } from '../search/ImportStopsSheet'
 import { copySourceRoutes } from '../../lib/copyStops'
 import { useAddStops } from '../../hooks/useAddStops'
@@ -101,12 +102,12 @@ export function RouteSheet({ pages, pageIndex }: RouteSheetProps) {
   const searchOpen = useUiStore((s) => s.searchOpen)
   const setSearchOpen = useUiStore((s) => s.setSearchOpen)
   const setAddByPinOpen = useUiStore((s) => s.setAddByPinOpen)
-  const setSetupOpen = useUiStore((s) => s.setSetupOpen)
   const { addSuggestion, addFromClipboard } = useAddStops()
   const addStops = useRoutesStore((s) => s.addStops)
   const allRoutes = useRoutesStore((s) => s.routes)
   const [copyOpen, setCopyOpen] = useState(false)
   const [importOpen, setImportOpen] = useState(false)
+  const [menuOpen, setMenuOpen] = useState(false)
 
   const sheetRef = useRef<HTMLElement>(null)
   const headerBlockRef = useRef<HTMLDivElement>(null)
@@ -482,7 +483,7 @@ export function RouteSheet({ pages, pageIndex }: RouteSheetProps) {
           }}
           searchActive={searchActive}
           onMenu={() => setDrawerOpen(true)}
-          onOverflow={() => setSetupOpen(true)}
+          onOverflow={() => setMenuOpen(true)}
         />
       </div>
 
@@ -609,6 +610,11 @@ export function RouteSheet({ pages, pageIndex }: RouteSheetProps) {
       />
 
       <ImportStopsSheet open={importOpen} onClose={() => setImportOpen(false)} />
+
+      {/* The route's own menu. The overflow button used to open the legacy
+          setup panel directly; that panel is now one item inside this —
+          "Reoptimise route…" — which is where it belongs. */}
+      <RouteMenuSheet open={menuOpen} route={route} onClose={() => setMenuOpen(false)} />
     </aside>
   )
 }

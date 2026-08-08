@@ -192,3 +192,28 @@ body {
 .ro-placing .maplibregl-canvas {
   cursor: crosshair;
 }
+
+/* ───────────────────────────────────────────────────────────── printing
+ *
+ * The app itself cannot be printed usefully: the sheet is positioned with a
+ * transform inside several `overflow: hidden` layers, its list is virtualised
+ * to about fifteen rows, and the map is a WebGL canvas. So "Print route"
+ * renders a separate document — components/print/PrintableRoute — portalled to
+ * the BODY, outside #root, and this swaps which of the two the printer sees.
+ *
+ * Portalling is what makes the rule this simple. Un-hiding a table from inside
+ * the transformed sheet would mean fighting every clip between here and there.
+ */
+@media print {
+  #root {
+    display: none !important;
+  }
+
+  [data-print-root] {
+    display: block !important;
+  }
+
+  @page {
+    margin: 12mm;
+  }
+}

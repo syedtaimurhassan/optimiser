@@ -834,7 +834,18 @@ async function main() {
   // ─────────────────────────────────── the legacy panels are reachable
   console.log('\n━━━ route setup, behind the overflow ━━━\n')
 
+  /*
+    M7 moved this one step further away, deliberately.
+
+    The overflow used to open the setup panel directly. It now opens the
+    route's own menu, and the panel is one item inside it — "Reoptimise
+    route…", which is where the endpoints, the objective, the search tier and
+    Calculate belong. The M1 controls are all still reachable, which is what
+    this check has always been about; only the path changed.
+  */
   await page.tap('[data-testid="header-overflow-collapsed"]')
+  await page.waitForSelector('[data-testid="menu-reoptimise"]', { timeout: 5000 })
+  await page.tap('[data-testid="menu-reoptimise"]')
   await page.waitForSelector('[data-testid="route-setup"]', { timeout: 5000 })
   check(
     'the overflow still reaches every M1 control',
