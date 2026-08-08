@@ -1,6 +1,6 @@
 import { test, describe } from 'node:test'
 import assert from 'node:assert/strict'
-import type { AddressedStop, OptimizedRoute, PendingChange, Route } from '../types.ts'
+import type { AddressedStop, NewPendingChange, OptimizedRoute, PendingChange, Route } from '../types.ts'
 import {
   addedStops,
   changeCount,
@@ -65,7 +65,7 @@ function route(stops: AddressedStop[], changes: PendingChange[] = [], order?: st
 }
 
 let seq = 0
-const change = (c: Omit<PendingChange, 'id' | 'at'> | PendingChange): PendingChange =>
+const change = (c: NewPendingChange | PendingChange): PendingChange =>
   ({ id: `c${++seq}`, at: seq, ...c }) as PendingChange
 
 const add = (id: string) => change({ kind: 'add', stopId: id, stop: stop(id) })
