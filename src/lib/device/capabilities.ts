@@ -23,6 +23,8 @@ export interface SyncCapabilities {
   wasm: boolean
   crossOriginIsolated: boolean
   sharedArrayBuffer: boolean
+  /** Web Workers — how the solver gets off the main thread. */
+  workers: boolean
   hardwareConcurrency: number | null
   indexedDB: boolean
   opfs: boolean
@@ -193,6 +195,7 @@ export function detectSync(): SyncCapabilities {
     wasm: typeof WebAssembly === 'object' && typeof WebAssembly.validate === 'function',
     crossOriginIsolated: typeof globalThis.crossOriginIsolated === 'boolean' ? globalThis.crossOriginIsolated : false,
     sharedArrayBuffer: typeof SharedArrayBuffer !== 'undefined',
+    workers: typeof Worker !== 'undefined',
     hardwareConcurrency: nav?.hardwareConcurrency ?? null,
     indexedDB: typeof indexedDB !== 'undefined',
     opfs: has(nav?.storage, 'getDirectory'),
@@ -282,6 +285,7 @@ export function formatReport(caps: Capabilities): string {
   row('wasmThreads', caps.asyncResolved ? caps.wasmThreads : 'pending')
   row('crossOriginIsolated', caps.crossOriginIsolated)
   row('sharedArrayBuffer', caps.sharedArrayBuffer)
+  row('workers', caps.workers)
   row('hardwareConcurrency', caps.hardwareConcurrency ?? 'unknown')
   lines.push('')
   row('indexedDB', caps.indexedDB)
