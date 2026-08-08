@@ -487,8 +487,10 @@ async function main() {
       const sameSkips = scored.every((g) => g.medianSkipped === scored[0].medianSkipped)
       const field = sameSkips ? 'medianArcs' : 'medianObjective'
       const best = Math.min(...scored.map((g) => g[field]))
-      const bestObjective = Math.min(...scored.map((g) => g.medianObjective))
-      for (const g of scored) if (g.medianObjective === bestObjective) wins[g.engine]++
+      // Won on the SAME field the row is measured in. Counting wins on the raw
+      // objective while printing gaps on travel cost let an engine be credited
+      // with a win on a row where it visibly trails.
+      for (const g of scored) if (g[field] === best) wins[g.engine]++
       const cells = ENGINE_LIST.map((e) => {
         const run = group.find((g) => g.engine === e)
         if (!run || run.medianObjective === null) return 'FAILED'.padStart(14)

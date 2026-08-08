@@ -1,0 +1,275 @@
+{
+  "generatedAt": "2026-08-08T17:17:37.270Z",
+  "budgetMs": 1000,
+  "engines": [
+    "ts",
+    "ts-workers",
+    "ortools"
+  ],
+  "rows": [
+    {
+      "instance": "berlin52",
+      "n": 52,
+      "optimum": 7542,
+      "engines": {
+        "ts": {
+          "tour": 7542,
+          "gap": 0,
+          "wallMs": 543
+        },
+        "ts-workers": {
+          "tour": 7542,
+          "gap": 0,
+          "wallMs": 496
+        },
+        "ortools": {
+          "tour": 7542,
+          "gap": 0,
+          "wallMs": 1849
+        }
+      }
+    },
+    {
+      "instance": "eil51",
+      "n": 51,
+      "optimum": 426,
+      "engines": {
+        "ts": {
+          "tour": 427,
+          "gap": 0.235,
+          "wallMs": 907
+        },
+        "ts-workers": {
+          "tour": 426,
+          "gap": 0,
+          "wallMs": 832
+        },
+        "ortools": {
+          "tour": 434,
+          "gap": 1.878,
+          "wallMs": 1663
+        }
+      }
+    },
+    {
+      "instance": "st70",
+      "n": 70,
+      "optimum": 675,
+      "engines": {
+        "ts": {
+          "tour": 680,
+          "gap": 0.741,
+          "wallMs": 1000
+        },
+        "ts-workers": {
+          "tour": 675,
+          "gap": 0,
+          "wallMs": 972
+        },
+        "ortools": {
+          "tour": 683,
+          "gap": 1.185,
+          "wallMs": 1661
+        }
+      }
+    },
+    {
+      "instance": "eil76",
+      "n": 76,
+      "optimum": 538,
+      "engines": {
+        "ts": {
+          "tour": 538,
+          "gap": 0,
+          "wallMs": 1000
+        },
+        "ts-workers": {
+          "tour": 538,
+          "gap": 0,
+          "wallMs": 1001
+        },
+        "ortools": {
+          "tour": 546,
+          "gap": 1.487,
+          "wallMs": 1767
+        }
+      }
+    },
+    {
+      "instance": "pr76",
+      "n": 76,
+      "optimum": 108159,
+      "engines": {
+        "ts": {
+          "tour": 108159,
+          "gap": 0,
+          "wallMs": 999
+        },
+        "ts-workers": {
+          "tour": 108159,
+          "gap": 0,
+          "wallMs": 981
+        },
+        "ortools": {
+          "tour": 108159,
+          "gap": 0,
+          "wallMs": 1621
+        }
+      }
+    },
+    {
+      "instance": "rat99",
+      "n": 99,
+      "optimum": 1211,
+      "engines": {
+        "ts": {
+          "tour": 1211,
+          "gap": 0,
+          "wallMs": 999
+        },
+        "ts-workers": {
+          "tour": 1211,
+          "gap": 0,
+          "wallMs": 1119
+        },
+        "ortools": {
+          "tour": 1213,
+          "gap": 0.165,
+          "wallMs": 1809
+        }
+      }
+    },
+    {
+      "instance": "kroA100",
+      "n": 100,
+      "optimum": 21282,
+      "engines": {
+        "ts": {
+          "tour": 21282,
+          "gap": 0,
+          "wallMs": 1000
+        },
+        "ts-workers": {
+          "tour": 21282,
+          "gap": 0,
+          "wallMs": 1172
+        },
+        "ortools": {
+          "tour": 21305,
+          "gap": 0.108,
+          "wallMs": 1634
+        }
+      }
+    },
+    {
+      "instance": "eil101",
+      "n": 101,
+      "optimum": 629,
+      "engines": {
+        "ts": {
+          "tour": 629,
+          "gap": 0,
+          "wallMs": 1000
+        },
+        "ts-workers": {
+          "tour": 629,
+          "gap": 0,
+          "wallMs": 1160
+        },
+        "ortools": {
+          "tour": 646,
+          "gap": 2.703,
+          "wallMs": 1817
+        }
+      }
+    },
+    {
+      "instance": "ch150",
+      "n": 150,
+      "optimum": 6528,
+      "engines": {
+        "ts": {
+          "tour": 6549,
+          "gap": 0.322,
+          "wallMs": 1000
+        },
+        "ts-workers": {
+          "tour": 6528,
+          "gap": 0,
+          "wallMs": 1216
+        },
+        "ortools": {
+          "tour": 6549,
+          "gap": 0.322,
+          "wallMs": 1897
+        }
+      }
+    },
+    {
+      "instance": "kroA150",
+      "n": 150,
+      "optimum": 26524,
+      "engines": {
+        "ts": {
+          "tour": 26525,
+          "gap": 0.004,
+          "wallMs": 1004
+        },
+        "ts-workers": {
+          "tour": 26524,
+          "gap": 0,
+          "wallMs": 1139
+        },
+        "ortools": {
+          "tour": 27409,
+          "gap": 3.337,
+          "wallMs": 2091
+        }
+      }
+    },
+    {
+      "instance": "tsp225",
+      "n": 225,
+      "optimum": 3916,
+      "engines": {
+        "ts": {
+          "tour": 3972,
+          "gap": 1.43,
+          "wallMs": 1004
+        },
+        "ts-workers": {
+          "tour": 3940,
+          "gap": 0.613,
+          "wallMs": 1079
+        },
+        "ortools": {
+          "tour": 4036,
+          "gap": 3.064,
+          "wallMs": 2358
+        }
+      }
+    },
+    {
+      "instance": "a280",
+      "n": 280,
+      "optimum": 2579,
+      "engines": {
+        "ts": {
+          "tour": 2649,
+          "gap": 2.714,
+          "wallMs": 1004
+        },
+        "ts-workers": {
+          "tour": 2603,
+          "gap": 0.931,
+          "wallMs": 1075
+        },
+        "ortools": {
+          "tour": 2688,
+          "gap": 4.226,
+          "wallMs": 3584
+        }
+      }
+    }
+  ]
+}

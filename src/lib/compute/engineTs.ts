@@ -257,6 +257,14 @@ export class Search {
     return this.cost() + this.skipPenalty * skipped
   }
 
+  /** True when some optional stop is being skipped — i.e. the cap binds. */
+  hasAbsentCandidates(): boolean {
+    for (let node = 0; node < this.n; node++) {
+      if (this.optional[node] === 1 && this.pos[node] === -1) return true
+    }
+    return false
+  }
+
   /** How many optional nodes the route currently visits. */
   private optionalVisited(): number {
     let count = 0
@@ -695,6 +703,84 @@ export class Search {
   }
 
   /**
+   * Ruin and recreate: tear a chunk out of the route and rebuild it, seeded
+   * with one stop chosen at random from those currently left out.
+   *
+   * ── Why a reordering perturbation is not enough ───────────────────────────
+   *
+   * When K binds, the hard question is not the order of the stops — it is WHICH
+   * stops. A double bridge cannot answer it: it permutes what is already in the
+   * route and never brings anything in from outside.
+   *
+   * Nor can the 1-for-1 swap in `selectionPass`. The benchmark's `decoy` family
+   * is built from exactly that observation: a ring of cheap stops near the start
+   * and the valuable payload in a dense cluster 18 km away. Trading ONE ring
+   * stop for ONE cluster stop is steeply uphill — you pay the whole 18 km
+   * detour to gain one delivery — so every single swap is rejected and the
+   * route stays in the ring. You have to move a dozen stops at once, and no
+   * sequence of individually-improving moves will take you there. Measured, on
+   * the decoy family, that cost us up to 18% against OR-Tools.
+   *
+   * ── The escape ───────────────────────────────────────────────────────────
+   *
+   * Remove a contiguous run, then force ONE random absent stop in before
+   * greedily refilling. The forced stop is the whole trick: a greedy refill on
+   * its own just puts the cheap ring straight back, but once a single cluster
+   * stop is in the route, its neighbours are cheap to add and the greedy fill
+   * follows it across the map. Most attempts are wasted; that is fine, because
+   * an attempt costs microseconds and the driver only needs one to land.
+   */
+  ruinAndRecreate(rng: () => number): void {
+    const removable: number[] = []
+    for (let p = this.lo; p <= this.hi && p < this.length; p++) {
+      if (this.optional[this.tour[p]] === 1) removable.push(p)
+    }
+    if (removable.length === 0) return
+
+    // A contiguous run, because the stops that should leave together are the
+    // ones that are near each other, and adjacency in the route is the cheapest
+    // available proxy for that.
+    const span = Math.max(1, Math.round(removable.length * (0.15 + rng() * 0.35)))
+    const from = Math.floor(rng() * Math.max(1, removable.length - span))
+    for (let i = Math.min(from + span, removable.length) - 1; i >= from; i--) {
+      this.removeAt(removable[i])
+    }
+
+    // The forced seed.
+    const absent: number[] = []
+    for (let node = 0; node < this.n; node++) {
+      if (this.optional[node] === 1 && this.pos[node] === -1) absent.push(node)
+    }
+    if (absent.length > 0 && this.optionalVisited() < this.cap) {
+      const seed = absent[Math.floor(rng() * absent.length)]
+      this.insertAt(seed, this.bestInsertion(seed).at)
+    }
+
+    this.greedyRefill()
+  }
+
+  /** Fill to the cap, cheapest insertion first, from whatever is still out. */
+  private greedyRefill(): void {
+    for (;;) {
+      if (this.optionalVisited() >= this.cap) return
+      let bestNode = -1
+      let bestAt = 0
+      let bestCost = Infinity
+      for (let node = 0; node < this.n; node++) {
+        if (this.optional[node] !== 1 || this.pos[node] !== -1) continue
+        const { at, cost } = this.bestInsertion(node)
+        if (cost < bestCost) {
+          bestCost = cost
+          bestNode = node
+          bestAt = at
+        }
+      }
+      if (bestNode < 0) return
+      this.insertAt(bestNode, bestAt)
+    }
+  }
+
+  /**
    * Rebuild from a shuffled offer order — a genuine restart, not a nudge.
    *
    * A double bridge explores the basin around one solution. When that basin is
@@ -830,6 +916,10 @@ export class TsEngine implements SolverEngine {
     const BARREN_RESTARTS = 3
     let sinceImprovement = 0
     let barrenRestarts = 0
+    // How far uphill the walk may drift. Zero unless the K cap binds — see the
+    // acceptance branch below for why.
+    const drift = search.hasAbsentCandidates() ? 0.02 : 0
+    let currentObjective = bestObjective
 
     while (Date.now() < deadline && barrenRestarts < BARREN_RESTARTS) {
       if (signal?.aborted) throw abortError()
@@ -840,7 +930,25 @@ export class TsEngine implements SolverEngine {
         sinceImprovement = 0
         barrenRestarts++
       } else {
-        search.doubleBridge(rng)
+        /*
+          Two perturbations, and which one matters depends entirely on whether
+          the K cap binds.
+
+          Visit-all (the default since M9): every stop is in the route, ruin and
+          recreate can only put back what it took out, and the double bridge is
+          the whole game.
+
+          K binding: the expensive question is WHICH stops, and the double
+          bridge cannot answer it — it only ever permutes what is already there.
+          So the two alternate, and ruin-and-recreate gets the larger share
+          precisely when there is something outside the route to bring in.
+        */
+        const canReselect = search.hasAbsentCandidates()
+        if (canReselect && rng() < 0.5) {
+          search.ruinAndRecreate(rng)
+        } else {
+          search.doubleBridge(rng)
+        }
         search.localSearch(deadline)
       }
       iterations++
@@ -849,13 +957,36 @@ export class TsEngine implements SolverEngine {
       if (objective < bestObjective - 1e-9) {
         bestObjective = objective
         best = search.snapshot()
+        currentObjective = objective
         sinceImprovement = 0
         barrenRestarts = 0
+      } else if (objective < currentObjective * (1 + drift)) {
+        /*
+          Accept a slightly worse route and keep walking from it.
+
+          Strict descent cannot solve the selection problem, and the benchmark
+          proved it: on the decoy family both TS engines returned IDENTICAL
+          routes from different seeds, which is what "every seed falls into the
+          same trap" looks like. Ruin-and-recreate seeds one far-cluster stop,
+          that single stop costs a whole 18 km detour to gain one delivery, the
+          route is instantly worse, and restoring the best throws it away before
+          its neighbours — the entire point of going there — can be added.
+
+          Reaching the cluster needs several consecutive moves that each look
+          like a loss. So a small uphill drift is allowed, and `best` is kept
+          separately so nothing found is ever lost.
+
+          The drift is ZERO when every stop is being visited. With nothing left
+          out there is no selection to revise, wandering buys nothing, and the
+          instances that already win should not pay for a problem they do not
+          have.
+        */
+        currentObjective = objective
+        sinceImprovement++
       } else {
         sinceImprovement++
-        // Wandering away from the best solution wastes the budget, so the walk
-        // always resumes from it rather than from wherever it drifted to.
         search.restore(best)
+        currentObjective = bestObjective
       }
 
       report(false)
