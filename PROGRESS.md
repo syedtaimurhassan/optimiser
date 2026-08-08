@@ -829,3 +829,145 @@ milestone. Teal is 4.18:1 and marginal for the same reason.
    device, that function is wrong about that device's font metrics.
 6. **`SCHEMA_VERSION` is still 4.** M5 persisted no new field; `sheetSnap` and
    `setupOpen` are transient `uiStore` state deliberately.
+
+## M6 — Addresses: geocoding, the unified search screen, and the importer
+
+The milestone that turns a coordinate into a place. Everything before this
+worked on `{lat, lng}`; a stop now knows what it is called, and the screens
+that were scaffolding in M5 have something real behind them.
+
+### What changed
+
+- **`lib/geocoding/`** — a provider seam, two adapters, an IndexedDB cache and
+  a service that composes them. Nothing above it names a provider.
+- **The unified search screen** — one field, two sections, no mode switch.
+  Existing stops render with the *identical* `StopRow` the route list uses.
+- **Add by map pin**, with a fixed centre pin and reverse geocoding on
+  `moveend`.
+- **The empty-route state**, and **copy stops from a past route**.
+- **The importer** now reads addresses, recipients and notes, and accepts
+  CSV/TSV/XLSX/JSON.
+- `SCHEMA_VERSION` 4 → 5 (`geocache` store). Additive; no migrate.ts entry.
+
+### The provider decision, and the axis that actually decided it
+
+The brief asked about CORS, quotas and referrer restriction. Those all mattered
+less than a question that was not on the list: **may we store the result
+permanently?** This app persists an address onto a stop forever, and that single
+fact eliminated most of the field before price was even considered —
+
+| Provider | Storage rule | |
+|---|---|---|
+| Google Places | lat/lng cacheable 30 days; only `place_id` indefinitely | ❌ |
+| Mapbox | temporary use only; permanent is a paid tier | ❌ |
+| HERE / TomTom | 30-day cache; "no derivative databases" | ❌ |
+| Stadia | permanent storage needs a paid plan; 7-day client cache cap | ❌ |
+| Geoapify / LocationIQ / Photon | permitted (OSM-derived) | ✅ |
+
+Stadia was the painful loss: domain-based auth means **no key in the bundle at
+all**, 200k credits/month, and `basemap.ts` already lists it as the tile
+fallback, so one property registration would have served both. Its free plan
+forbids permanently storing results, which is precisely what we do.
+
+The two suspected disqualifiers were confirmed. Nominatim's policy names our
+exact use case — *"Auto-complete search … you must not implement such a service
+on the client side using the API."* ORS is weaker: the ToS renders as an empty
+shell to a fetcher, and the only evidence is a maintainer answering our exact
+question with *"If you don't want to expose it to the user, that is correct."*
+Guidance, not a quoted prohibition — unusable for us either way.
+
+Geoapify won on a detail worth more than the quota: it returns `address_line1`
+and `address_line2`, which is exactly the title/subtitle split `types.ts` was
+already designed around. We store the provider's own answer instead of parsing
+`formatted`.
+
+### 🔴 The key is unrestricted, and the design leans on that
+
+The Geoapify dashboard offered no way to restrict the key, so it ships in the
+bundle usable by anyone. Verified: a forged referrer from an unrelated domain
+returns 200. **This is an accepted risk, not an oversight**, and three things
+compensate:
+
+- the free tier has no billing overage, so an abused key degrades, never bills;
+- min query length, a 350ms debounce, a 30-day cache and in-flight coalescing
+  keep our own consumption low;
+- **Photon needs no key**, so exhaustion is survivable rather than fatal.
+
+That last point is why the fallback is load-bearing rather than decorative. If
+key restriction ever becomes available, apply it — that removes the only reason
+any of the above has to be true.
+
+### What live testing caught that unit tests could not
+
+Three things, all found by pointing the real adapters at the real APIs:
+
+1. **Photon throttles with 503, not 429**, and readily — firing an autocomplete
+   and a reverse back to back earns one. Added a shared 1.1 req/s limiter to
+   respect its documented policy, and classified 503 as `rateLimited`.
+2. **Geoapify reports Danish municipalities as `city`** — "Gladsaxe
+   Municipality" where a driver says "Bagsværd". `suburb` is now preferred.
+3. **Geoapify exposes no rate-limit headers at all**, so status codes are the
+   only signal a limiter could use.
+
+A fourth came from the M5 smoke suite: focusing search set `searchOpen` and
+nothing cleared it, so dragging the sheet down left the route list replaced by
+a search screen whose field was no longer visible. The way out had scrolled
+away. Leaving the expanded detents now exits search.
+
+### Where we deliberately diverge from Spoke
+
+- **No scan/mic icons inside the field.** Spoke has the same two verbs twice on
+  one screen, with the inline pair outside the thumb's reach. Tiles only.
+- **The discard dialog is un-inverted.** Spoke makes the filled, thumb-nearest
+  button the one that discards, and phrases it as a double negative ("Don't add
+  stop?" / "Don't add stop"). Ours: *"Discard this stop?"*, filled **Keep
+  editing**, text **Discard**. `ConfirmDialog` gained an opt-in `protective`
+  tone; every existing caller keeps the destructive default.
+- **A Paste tile Spoke lacks.** Four tiles in a 2×2 grid rather than
+  `ActionRow3Up`, whose own docstring says a fourth item would shrink the
+  targets — that reasoning does not stop being true because we wanted another
+  verb.
+
+### Verified
+
+- 348 unit tests pass; `lint` and `build` clean.
+- **58/58 M5 smoke checks pass in Chromium**, including new M6 assertions: the
+  D7 parcel lookup, the ASCII-to-Danish fold, and Cancel restoring the list.
+- Both adapters exercised against live APIs — autocomplete and reverse.
+- The importer end to end: Danish headers, a phone folded into notes, a blank
+  row reported by line, a nonsense address correctly unmatched, and a TSV of
+  coordinates importing with **zero** lookups.
+
+### Deferred
+
+- **Scan and Voice** are present as tiles announced "Coming soon" — M13, as
+  specified.
+- **`details()` is a no-op.** Both providers return coordinates straight from
+  autocomplete, so neither implements it. The seam exists for a provider that
+  bills a separate details call.
+- **No XLSX round-trip test against a real file.** The XML parsing is tested
+  against hand-written fixtures; the ZIP reader is not, because generating a
+  real .xlsx in a Node test needs the dependency the reader exists to avoid.
+- **Desktop is still untouched** — the sidebar has no search.
+- ETAs still absent (M7); amber/teal chip contrast; cross-origin isolation.
+
+### What the next session needs to know
+
+1. **The key is public and unrestricted.** Treat the quota as a shared, hostile
+   resource. Before adding any geocoding call, ask what stops it firing per
+   keystroke — `service.ts` is where that policy lives, not the components.
+2. **`lib/searchScreen.ts` owns matching.** The Danish folding is not
+   decoration: `ø` and `æ` have no canonical decomposition, so NFD alone leaves
+   a Danish route unsearchable from an ASCII keyboard. Extend the fold map, not
+   the components.
+3. **`addStops` now takes `NewStopInput[]`** (`LatLng & { address? }`). Bare
+   `LatLng[]` still type-checks, so M1 callers are unaffected.
+4. **The bench seeders no longer name a DB version.** They broke on the 4 → 5
+   bump; opening without one keeps the harness unpinned from any release.
+   Don't reintroduce a literal.
+5. **`AddByPin` must render inside `MapControllerContext`** — it reads the
+   camera. That is why it lives in `MapComponent` and is driven by a store flag
+   rather than a prop.
+6. **`DEFAULT_TTL_MS` in the cache is a licence decision**, not a performance
+   one. 30 days is defensible under Geoapify + the OSMF guideline; LocationIQ's
+   free plan would cap it at 48 hours.
