@@ -20,6 +20,8 @@ import {
   type SnapOffsets,
 } from '../../lib/sheetSnap'
 import { buildRouteRows, nextStopRowIndex } from '../../lib/routeList'
+import { liveEta } from '../../lib/arrivals'
+import { useNowTicker } from '../../hooks/useNowTicker'
 import { searchPlaceholder } from '../../lib/searchScreen'
 import { selectActiveRoute, useRoutesStore } from '../../store/routesStore'
 import { useUiStore } from '../../store/uiStore'
@@ -119,7 +121,27 @@ export function RouteSheet({ pages, pageIndex }: RouteSheetProps) {
   // need them: the list renders them, and the jump FAB needs to know whether
   // there is a next stop to jump to. Building them twice would be building
   // 300 rows twice.
-  const rows = useMemo(() => (route ? buildRouteRows({ route }) : []), [route])
+  /*
+    ETAs, computed ONCE per tick and shared.
+
+    The rows want them, the stop card wants them, and computing them twice
+    would anchor the two to two different instants — so a row could read 16:03
+    while the card for the same stop read 16:04. The ticker is the same one the
+    finish pill uses, so every clock on the screen moves together.
+  */
+  const nowMs = useNowTicker()
+  const etaByStopId = useMemo(
+    () =>
+      route?.optimized
+        ? liveEta({ optimized: route.optimized, stops: route.stops, nowMs }).byStopId
+        : undefined,
+    [route, nowMs],
+  )
+
+  const rows = useMemo(
+    () => (route ? buildRouteRows({ route, etaByStopId }) : []),
+    [route, etaByStopId],
+  )
   const nextIndex = useMemo(() => nextStopRowIndex(rows), [rows])
 
   // Routes worth offering as a copy source. Computed here rather than inside
@@ -506,7 +528,7 @@ export function RouteSheet({ pages, pageIndex }: RouteSheetProps) {
             is a fixed frame and the cards move inside it, which is only true
             if they are the sheet's content.
           */
-          <StopPages route={route} pages={pages} index={pageIndex} />
+          <StopPages route={route} pages={pages} index={pageIndex} etaByStopId={etaByStopId} />
         ) : searchActive ? (
           <SearchScreen
             query={searchQuery}

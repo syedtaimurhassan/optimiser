@@ -236,8 +236,26 @@ export interface OptimizedRoute {
    * Endpoints that are not themselves stops contribute a `null`.
    */
   orderedStopIds: (string | null)[]
-  /** Arrival time per entry of `orderedStopIds`, seconds from route start. */
+  /**
+   * Arrival time per entry of `orderedStopIds`, seconds from ROUTE START.
+   *
+   * Relative, not a wall clock, and deliberately so: a route solved at 08:00
+   * and opened at 14:00 has not changed shape, only when it is happening. The
+   * clock is computed at render time by `lib/arrivals.ts`, which anchors the
+   * plan to where the driver actually is.
+   */
   arrivalSec: number[]
+
+  /**
+   * Per-leg driving seconds and metres for the ordered point list.
+   *
+   * Length is `orderedStopIds.length - 1` — one entry per consecutive pair.
+   * OSRM returns these on every route response and M2's pipeline threw them
+   * away; they are what makes an arrival time real rather than a share of a
+   * total. Optional because a route solved before M7 has neither.
+   */
+  legSeconds?: number[]
+  legMeters?: number[]
 
   /** GeoJSON LineString of the driving route geometry ([lng, lat] pairs). */
   geometry: LineString

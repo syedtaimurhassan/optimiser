@@ -124,28 +124,48 @@ describe('the gutter sequence', () => {
 })
 
 describe('ETAs', () => {
-  test('there is none until the pipeline produces arrivals', () => {
+  /**
+   * M7 changed where an ETA comes from.
+   *
+   * It used to be derived here, by reading `arrivalSec` as seconds from
+   * midnight — which it never was. Arrivals are seconds from the ROUTE'S
+   * start, so turning one into a clock needs to know when the driver actually
+   * is, and that is not a question a pure row-builder can answer.
+   *
+   * So `lib/arrivals.liveEta` computes the map — anchored to where the round
+   * has got to — and this function is handed it. The positional join across
+   * the endpoint nulls that this block used to guard now lives there, with its
+   * own test.
+   */
+  test('there is none until the caller supplies arrivals', () => {
     const rows = stopRows(buildRouteRows({ route: route({ stops: [stop('a')] }) }))
     assert.equal(rows[0].eta, null)
   })
 
-  /**
-   * `arrivalSec` is positional against `orderedStopIds` INCLUDING its nulls.
-   * Zipping it against the filtered stop list instead would shift every
-   * arrival by the number of endpoints and hand each stop its neighbour's
-   * time — a bug that looks like a plausible ETA, which is the worst kind.
-   */
-  test('arrivals are joined by index across the endpoint nulls', () => {
+  test('a supplied arrival lands on the row it belongs to', () => {
     const stops = [stop('a'), stop('b')]
+    const at = (h: number, m: number) => new Date(2026, 7, 8, h, m).getTime()
     const rows = stopRows(
       buildRouteRows({
-        route: route({
-          stops,
-          optimized: solved([null, 'a', 'b', null], [0, 9 * 3600, 9.5 * 3600, 10 * 3600]),
-        }),
+        route: route({ stops, optimized: solved([null, 'a', 'b', null], [0, 1, 2, 3]) }),
+        etaByStopId: new Map([
+          ['a', at(9, 0)],
+          ['b', at(9, 30)],
+        ]),
       }),
     )
     assert.deepEqual(rows.map((r) => r.eta), ['09:00', '09:30'])
+  })
+
+  test('a stop with no arrival keeps a null rather than borrowing a neighbour\'s', () => {
+    const stops = [stop('a'), stop('b')]
+    const rows = stopRows(
+      buildRouteRows({
+        route: route({ stops, optimized: solved([null, 'a', 'b', null], [0, 1, 2, 3]) }),
+        etaByStopId: new Map([['b', new Date(2026, 7, 8, 9, 30).getTime()]]),
+      }),
+    )
+    assert.deepEqual(rows.map((r) => r.eta), [null, '09:30'])
   })
 })
 

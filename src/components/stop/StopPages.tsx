@@ -3,6 +3,8 @@ import { useLocation } from 'wouter'
 import type { Route } from '../../types'
 import type { StopPage } from '../../lib/stopPages'
 import { formatLatLng } from '../../lib/coordinates'
+import { clockAt } from '../../lib/routeSummary'
+import { liveEta } from '../../lib/arrivals'
 import { googleMapsSearchUrl } from '../../lib/googleMaps'
 import { useRoutesStore } from '../../store/routesStore'
 import { useUiStore } from '../../store/uiStore'
@@ -33,9 +35,11 @@ export interface StopPagesProps {
   route: Route
   pages: StopPage[]
   index: number
+  /** Predicted arrivals, epoch ms, computed once by the sheet and shared. */
+  etaByStopId?: ReadonlyMap<string, number>
 }
 
-export function StopPages({ route, pages, index }: StopPagesProps) {
+export function StopPages({ route, pages, index, etaByStopId }: StopPagesProps) {
   const [, navigate] = useLocation()
   /**
    * The stop whose reason sheet is open.
@@ -87,9 +91,7 @@ export function StopPages({ route, pages, index }: StopPagesProps) {
         return (
           <EndLocationCard
             title={endTitle(route)}
-            // Real arrivals land later in this milestone; until then the line
-            // reads "End location" alone rather than inventing a time.
-            arrival={null}
+            arrival={endArrival(route, etaByStopId)}
             completed={route.status === 'completed'}
             onClose={close}
             onNavigate={() => openNavigation(page.point)}
@@ -104,7 +106,7 @@ export function StopPages({ route, pages, index }: StopPagesProps) {
           position={page.position}
           total={page.total}
           groups={route.groups}
-          etaMs={null}
+          etaMs={etaByStopId?.get(page.stop.id) ?? null}
           onClose={close}
           onNavigate={() => openNavigation({ lat: page.stop.lat, lng: page.stop.lng })}
           onSetStatus={(status) => {
@@ -127,6 +129,7 @@ export function StopPages({ route, pages, index }: StopPagesProps) {
     },
     [
       route,
+      etaByStopId,
       close,
       setStopStatus,
       setReasonStopId,
@@ -202,6 +205,22 @@ function openNavigation(point: { lat: number; lng: number }): void {
  * you started" and "end at the depot" both look like), borrow its address
  * rather than showing a driver two numbers.
  */
+/**
+ * "17:07" on the end page.
+ *
+ * The finish is the LAST arrival in the plan, which is the end location's own
+ * — so it is read from `liveEta` rather than from the per-stop map, which by
+ * construction only contains stops.
+ */
+function endArrival(
+  route: Route,
+  etaByStopId: ReadonlyMap<string, number> | undefined,
+): string | null {
+  if (!route.optimized || !etaByStopId) return null
+  const { finishMs } = liveEta({ optimized: route.optimized, stops: route.stops, nowMs: Date.now() })
+  return finishMs === null ? null : clockAt(finishMs)
+}
+
 function endTitle(route: Route): string {
   const end = route.end
   if (!end) return 'End location'

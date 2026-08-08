@@ -23,10 +23,17 @@ interface OsrmTableResponse {
 /** What the optimizer minimizes: driving time or road distance. */
 export type Objective = 'duration' | 'distance'
 
+interface OsrmLeg {
+  distance: number
+  duration: number
+}
+
 interface OsrmRoute {
   geometry: LineString
   distance: number
   duration: number
+  /** One per consecutive pair of the coordinates we asked about. */
+  legs?: OsrmLeg[]
 }
 
 interface OsrmRouteResponse {
@@ -40,6 +47,17 @@ export interface RouteGeometry {
   geometry: LineString
   distanceMeters: number
   durationSeconds: number
+  /**
+   * Per-leg driving seconds and metres — one entry per consecutive pair of the
+   * points we asked about.
+   *
+   * OSRM returns these on every route response and this adapter used to drop
+   * them. They are the difference between a real arrival time and a share of a
+   * total. Empty when the response's leg count disagrees with what we asked
+   * for, because a mismatched array silently shifts every arrival by one stop.
+   */
+  legSeconds: number[]
+  legMeters: number[]
 }
 
 /** The public OSRM Table service rejects a request for more than this many
@@ -176,9 +194,15 @@ export async function fetchRouteGeometry(
   }
 
   const route = data.routes[0]
+  const legs = Array.isArray(route.legs) ? route.legs : []
+  const expected = points.length - 1
+  const usable = legs.length === expected
+
   return {
     geometry: route.geometry,
     distanceMeters: route.distance,
     durationSeconds: route.duration,
+    legSeconds: usable ? legs.map((leg) => leg.duration) : [],
+    legMeters: usable ? legs.map((leg) => leg.distance) : [],
   }
 }

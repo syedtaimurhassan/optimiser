@@ -32,12 +32,19 @@ const sameCoord = (a: LatLng, b: LatLng) => a.lat === b.lat && a.lng === b.lng
 /**
  * What the pipeline can produce on its own.
  *
- * `orderedStopIds` and `arrivalSec` are M2 fields this pipeline cannot fill: it
- * is handed bare coordinates and never sees stop identity. The caller joins the
- * result back to stops and supplies them. Teaching the pipeline about stops is
- * M7's job, alongside the solver work — M2 deliberately leaves it alone.
+ * `orderedStopIds` and `arrivalSec` are the two fields it cannot fill: it is
+ * handed bare coordinates and never sees stop identity, and an arrival time
+ * needs the service time at each stop. The caller joins the result back to
+ * stops and supplies both.
+ *
+ * `legSeconds` and `legMeters` ARE produced here — M7 stopped throwing away
+ * what OSRM already returns, because per-leg times are what make an arrival
+ * real rather than a share of a total.
  */
-export type PlannedRoute = Omit<OptimizedRoute, 'orderedStopIds' | 'arrivalSec'>
+export type PlannedRoute = Omit<OptimizedRoute, 'orderedStopIds' | 'arrivalSec'> & {
+  legSeconds: number[]
+  legMeters: number[]
+}
 
 /**
  * Full pipeline (all in-browser):
@@ -101,10 +108,15 @@ export async function planSelectiveRoute({
   const visited = await solveSelectiveTSP(matrix, { startNode, endNode, k, timeBudgetMs })
   const orderedWaypoints = visited.map((i) => points[i])
 
-  // Real cost along the chosen route (sum of matrix cells).
+  // Real cost along the chosen route (sum of matrix cells), and the per-leg
+  // costs it is made of — which are the fallback for arrival times when the
+  // road router is unreachable.
   let matrixCost = 0
+  const matrixLegs: number[] = []
   for (let i = 0; i < visited.length - 1; i++) {
-    matrixCost += matrix[visited[i]][visited[i + 1]]
+    const cell = matrix[visited[i]][visited[i + 1]]
+    matrixLegs.push(cell)
+    matrixCost += cell
   }
 
   // 3) Best-effort real road geometry for the chosen sequence.
@@ -116,6 +128,8 @@ export async function planSelectiveRoute({
       geometry: road.geometry,
       distanceMeters: road.distanceMeters,
       durationSeconds: road.durationSeconds,
+      legSeconds: road.legSeconds,
+      legMeters: road.legMeters,
       candidatesVisited: orderedWaypoints.length - fixedCount,
       candidatesTotal: candidates.length,
       estimated: false,
@@ -123,9 +137,12 @@ export async function planSelectiveRoute({
   } catch {
     // Fallback: straight-line geometry + haversine distance. Duration is the
     // real matrix sum only when we optimized on duration; otherwise estimate.
+    const straightLegs: number[] = []
     let straightMeters = 0
     for (let i = 0; i < orderedWaypoints.length - 1; i++) {
-      straightMeters += haversine(orderedWaypoints[i], orderedWaypoints[i + 1])
+      const metres = haversine(orderedWaypoints[i], orderedWaypoints[i + 1])
+      straightLegs.push(metres)
+      straightMeters += metres
     }
     const geometry: LineString = {
       type: 'LineString',
@@ -136,6 +153,12 @@ export async function planSelectiveRoute({
       geometry,
       distanceMeters: objective === 'distance' ? matrixCost : straightMeters,
       durationSeconds: objective === 'duration' ? matrixCost : straightMeters / 8,
+      // The matrix legs ARE seconds when we optimised on duration — that is
+      // what the matrix holds. Optimising on distance leaves no time source at
+      // all, so the arrival times fall back to a crude 8 m/s rather than
+      // pretending metres are seconds.
+      legSeconds: objective === 'duration' ? matrixLegs : straightLegs.map((m) => m / 8),
+      legMeters: objective === 'distance' ? matrixLegs : straightLegs,
       candidatesVisited: orderedWaypoints.length - fixedCount,
       candidatesTotal: candidates.length,
       estimated: true,

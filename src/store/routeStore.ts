@@ -4,6 +4,7 @@ import { useUiStore } from './uiStore'
 import type { AddressedStop, LatLng, Objective, OptimizedRoute, Favorite } from '../types'
 import { planSelectiveRoute } from '../lib/planRoute'
 import { warmUpSolver } from '../lib/solver'
+import { cumulativeArrivals, serviceSecFor } from '../lib/arrivals'
 
 /**
  * Compatibility facade over the M2 stores.
@@ -154,10 +155,29 @@ const ACTIONS = {
         const key = `${s.lat},${s.lng}`
         if (!byCoord.has(key)) byCoord.set(key, s.id)
       }
+      const orderedStopIds = result.orderedWaypoints.map(
+        (p) => byCoord.get(`${p.lat},${p.lng}`) ?? null,
+      )
+
+      /*
+        Arrival times, at last.
+
+        The pipeline knows the drive between each pair of points; only the
+        caller knows how long the driver stands at each one, because service
+        time is a property of a STOP and the pipeline never sees stops. So the
+        join happens here: `orderedStopIds` maps each ordered point back to its
+        stop, and an endpoint that is not a stop costs nothing.
+      */
+      const byId = new Map(pending.map((s) => [s.id, s]))
+      const serviceSeconds = orderedStopIds.map((id) => {
+        const stop = id ? byId.get(id) : undefined
+        return stop ? serviceSecFor(stop) : 0
+      })
+
       const optimized: OptimizedRoute = {
         ...result,
-        orderedStopIds: result.orderedWaypoints.map((p) => byCoord.get(`${p.lat},${p.lng}`) ?? null),
-        arrivalSec: [],
+        orderedStopIds,
+        arrivalSec: cumulativeArrivals({ legSeconds: result.legSeconds, serviceSeconds }),
       }
 
       state.setOptimized(optimized)

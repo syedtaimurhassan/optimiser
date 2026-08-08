@@ -1,25 +1,26 @@
 import type { AddressedStop, OptimizedRoute } from '../types.ts'
+import { liveEta } from './arrivals.ts'
 
 /**
  * What is LEFT of the route — the three facts the summary strip states, and
  * the one the finish pill states.
  *
- * ── Read this before quoting the finish time ──────────────────────────────
+ * ── Two paths, and which one you get ──────────────────────────────────────
  *
- * The pipeline does not yet produce per-stop arrival times: `arrivalSec` is
- * still empty and filling it is M7's job. Until then the remaining drive is
- * approximated by scaling the solved TOTAL by the share of stops still
- * pending. That is a straight line through a curve — it ignores where in the
- * route the driver actually is, so it reads optimistically on a round whose
- * long legs come last.
+ * EXACT, when the route was solved with per-leg times: the finish is the last
+ * arrival in the plan, anchored to where the driver actually is, and the
+ * distance is the sum of the legs still to drive. `lib/arrivals.ts` owns that
+ * arithmetic.
  *
- * It is shown anyway because a rough finish time beats no finish time, and it
- * lives here rather than in the component because M5 puts the same number in
- * two places at once (the pill over the map, the strip on the sheet). Two
- * copies of an approximation drift, and two different finish times on one
- * screen is worse than one imperfect one.
+ * APPROXIMATE, for a route solved before M7 — `arrivalSec` is empty on those
+ * and always will be, because nothing re-solves a route to backfill it. The
+ * old estimate is kept for exactly that case: it scales the solved TOTAL by
+ * the share of stops still pending, which is a straight line through a curve
+ * and reads optimistically on a round whose long legs come last.
  *
- * M7 should REPLACE this with real arrivals, not refine it.
+ * Both live here rather than in a component because the same number appears in
+ * two places at once — the pill over the map and the strip on the sheet — and
+ * two different finish times on one screen is worse than one imperfect one.
  */
 
 export interface RemainingRoute {
@@ -48,20 +49,41 @@ export function remainingRoute({ stops, optimized, nowMs }: RemainingRouteInput)
     Number.isFinite(optimized.durationSeconds) &&
     Number.isFinite(optimized.distanceMeters)
 
-  if (!solved) {
+  if (!solved || !optimized) {
     return { finishClock: null, stopsLeft, metresLeft: null, estimated: false }
   }
 
-  // An empty route is "all of it left", not "none of it": a solved route with
-  // no stops at all still has its endpoints to drive between.
-  const share = stops.length > 0 ? stopsLeft / stops.length : 1
+  // The exact path. Available whenever the route was solved with per-leg
+  // times, which is every route solved from M7 on.
+  const live = liveEta({ optimized, stops, nowMs })
+  if (live.finishMs !== null) {
+    return {
+      finishClock: clockAt(live.finishMs),
+      stopsLeft,
+      metresLeft: live.metresLeft ?? optimized.distanceMeters * shareLeft(stops, stopsLeft),
+      estimated: Boolean(optimized.estimated),
+    }
+  }
 
+  // A route solved before M7 has no arrivals and never will. The old estimate,
+  // kept for exactly that case.
+  const share = shareLeft(stops, stopsLeft)
   return {
     finishClock: clockAt(nowMs + optimized.durationSeconds * share * 1000),
     stopsLeft,
     metresLeft: optimized.distanceMeters * share,
     estimated: Boolean(optimized.estimated),
   }
+}
+
+/**
+ * How much of the round is left, as a fraction.
+ *
+ * An empty route is "all of it left", not "none of it": a solved route with no
+ * stops at all still has its endpoints to drive between.
+ */
+function shareLeft(stops: readonly AddressedStop[], stopsLeft: number): number {
+  return stops.length > 0 ? stopsLeft / stops.length : 1
 }
 
 /** Epoch ms → "17:07" on the device's own clock, 24h, zero-padded. */

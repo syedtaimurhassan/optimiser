@@ -78,10 +78,17 @@ function seedRoute() {
     optimizeBy: 'duration',
     searchTierSec: 3,
     targetK: null,
+    // Real per-leg times, and the arrivals they produce: ten minutes between
+    // every point, a minute at every stop. An M7 route carries these; an
+    // earlier one does not, which is the case routeSummary still falls back for.
     optimized: {
       orderedWaypoints: [],
       orderedStopIds: [null, ...stops.map((s) => s.id), null],
-      arrivalSec: [],
+      legSeconds: Array.from({ length: stops.length + 1 }, () => 600),
+      legMeters: Array.from({ length: stops.length + 1 }, () => 4000),
+      arrivalSec: Array.from({ length: stops.length + 2 }, (_, i) =>
+        i === 0 ? 0 : i * 600 + (i - 1) * 60,
+      ),
       geometry: {
         type: 'LineString',
         coordinates: [[12.39, 55.59], ...stops.map((s) => [s.lng, s.lat]), [14.0, 57.5]],
@@ -796,6 +803,55 @@ async function main() {
     'but NOT with the group — groups are route-scoped and cannot travel',
     sticky.group === null,
     String(sticky.group),
+  )
+
+  // ────────────────────────────────────────────────── the arrival times
+  console.log('\n━━━ arrival times ━━━\n')
+
+  await page.goto(`${page.url().split('#')[0]}#/route/${route.id}/stop/stop-1`, {
+    waitUntil: 'load',
+  })
+  await page.waitForSelector(CURRENT + '[data-testid="stop-detail"]', { timeout: 10_000 })
+
+  const counter = (await page.textContent(CURRENT + '[data-testid="stop-counter"]')).trim()
+  check(
+    'the status line reads position, then ETA',
+    /^2\/300, \d{2}:\d{2}$/.test(counter),
+    counter,
+  )
+
+  /*
+    The one that proves it is anchored rather than invented: stop 2 is the
+    first pending stop (stop-0 is pending too, so it is the anchor), and the
+    plan puts stop 2 one leg plus one service beyond it. Ten minutes of drive,
+    one minute at the door, ten more — so 21 minutes from now, ±1 for the tick.
+  */
+  const minutesOut = await page.evaluate((text) => {
+    const [hh, mm] = text.split(', ')[1].split(':').map(Number)
+    const eta = new Date()
+    eta.setHours(hh, mm, 0, 0)
+    return Math.round((eta.getTime() - Date.now()) / 60000)
+  }, counter)
+  check(
+    'and the ETA is anchored to where the round has got to, not to its planned start',
+    Math.abs(minutesOut - 21) <= 1,
+    `${minutesOut} minutes out, expected 21`,
+  )
+
+  await page.goto(`${page.url().split('#')[0]}#/route/${route.id}/stop/end`, { waitUntil: 'load' })
+  await page.waitForSelector('[data-testid="end-detail"]', { timeout: 10_000 })
+  const endLine = (await page.textContent(CURRENT + '[data-testid="end-subtitle"]')).trim()
+  check(
+    'the end location states when the round finishes',
+    /^End location, \d{2}:\d{2}$/.test(endLine),
+    endLine,
+  )
+
+  const finishPill = (await page.textContent('[data-testid="finish-pill"]')).trim()
+  check(
+    'and the finish pill agrees with it — one number, not two',
+    endLine.endsWith(finishPill.replace(/[^0-9:]/g, '')),
+    `card "${endLine}" vs pill "${finishPill}"`,
   )
 
   // ─────────────────────────────────────────────── the route menu

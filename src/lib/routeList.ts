@@ -1,5 +1,5 @@
 import type { AddressedStop, Route, RouteBreak, StopGroup } from '../types.ts'
-import { formatEta } from './map/features.ts'
+import { clockAt } from './routeSummary.ts'
 import { visitOrder } from './routeOrder.ts'
 import { GROUP_COLORS, type GroupColorName } from './map/palette.ts'
 import { formatLatLng } from './coordinates.ts'
@@ -60,8 +60,15 @@ export type RouteRow =
 
 export interface RouteRowsInput {
   route: Route
-  /** Now, epoch ms — only used to date an ETA. Passed in so this stays pure. */
-  nowMs?: number
+  /**
+   * Predicted arrival per stop id, epoch ms — from `lib/arrivals.liveEta`.
+   *
+   * Passed in rather than computed here for two reasons: it depends on NOW, so
+   * computing it inside would make this function impure; and the same map is
+   * wanted by the stop card, so computing it twice would anchor the two to
+   * two different instants and let a row and its card disagree by a minute.
+   */
+  etaByStopId?: ReadonlyMap<string, number>
 }
 
 /**
@@ -138,20 +145,8 @@ export function breakLabel(breaks: RouteBreak[]): { label: string; planned: bool
   }
 }
 
-/**
- * Seconds from route start → a wall clock, given when the route started.
- *
- * `arrivalSec` is empty until M7, so in practice every ETA is null right now
- * and the gutter shows the sequence number alone. The rendering is built for
- * the real thing so M7 fills data rather than rewrites rows.
- */
-function etaClock(arrivalSec: number | undefined, stop: AddressedStop): string | null {
-  return formatEta(arrivalSec ?? stop.etaSec)
-}
-
-export function buildRouteRows({ route }: RouteRowsInput): RouteRow[] {
+export function buildRouteRows({ route, etaByStopId }: RouteRowsInput): RouteRow[] {
   const ordered = visitOrder(route)
-  const arrivals = arrivalsById(route)
 
   const brk = breakLabel(route.breaks)
 
@@ -173,7 +168,10 @@ export function buildRouteRows({ route }: RouteRowsInput): RouteRow[] {
       id: stop.id,
       stop,
       seq: formatSeq(index + 1, ordered.length),
-      eta: etaClock(arrivals.get(stop.id), stop),
+      // Absent for a stop already handled, and on a route that has never been
+      // solved. An estimated arrival at a door you have already been to is not
+      // stale information, it is noise.
+      eta: etaClockFor(etaByStopId, stop.id),
       title: titleFor(stop),
       subtitle: stop.address?.subtitle?.trim() ?? '',
       color: colorNameFor(stop, route.groups),
@@ -188,23 +186,13 @@ export function buildRouteRows({ route }: RouteRowsInput): RouteRow[] {
   return rows
 }
 
-/**
- * Arrival seconds keyed by stop id.
- *
- * `arrivalSec` is positional against `orderedStopIds`, INCLUDING its nulls, so
- * it cannot be zipped against the filtered stop list — doing that would shift
- * every arrival by the number of endpoints and quietly hand each stop its
- * neighbour's time. Empty today; correct when M7 fills it.
- */
-function arrivalsById(route: Route): Map<string, number> {
-  const out = new Map<string, number>()
-  const optimized = route.optimized
-  if (!optimized || optimized.arrivalSec.length === 0) return out
-  optimized.orderedStopIds.forEach((id, index) => {
-    const at = optimized.arrivalSec[index]
-    if (id !== null && at !== undefined) out.set(id, at)
-  })
-  return out
+/** "09:42", or null when there is no prediction for this stop. */
+function etaClockFor(
+  etaByStopId: ReadonlyMap<string, number> | undefined,
+  stopId: string,
+): string | null {
+  const at = etaByStopId?.get(stopId)
+  return at === undefined || !Number.isFinite(at) ? null : clockAt(at)
 }
 
 /** Where the jump FAB goes: the first row for a stop that is still pending. */
