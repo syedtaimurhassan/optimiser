@@ -69,11 +69,24 @@ interface UiState {
   /** The route awaiting a delete confirmation. */
   confirmDeleteRouteId: string | null
 
+  /**
+   * The "Route setup" modal — the M1 control panels, reached from the sheet's
+   * overflow.
+   *
+   * Transitional by design. M5 replaces the mobile screen with the sheet, and
+   * the legacy panels are the only way to upload a file, set the endpoints or
+   * press Calculate until M6–M8 rebuild them. Parking them behind the overflow
+   * keeps every existing capability reachable without wiring any of it into the
+   * new design. When the last panel is replaced, this flag and the modal go.
+   */
+  setupOpen: boolean
+
   setDrawerOpen: (open: boolean) => void
   openRouteEditor: (target: RouteEditorTarget) => void
   closeRouteEditor: () => void
   setOverflowRouteId: (routeId: string | null) => void
   setConfirmDeleteRouteId: (routeId: string | null) => void
+  setSetupOpen: (open: boolean) => void
 
   setSheetSnap: (snap: SheetSnap) => void
   setSelectedStopId: (id: string | null) => void
@@ -102,6 +115,7 @@ export const useUiStore = create<UiState>()((set) => ({
   routeEditor: null,
   overflowRouteId: null,
   confirmDeleteRouteId: null,
+  setupOpen: false,
 
   setDrawerOpen: (drawerOpen) => set({ drawerOpen }),
   // Opening the editor closes the overflow sheet it was launched from —
@@ -110,6 +124,7 @@ export const useUiStore = create<UiState>()((set) => ({
   closeRouteEditor: () => set({ routeEditor: null }),
   setOverflowRouteId: (overflowRouteId) => set({ overflowRouteId }),
   setConfirmDeleteRouteId: (confirmDeleteRouteId) => set({ confirmDeleteRouteId, overflowRouteId: null }),
+  setSetupOpen: (setupOpen) => set({ setupOpen }),
 
   setSheetSnap: (sheetSnap) => set({ sheetSnap }),
   setSelectedStopId: (selectedStopId) => set({ selectedStopId }),

@@ -21,10 +21,15 @@ import { CalculatePanel } from './CalculatePanel'
 const PEEK_PX = 116
 
 /**
- * The controls sidebar. On desktop (md+) it's the fixed left column with the
- * pinned Calculate footer — unchanged. On phones it becomes a bottom sheet that
- * can be dragged (or tapped on its handle) between a peek and an expanded state,
- * letting the full-height map breathe underneath.
+ * The controls sidebar — DESKTOP ONLY as of M5.
+ *
+ * It was the phone's bottom sheet too, and M5 replaced that with
+ * `components/sheet/RouteSheet`. The mobile drag machinery below is now
+ * unreachable (`hidden md:flex`, and `isMobile` is false wherever this
+ * renders); it is left in place rather than torn out because the desktop
+ * column still uses everything around it, and M6–M8 replace this component
+ * wholesale. On a phone these same panels live in the sheet's overflow — see
+ * `RouteSetupSheet`.
  */
 export function Sidebar() {
   const isMobile = useMediaQuery('(max-width: 767px)')
@@ -88,7 +93,7 @@ export function Sidebar() {
     <aside
       ref={sheetRef}
       style={sheetStyle}
-      className="fixed inset-x-0 bottom-0 z-[1500] flex h-[88dvh] min-h-0 flex-col rounded-t-2xl border border-slate-200 bg-white shadow-2xl md:static md:z-auto md:h-auto md:w-96 md:flex-none md:rounded-none md:border-0 md:border-r md:shadow-none md:order-1"
+      className="fixed inset-x-0 bottom-0 z-[1500] hidden h-[88dvh] min-h-0 flex-col rounded-t-2xl border border-slate-200 bg-white shadow-2xl md:static md:z-auto md:flex md:h-auto md:w-96 md:flex-none md:rounded-none md:border-0 md:border-r md:shadow-none md:order-1"
     >
       {/* Drag handle + peek header — mobile only */}
       <div

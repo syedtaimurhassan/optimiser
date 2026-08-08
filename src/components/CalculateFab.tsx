@@ -34,7 +34,10 @@ export function CalculateFab() {
       onClick={calculateRoute}
       disabled={!canCalculate}
       aria-label={isCalculating ? 'Calculating route' : 'Calculate route'}
-      className={`fixed bottom-6 right-6 z-[1600] flex min-h-[44px] items-center gap-2 rounded-full px-5 py-3 text-sm font-semibold text-white shadow-lg transition-colors md:hidden disabled:cursor-not-allowed ${
+      // Clears the route sheet the same way the FAB stack does — see the note
+      // there. It sits one row above them, so it adds the stack's own height.
+      style={{ bottom: 'calc(var(--sheet-peek, 0px) + 4.25rem)' }}
+      className={`fixed right-6 z-[1600] flex min-h-[44px] items-center gap-2 rounded-full px-5 py-3 text-sm font-semibold text-white shadow-lg transition-colors md:hidden disabled:cursor-not-allowed ${
         isCalculating ? 'bg-blue-500' : 'bg-blue-600 hover:bg-blue-700 disabled:bg-slate-400/80'
       }`}
     >

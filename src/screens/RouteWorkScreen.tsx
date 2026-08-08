@@ -1,6 +1,8 @@
 import { useEffect } from 'react'
 import { Link, useParams } from 'wouter'
 import { Sidebar } from '../components/Sidebar'
+import { RouteSheet } from '../components/sheet/RouteSheet'
+import { RouteSetupSheet } from '../components/sheet/RouteSetupSheet'
 import { MapComponent } from '../components/MapComponent'
 import { CalculatingOverlay } from '../components/CalculatingOverlay'
 import { CalculateFab } from '../components/CalculateFab'
@@ -62,8 +64,19 @@ export function RouteWorkScreen() {
         <CalculatingOverlay />
       </main>
 
-      {/* Sidebar: draggable bottom sheet on mobile, left column on desktop */}
+      {/*
+        The route sheet — the phone's primary surface, persistent over the map
+        at one of four detents. `md:hidden` on the sheet itself.
+
+        Desktop keeps the M1 sidebar column, which is `hidden` below md. The
+        two are alternatives, not layers: the sheet is the phone design and the
+        sidebar is what desktop has until a milestone gives it its own. The
+        legacy panels stay reachable on a phone through the sheet's overflow —
+        see RouteSetupSheet.
+      */}
+      <RouteSheet />
       <Sidebar />
+      <RouteSetupSheet />
 
       {/* Calculate FAB — mobile only */}
       <CalculateFab />

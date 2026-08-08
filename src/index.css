@@ -92,6 +92,8 @@
   --text-display--line-height: 2.125rem;
   --text-title: 1.25rem; /* section / sheet titles */
   --text-title--line-height: 1.625rem;
+  --text-route-title: 1.375rem; /* 22sp — the route name atop its own list */
+  --text-route-title--line-height: 1.75rem;
   --text-row: 1rem; /* list row title */
   --text-row--line-height: 1.375rem;
   --text-body: 0.9375rem;
@@ -119,6 +121,20 @@
    always a full-bleed overlay, never a `bg-*` on a component. */
 :root {
   --scrim: rgb(0 0 0 / 0.45);
+
+  /*
+   * How much of the route sheet is showing when collapsed.
+   *
+   * RouteSheet MEASURES its own collapsed height and writes this on mount, so
+   * anything floating over the map (the FAB stack, the Calculate FAB) can
+   * clear the sheet by reading one number instead of copying a constant. M4's
+   * FAB stack hard-coded 128px to clear the old sheet's 116px peek, and
+   * nothing kept the two related.
+   *
+   * The 0 here is the DESKTOP value and the correct fallback: there is no
+   * sheet at md+, so there is nothing to clear.
+   */
+  --sheet-peek: 0px;
 }
 
 html,

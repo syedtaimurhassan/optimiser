@@ -1,12 +1,21 @@
 import type { ReactNode } from 'react'
 
-export type ButtonVariant = 'primary' | 'danger' | 'demoted'
+export type ButtonVariant = 'primary' | 'danger' | 'demoted' | 'outlined'
 
 const VARIANTS: Record<ButtonVariant, string> = {
   primary: 'bg-primary text-on-primary active:bg-primary-pressed',
   // Only ever for destruction. See the semantic rule in index.css.
   danger: 'bg-danger text-white',
   demoted: 'bg-surface-variant text-on-surface',
+  /**
+   * For a rare action that ends something.
+   *
+   * "Mark route as completed" sits under a list the driver scrolls all day. As
+   * a filled blue button it would be the loudest thing on the screen and an
+   * invitation to a mis-tap that ends the round; outlined, it is unmistakably
+   * available and unmistakably not the thing you are here to press.
+   */
+  outlined: 'border border-outline bg-surface text-on-surface active:bg-surface-variant',
 }
 
 export interface FullWidthButtonProps {

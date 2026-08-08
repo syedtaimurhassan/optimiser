@@ -19,13 +19,28 @@ import { MenuIcon } from '../ui/icons'
  */
 export function DrawerTrigger() {
   const setDrawerOpen = useUiStore((s) => s.setDrawerOpen)
+  const snap = useUiStore((s) => s.sheetSnap)
+
+  /**
+   * Hidden once the route sheet is open past `medium`.
+   *
+   * The sheet's own header morphs to show a hamburger at exactly those
+   * detents, so leaving this one up would put two identical controls on screen
+   * — and this one would be floating on top of the sheet that covers the map
+   * it belongs to. The morph is what makes the handover possible; this is the
+   * other half of it. Desktop has no sheet, so it always shows.
+   */
+  const supersededBySheet = snap === 'expanded' || snap === 'full'
 
   return (
     <button
       type="button"
       onClick={() => setDrawerOpen(true)}
       aria-label="Your routes"
-      className="fixed left-4 top-4 z-[1550] flex h-touch w-touch items-center justify-center rounded-pill border border-outline bg-surface text-on-surface shadow-md md:left-[25rem]"
+      data-testid="drawer-trigger"
+      className={`fixed left-4 top-4 z-[1550] h-touch w-touch items-center justify-center rounded-pill border border-outline bg-surface text-on-surface shadow-md md:left-[25rem] md:flex ${
+        supersededBySheet ? 'hidden' : 'flex'
+      }`}
     >
       <MenuIcon className="h-6 w-6" />
     </button>

@@ -51,17 +51,19 @@ export function FabStack({
     //
     // ── The mobile offset and z-index are not cosmetic ────────────────────
     //
-    // The legacy M1 controls sheet is `fixed bottom-0 z-[1500]` and peeks
-    // 116px above the bottom edge, and the Calculate FAB floats over it at
-    // z-1600. At `bottom-3 z-20` these buttons rendered UNDERNEATH the sheet
-    // and were completely untappable — Playwright caught it as the sheet
-    // intercepting every click.
+    // The route sheet is `fixed z-[1500]` and covers the bottom of the screen.
+    // At `bottom-3 z-20` these buttons render UNDERNEATH it and are completely
+    // untappable — Playwright caught exactly that in M4, reporting the sheet's
+    // subtree as intercepting every click.
     //
-    // So: sit above the peek (128px clears 116px), and z-1550 to match
-    // DrawerTrigger, which solved the same problem. M5 rebuilds that sheet
-    // and should own this relationship properly rather than inherit the
-    // magic number.
-    <div className="pointer-events-none absolute bottom-32 right-3 z-[1550] flex flex-col items-end gap-3 md:bottom-3">
+    // So: clear the sheet's collapsed height plus a 12dp gap, and z-1550 to
+    // match DrawerTrigger. `--sheet-peek` is MEASURED and published by
+    // RouteSheet; M4 hard-coded 128px to clear a 116px peek and nothing kept
+    // the two related. It falls back to 0 at md+, where there is no sheet.
+    <div
+      style={{ bottom: 'calc(var(--sheet-peek, 0px) + 0.75rem)' }}
+      className="pointer-events-none absolute right-3 z-[1550] flex flex-col items-end gap-3"
+    >
       <Fab onClick={onToggleBasemap} label={`Basemap: ${basemapLabel}`} testId="fab-basemap">
         <LayersIcon className="h-6 w-6" />
       </Fab>
