@@ -3,6 +3,7 @@ import { useLocation } from 'wouter'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import type { Route } from '../../types'
 import type { RouteRow } from '../../lib/routeList'
+import type { SwipeOutcome } from '../../lib/swipeAction'
 import { useRoutesStore } from '../../store/routesStore'
 import { useUiStore } from '../../store/uiStore'
 import { BreakRow, EndRow, FooterRow, HeaderRow, StartRow } from './ListRows'
@@ -67,6 +68,25 @@ export function RouteList({ route, rows, scrollElementRef, scrollToIndexRef }: R
   const selectedStopId = useUiStore((s) => s.selectedStopId)
   const setSetupOpen = useUiStore((s) => s.setSetupOpen)
   const setRouteStatus = useRoutesStore((s) => s.setRouteStatus)
+  const setStopStatus = useRoutesStore((s) => s.setStopStatus)
+  const undoStopStatus = useRoutesStore((s) => s.undoStopStatus)
+
+  /**
+   * Swiping a row marks it, without opening it.
+   *
+   * Note what this deliberately does NOT do: a swipe to "failed" does not
+   * raise the reason sheet. The gesture's whole value is that it works without
+   * looking at the screen, and a modal appearing over a list the driver is
+   * still scrolling would undo that. The card's Failed button asks; the
+   * gesture does not, and the card offers "Add a reason" later either way.
+   */
+  const onSwipe = useCallback(
+    (id: string, outcome: SwipeOutcome) => {
+      if (outcome.kind === 'set') setStopStatus(id, outcome.status)
+      else if (outcome.kind === 'undo') undoStopStatus(id)
+    },
+    [setStopStatus, undoStopStatus],
+  )
 
   const virtualizer = useVirtualizer({
     count: rows.length,
@@ -152,7 +172,14 @@ export function RouteList({ route, rows, scrollElementRef, scrollToIndexRef }: R
           />
         )
       case 'stop':
-        return <StopRow row={row} selected={row.id === selectedStopId} onSelect={onSelect} />
+        return (
+          <StopRow
+            row={row}
+            selected={row.id === selectedStopId}
+            onSelect={onSelect}
+            onSwipe={onSwipe}
+          />
+        )
       case 'end':
         return <EndRow time={row.time} hasAnchor={row.hasAnchor} onSetEnd={toSetup} />
       case 'footer':

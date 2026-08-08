@@ -104,11 +104,17 @@ export function useHorizontalDrag({
   const onPointerDown = useCallback((e: ReactPointerEvent) => {
     if (!enabledRef.current || e.button !== 0 || dragRef.current) return
 
-    // A tap on a control inside the card is that control's. Claiming it here
+    // A tap on a control INSIDE the drag surface is that control's. Claiming it
     // would mean a button that needs a perfectly still finger to activate.
-    if ((e.target as HTMLElement).closest('button, input, a, textarea, select, [role="button"]')) {
-      return
-    }
+    //
+    // `!== e.currentTarget` is load-bearing: a list row is itself a
+    // `role="button"` (it has to be — the whole row is the tap target and it
+    // carries its own trailing controls), so a bare `closest` matched the drag
+    // surface itself and declined every swipe on the list.
+    const control = (e.target as HTMLElement).closest(
+      'button, input, a, textarea, select, [role="button"]',
+    )
+    if (control && control !== e.currentTarget) return
 
     const drag: Drag = {
       pointerId: e.pointerId,

@@ -506,6 +506,126 @@ async function main() {
     `navigate ${navBox.w}×${navBox.h}, completed ${completedBox.w}px wide`,
   )
 
+  // ────────────────────────────────────────── swipe a row to mark it
+  console.log('\n━━━ swipe-to-complete on the list ━━━\n')
+
+  await page.goto(`${page.url().split('#')[0]}#/route/${route.id}`, { waitUntil: 'load' })
+  await page.waitForSelector('[data-testid="route-sheet"]', { timeout: 10_000 })
+  for (let i = 0; i < 6; i++) {
+    if ((await snapAttr(page)) === 'expanded') break
+    await page.tap('[data-testid="sheet-handle"]')
+    await settle(page)
+  }
+  await page.waitForSelector('[data-testid="stop-row"][data-stop-id="stop-8"]', { timeout: 10_000 })
+
+  /**
+   * The vertical middle of a row, ON SCREEN.
+   *
+   * The scroll is mandatory, not defensive. The list is virtualised with an
+   * overscan, so a row can be in the DOM with a bounding rect a long way below
+   * the viewport — and a synthetic touch dispatched at y > 844 lands on
+   * nothing at all, silently. Every swipe check passed vacuously until this
+   * scrolled first.
+   */
+  const rowY = async (id) => {
+    const selector = `[data-testid="stop-row"][data-stop-id="${id}"]`
+    // Centre the row in the sheet's own scroller, twice — the virtualiser
+    // re-measures as rows enter the window, so the first scroll lands
+    // approximately and the second lands exactly. `scrollIntoViewIfNeeded`
+    // scrolls the MINIMUM, which parks a row from below the fold at the very
+    // bottom of the screen, under the floating jump FAB.
+    for (let i = 0; i < 2; i++) {
+      await page.evaluate((sel) => {
+        const row = document.querySelector(sel)
+        const list = document.querySelector('[data-testid="sheet-list"]')
+        if (!row || !list) return
+        const r = row.getBoundingClientRect()
+        const l = list.getBoundingClientRect()
+        list.scrollTop += r.top + r.height / 2 - (l.top + l.height / 2)
+      }, selector)
+      await page.waitForTimeout(150)
+    }
+    const y = Math.round(
+      await page.evaluate((sel) => {
+        const r = document.querySelector(sel).getBoundingClientRect()
+        return r.top + r.height / 2
+      }, selector),
+    )
+    if (y < 0 || y > PHONE.height) throw new Error(`row ${id} is off screen at y=${y}`)
+    return y
+  }
+
+  const rowStatus = (id) =>
+    page.getAttribute(`[data-testid="stop-row"][data-stop-id="${id}"]`, 'data-status')
+
+  // A short drag: far enough to see, not far enough to commit.
+  await touchSwipe(client, { y: await rowY('stop-8'), fromX: 120, toX: 170, steps: 6, holdMs: 24 })
+  await page.waitForTimeout(300)
+  check(
+    'a short drag springs back and changes nothing',
+    (await rowStatus('stop-8')) === 'pending',
+    await rowStatus('stop-8'),
+  )
+
+  await touchSwipe(client, { y: await rowY('stop-8'), fromX: 60, toX: 340, steps: 8, holdMs: 20 })
+  await page.waitForTimeout(400)
+  check(
+    'swiping right marks the row delivered',
+    (await rowStatus('stop-8')) === 'delivered',
+    await rowStatus('stop-8'),
+  )
+
+  check(
+    'and the row springs back rather than staying pushed aside',
+    Math.abs(
+      await page.evaluate(
+        (sel) => document.querySelector(sel).getBoundingClientRect().x,
+        '[data-testid="stop-row"][data-stop-id="stop-8"]',
+      ),
+    ) < 1,
+  )
+
+  await touchSwipe(client, { y: await rowY('stop-8'), fromX: 60, toX: 340, steps: 8, holdMs: 20 })
+  await page.waitForTimeout(400)
+  check(
+    'swiping the same way again undoes it',
+    (await rowStatus('stop-8')) === 'pending',
+    await rowStatus('stop-8'),
+  )
+
+  // Starts at 300, not 340. `scrollIntoViewIfNeeded` scrolls the minimum, so a
+  // row from below the fold lands at the BOTTOM of the viewport — which is
+  // where the jump FAB floats (x 330–374, y 776–820). A leftward swipe begun
+  // at 340 starts on the FAB and never reaches the row at all.
+  await touchSwipe(client, { y: await rowY('stop-9'), fromX: 300, toX: 40, steps: 8, holdMs: 20 })
+  await page.waitForTimeout(400)
+  check(
+    'swiping left marks the row failed',
+    (await rowStatus('stop-9')) === 'failed',
+    await rowStatus('stop-9'),
+  )
+
+  check(
+    'a swipe does NOT open the card — the gesture works without looking',
+    !page.url().includes('/stop/'),
+    page.url().split('#')[1],
+  )
+
+  // The sheet must not have moved: a horizontal gesture is never the sheet's.
+  check(
+    'swiping a row never drags the sheet',
+    (await snapAttr(page)) === 'expanded',
+    await snapAttr(page),
+  )
+
+  await page.tap('[data-testid="stop-row"][data-stop-id="stop-10"]')
+  await page.waitForTimeout(400)
+  check(
+    'tapping a row still opens it',
+    page.url().endsWith('/stop/stop-10'),
+    page.url().split('#')[1],
+  )
+
   // ───────────────────────────────────────────────────────── errors
   console.log('\n━━━ no errors along the way ━━━\n')
   check('no uncaught page errors', pageErrors.length === 0, pageErrors.join(' | '))
