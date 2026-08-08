@@ -1536,6 +1536,18 @@ travel cost when the skipped counts match.
   a 14-node instance solved correctly. That configuration threw before M9.
 - `bench:verify-seam` passes and now also asserts no OR-Tools symbols and no
   `.wasm` in production output. `or-tools-wasm` is a devDependency.
+- **A worker that fails to load no longer hangs the app.** Found while auditing
+  the milestone, not by a test: `worker.onerror` was empty on the assumption
+  that a dead worker reports itself through its job's `failed` message. It does
+  not — a worker that 404s never runs our code, so its share of `outstanding`
+  was never credited and the solve promise never settled. "Optimizing route…"
+  forever, no error, no timeout. The pool now drops the worker, credits every
+  job in flight, and answers in-process. Verified by serving the bundle with
+  every `solveWorker` chunk 404'd: both a first and a second solve return valid
+  routes.
+- The M1/M4/M5/M7/M8 acceptance suites still pass (42/42, 41/41, 58/58, 65/65,
+  35/35). M3 is 50/52 — the drawer-dismissal defect M8 already deferred, in a
+  surface M9 does not touch.
 
 ### Deferred
 

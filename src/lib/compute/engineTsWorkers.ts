@@ -1,3 +1,4 @@
+import { engineTs } from './engineTs.ts'
 import {
   abortError,
   objectiveValue,
@@ -55,6 +56,18 @@ export function workerCount(hardwareConcurrency: number | null): number {
   return Math.max(1, Math.min(MAX_WORKERS, cores - 1))
 }
 
+/**
+ * What a `WorkerEvent` actually tells us, which is often very little — a
+ * cross-origin worker failure is reported with every field blank.
+ */
+function describeWorkerError(event: ErrorEvent | Event): string {
+  const error = event as ErrorEvent
+  const detail = [error.message, error.filename && `at ${error.filename}`]
+    .filter(Boolean)
+    .join(' ')
+  return detail ? `solver worker failed: ${detail}` : 'solver worker failed to start'
+}
+
 /** One in-flight job's bookkeeping. */
 interface Job {
   resolve: (result: SolveResult) => void
@@ -67,6 +80,7 @@ interface Job {
   failures: string[]
   onProgress?: (progress: SolveProgress) => void
   bestReported: number
+  signal?: AbortSignal
 }
 
 export class TsWorkerPool implements SolverEngine {
@@ -106,9 +120,17 @@ export class TsWorkerPool implements SolverEngine {
         type: 'module',
       })
       worker.onmessage = (event: MessageEvent<WorkerResponse>) => this.receive(event.data)
-      worker.onerror = () => {
-        /* A dead worker is reported through its job's `failed`; nothing to do. */
-      }
+      /*
+        A worker that never loads must not hang the app.
+
+        This handler used to be empty, on the assumption that a dead worker
+        would report itself through its job's `failed` message. It does not: a
+        worker that 404s, is blocked by CSP, or fails to parse never runs our
+        code at all, so it never posts anything. Its share of `outstanding`
+        would then never be decremented and the solve promise would never
+        settle — "Optimizing route…" forever, with no error and no timeout.
+      */
+      worker.onerror = (event) => this.loseWorker(worker, describeWorkerError(event))
       this.workers.push(worker)
     }
   }
@@ -164,14 +186,53 @@ export class TsWorkerPool implements SolverEngine {
       job.failures.push(message.message)
     }
 
+    this.settleOne(message.jobId, job)
+  }
+
+  /** One worker has reported in. Finish the job when the last one does. */
+  private settleOne(jobId: number, job: Job): void {
     job.outstanding--
     if (job.outstanding > 0) return
-    this.jobs.delete(message.jobId)
+    this.jobs.delete(jobId)
 
     if (job.bestOrder) {
       job.resolve(toResult(job.request, job.bestOrder))
-    } else {
-      job.reject(new Error(job.failures[0] ?? 'Every solver worker failed.'))
+      return
+    }
+
+    /*
+      Every worker died and none of them produced a route, so answer in-process.
+
+      Without this the FIRST solve after a bad deploy fails outright — the pool
+      only discovers its workers are dead once they have failed to load, which
+      is after the job has already been dispatched. Rejecting there would tell a
+      driver at a kerb that routing is broken, when what is actually true is
+      that it is about to be slower.
+    */
+    if (this.workers.length === 0 && !job.signal?.aborted) {
+      engineTs.solve(job.request, job.onProgress, job.signal).then(job.resolve, job.reject)
+      return
+    }
+
+    job.reject(new Error(job.failures[0] ?? 'Every solver worker failed.'))
+  }
+
+  /**
+   * A worker died. Drop it, and credit its share of every job in flight.
+   *
+   * Dropped rather than replaced: a worker that failed to load will fail to
+   * load again, and respawning it would turn one broken URL into an infinite
+   * loop of broken URLs.
+   */
+  private loseWorker(worker: Worker, message: string): void {
+    const at = this.workers.indexOf(worker)
+    if (at < 0) return
+    this.workers.splice(at, 1)
+    worker.terminate()
+
+    for (const [jobId, job] of [...this.jobs]) {
+      job.failures.push(message)
+      this.settleOne(jobId, job)
     }
   }
 
@@ -187,6 +248,15 @@ export class TsWorkerPool implements SolverEngine {
     if (signal?.aborted) return Promise.reject(abortError())
 
     this.ensureWorkers()
+    /*
+      No workers left, so answer in-process instead of failing.
+
+      A tier is supposed to buy speed and never capability (see registry.ts). A
+      pool that cannot spawn workers has lost its speed; it has not earned the
+      right to stop returning a route.
+    */
+    if (this.workers.length === 0) return engineTs.solve(request, onProgress, signal)
+
     const jobId = this.nextJobId++
     const baseSeed = request.seed ?? 0x9e3779b9
 
@@ -201,6 +271,7 @@ export class TsWorkerPool implements SolverEngine {
         failures: [],
         onProgress,
         bestReported: Infinity,
+        signal,
       }
       this.jobs.set(jobId, job)
 
