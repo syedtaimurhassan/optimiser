@@ -441,6 +441,33 @@ export class MapController {
     return true
   }
 
+  /**
+   * Where the camera is now.
+   *
+   * Exists for the add-by-pin flow, whose pin is fixed to the centre of the
+   * screen and whose "location" is therefore whatever the camera is looking at.
+   * Exposed as a method so components never have to touch `map` directly —
+   * MapLibre stays behind this class, which is the whole point of it.
+   */
+  getCenter(): LatLng {
+    const { lat, lng } = this.map.getCenter()
+    return { lat, lng }
+  }
+
+  /**
+   * Subscribe to the camera coming to rest. Returns an unsubscribe function.
+   *
+   * `moveend` and not `move`: the pin flow reverse-geocodes on this, and firing
+   * per frame would spend a credit for every pixel of a drag.
+   */
+  onMoveEnd(listener: (center: LatLng) => void): () => void {
+    const handler = () => listener(this.getCenter())
+    this.map.on('moveend', handler)
+    return () => {
+      this.map.off('moveend', handler)
+    }
+  }
+
   /** The coordinate primitive behind focusStop, also used by camera intents. */
   focusPoint(point: LatLng): void {
     this.map.easeTo({

@@ -10,6 +10,7 @@ import { selectActiveRoute, useRoutesStore } from '../store/routesStore'
 import { useUiStore } from '../store/uiStore'
 import { MapControllerContext } from './map/MapControllerContext'
 import { MapChrome } from './map/MapChrome'
+import { AddByPin } from './search/AddByPin'
 
 /**
  * The map.
@@ -48,6 +49,9 @@ export function MapComponent() {
       setPlacementMode: s.setMapPlacementMode,
     })),
   )
+  const addByPinOpen = useUiStore((s) => s.addByPinOpen)
+  const setAddByPinOpen = useUiStore((s) => s.setAddByPinOpen)
+  const addStops = useRoutesStore((s) => s.addStops)
   const cameraIntent = useUiStore((s) => s.cameraIntent)
   const clearCameraIntent = useUiStore((s) => s.clearCameraIntent)
 
@@ -209,6 +213,33 @@ export function MapComponent() {
           onSelectStop={setSelectedStopId}
           optimized={optimized}
         />
+
+        {/*
+          Add-by-pin renders INSIDE this provider because the pin is a property
+          of the camera: it reads the centre and follows every `moveend`. The
+          tile that opens it lives in the sheet, which is outside the map
+          entirely — hence the store flag rather than a prop.
+        */}
+        {addByPinOpen && (
+          <AddByPin
+            onAdd={(point, address) => {
+              addStops([{ ...point, address: address ?? undefined }])
+              setAddByPinOpen(false)
+            }}
+            onAddAndEdit={(point, address) => {
+              addStops([{ ...point, address: address ?? undefined }])
+              setAddByPinOpen(false)
+              // The stop the driver just made is the one they want to edit,
+              // and it is always the last appended.
+              const stops = useRoutesStore.getState().routes[
+                useRoutesStore.getState().activeRouteId ?? ''
+              ]?.stops
+              const created = stops?.[stops.length - 1]
+              if (created) setSelectedStopId(created.id)
+            }}
+            onCancel={() => setAddByPinOpen(false)}
+          />
+        )}
       </div>
     </MapControllerContext.Provider>
   )

@@ -234,3 +234,63 @@ export const PickupIcon = (props: IconProps) => (
     <path d="M12 19.5V5M12 5l-5 5M12 5l5 5" />
   </Icon>
 )
+
+// ───────────────────────────────────────────────────────── M6: search & add
+
+/**
+ * A pin with a plus — "add this as a stop".
+ *
+ * Distinct from `PinIcon` by the plus in the head rather than the usual dot,
+ * so the add-a-new-stop rows in search cannot be mistaken for the existing
+ * stops directly above them. That distinction is the only thing separating the
+ * two sections at a glance once the driver is scrolling.
+ */
+export const PinPlusIcon = (props: IconProps) => (
+  <Icon {...props}>
+    <path d="M12 21.5c4.2-4.6 6.3-8 6.3-10.5a6.3 6.3 0 1 0-12.6 0c0 2.5 2.1 5.9 6.3 10.5z" />
+    <path d="M12 8.4v4.8" />
+    <path d="M9.6 10.8h4.8" />
+  </Icon>
+)
+
+/** The empty-state glyph: the same pin-plus, drawn dashed. */
+export const PinPlusDashedIcon = (props: IconProps) => (
+  <Icon {...props}>
+    <path
+      d="M12 21.5c4.2-4.6 6.3-8 6.3-10.5a6.3 6.3 0 1 0-12.6 0c0 2.5 2.1 5.9 6.3 10.5z"
+      strokeDasharray="3 3"
+    />
+    <path d="M12 8.4v4.8" />
+    <path d="M9.6 10.8h4.8" />
+  </Icon>
+)
+
+/** Barcode scan. M13 — the tile is present and announced as unavailable. */
+export const ScanIcon = (props: IconProps) => (
+  <Icon {...props}>
+    <path d="M4 8V6a2 2 0 0 1 2-2h2" />
+    <path d="M16 4h2a2 2 0 0 1 2 2v2" />
+    <path d="M20 16v2a2 2 0 0 1-2 2h-2" />
+    <path d="M8 20H6a2 2 0 0 1-2-2v-2" />
+    <path d="M4 12h16" />
+  </Icon>
+)
+
+/** Voice entry. M13, as above. */
+export const MicIcon = (props: IconProps) => (
+  <Icon {...props}>
+    <rect x="9" y="3" width="6" height="11" rx="3" />
+    <path d="M5 11a7 7 0 0 0 14 0" />
+    <path d="M12 18v3" />
+  </Icon>
+)
+
+/** Paste addresses from the clipboard. */
+export const ClipboardIcon = (props: IconProps) => (
+  <Icon {...props}>
+    <rect x="5" y="4" width="14" height="17" rx="2" />
+    <path d="M9 4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v1H9z" />
+    <path d="M9 11h6" />
+    <path d="M9 15h4" />
+  </Icon>
+)

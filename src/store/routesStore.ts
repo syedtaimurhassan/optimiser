@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { persist, createJSONStorage } from 'zustand/middleware'
 import type {
+  Address,
   AddressedStop,
   LatLng,
   Objective,
@@ -73,7 +74,7 @@ interface RoutesState {
   setOptimized: (optimized: OptimizedRoute | null) => void
 
   // ── Stop CRUD ──
-  addStops: (points: LatLng[]) => void
+  addStops: (points: NewStopInput[]) => void
   insertStopNear: (nearStopId: string, point: LatLng) => string | null
   removeStop: (id: string) => void
   clearStops: () => void
@@ -160,8 +161,20 @@ const highestOriginalPosition = (stops: AddressedStop[]): number =>
   stops.reduce((max, s) => Math.max(max, s.originalPosition), 0)
 
 /** A new stop with sensible defaults. */
+/**
+ * What it takes to create a stop: a coordinate, and optionally the address that
+ * coordinate came from.
+ *
+ * A bare `LatLng` is still legal — that is what a file of coordinates and a
+ * dropped pin both produce, and coordinate-only stops remain a supported shape
+ * (see `AddressedStop.address`). The optional address is what M6 adds, so a
+ * stop created from search arrives already knowing how to render itself rather
+ * than being reverse-geocoded a second time to find out.
+ */
+export type NewStopInput = LatLng & { address?: Address }
+
 function makeStop(
-  point: LatLng,
+  point: NewStopInput,
   stopId: string,
   originalPosition: number,
 ): AddressedStop {
@@ -171,6 +184,7 @@ function makeStop(
     originalPosition,
     lat: point.lat,
     lng: point.lng,
+    address: point.address,
     kind: 'delivery',
     order: 'auto',
     status: 'pending',

@@ -51,6 +51,15 @@ interface UiState {
   searchQuery: string
   searchOpen: boolean
   /**
+   * The add-by-pin flow is open over the map.
+   *
+   * Lives here rather than in the sheet because the pin belongs to the MAP —
+   * it reads the camera and moves with it — so the component has to render
+   * inside the map's controller context, while the control that opens it is a
+   * tile in the sheet. A store flag is the only thing both can see.
+   */
+  addByPinOpen: boolean
+  /**
    * Which basemap the layers FAB has selected.
    *
    * Not persisted, like everything else here — but note the asymmetry with
@@ -96,6 +105,7 @@ interface UiState {
   clearCameraIntent: () => void
   setSearchQuery: (q: string) => void
   setSearchOpen: (open: boolean) => void
+  setAddByPinOpen: (open: boolean) => void
   setBasemap: (basemap: BasemapId) => void
 }
 
@@ -109,6 +119,7 @@ export const useUiStore = create<UiState>()((set) => ({
   cameraIntent: null,
   searchQuery: '',
   searchOpen: false,
+  addByPinOpen: false,
   basemap: DEFAULT_BASEMAP,
 
   drawerOpen: false,
@@ -134,5 +145,6 @@ export const useUiStore = create<UiState>()((set) => ({
   clearCameraIntent: () => set({ cameraIntent: null }),
   setSearchQuery: (searchQuery) => set({ searchQuery }),
   setSearchOpen: (searchOpen) => set({ searchOpen }),
+  setAddByPinOpen: (addByPinOpen) => set({ addByPinOpen }),
   setBasemap: (basemap) => set({ basemap }),
 }))

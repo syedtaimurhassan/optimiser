@@ -23,24 +23,32 @@ import { SummaryStrip } from './SummaryStrip'
  * summary to a search bar they are not using, and never loses the search bar
  * to a summary they have already read.
  *
- * ── The search field is deliberately inert ────────────────────────────────
+ * ── The search field ──────────────────────────────────────────────────────
  *
- * It focuses, it moves the sheet to `full`, and it writes to the store. There
- * is no consumer of `searchQuery` yet and nothing filters — that is M6. It is
- * a real input rather than a fake one so M6 wires a reducer rather than
- * rebuilding the header.
+ * M5 built this input as a real one that wrote to the store and had no
+ * consumer. M6 gave it one: the sheet swaps the route list for the search
+ * screen whenever the field is active. The header's own job did not change.
+ *
+ * While search is active the overflow button becomes Cancel. That is a swap
+ * rather than an addition because the row is full at three controls on a
+ * 360dp screen, and route options are not what anyone reaches for mid-search —
+ * whereas "get me out of here" is exactly what they reach for.
  */
 export interface SheetHeaderProps {
   snap: SheetSnap
   routeName: string
+  /** Changes with the route's state: "Tap to add stops" when it is empty. */
+  placeholder: string
   stops: readonly AddressedStop[]
   optimized: OptimizedRoute | undefined
   searchQuery: string
+  searchActive: boolean
   onSearchQuery: (value: string) => void
   /** Focusing search opens the sheet all the way — that is what `full` is for. */
   onSearchFocus: () => void
   /** Collapsed: the search icon stands in for the field there is no room for. */
   onSearchTap: () => void
+  onSearchCancel: () => void
   onMenu: () => void
   onOverflow: () => void
 }
@@ -48,12 +56,15 @@ export interface SheetHeaderProps {
 export function SheetHeader({
   snap,
   routeName,
+  placeholder,
   stops,
   optimized,
   searchQuery,
+  searchActive,
   onSearchQuery,
   onSearchFocus,
   onSearchTap,
+  onSearchCancel,
   onMenu,
   onOverflow,
 }: SheetHeaderProps) {
@@ -65,6 +76,13 @@ export function SheetHeader({
   useEffect(() => {
     if (!expanded && document.activeElement === inputRef.current) inputRef.current?.blur()
   }, [expanded])
+
+  // The search icon in the collapsed layer promises a field. Honour that:
+  // opening the sheet from there should land with the caret already in it,
+  // otherwise the driver taps search and then has to tap search again.
+  useEffect(() => {
+    if (expanded && searchActive) inputRef.current?.focus()
+  }, [expanded, searchActive])
 
   return (
     <div
@@ -93,24 +111,41 @@ export function SheetHeader({
 
         <div className="flex min-w-0 flex-1 items-center gap-2 rounded-pill bg-surface-variant px-3">
           <SearchIcon className="h-4 w-4 shrink-0 text-on-surface-variant" />
+          {/*
+            No scan or mic icon in here, deliberately. Spoke puts both inline
+            AND on the tiles below — the same two verbs twice on one screen,
+            with the inline copies at the far end of the thumb's reach. The
+            tiles keep them; the field stays a field.
+          */}
           <input
             ref={inputRef}
             type="search"
             value={searchQuery}
             onChange={(e) => onSearchQuery(e.target.value)}
             onFocus={onSearchFocus}
-            placeholder={`Search ${routeName}`}
+            placeholder={placeholder}
             data-testid="sheet-search"
-            aria-label="Search stops on this route"
+            aria-label={`Add or find stops on ${routeName}`}
             // `min-w-0` is what lets the field shrink inside the flex row
             // instead of pushing the overflow button off the edge.
             className="min-w-0 flex-1 bg-transparent py-2.5 text-body text-on-surface outline-none placeholder:text-on-surface-variant"
           />
         </div>
 
-        <IconButton label="Route options" onClick={onOverflow} testId="header-overflow">
-          <MoreIcon className="h-6 w-6" />
-        </IconButton>
+        {searchActive ? (
+          <button
+            type="button"
+            onClick={onSearchCancel}
+            data-testid="header-search-cancel"
+            className="shrink-0 rounded-pill px-2 py-2 text-label font-semibold text-primary active:bg-surface-variant"
+          >
+            Cancel
+          </button>
+        ) : (
+          <IconButton label="Route options" onClick={onOverflow} testId="header-overflow">
+            <MoreIcon className="h-6 w-6" />
+          </IconButton>
+        )}
       </Layer>
     </div>
   )

@@ -19,11 +19,14 @@ import {
   type SnapOffsets,
 } from '../../lib/sheetSnap'
 import { buildRouteRows, nextStopRowIndex } from '../../lib/routeList'
+import { searchPlaceholder } from '../../lib/searchScreen'
 import { selectActiveRoute, useRoutesStore } from '../../store/routesStore'
 import { useUiStore } from '../../store/uiStore'
 import { ChevronDownIcon } from '../ui/icons'
 import { SheetHeader } from './SheetHeader'
 import { RouteList } from './RouteList'
+import { SearchScreen } from '../search/SearchScreen'
+import { useAddStops } from '../../hooks/useAddStops'
 
 /**
  * The persistent bottom sheet.
@@ -80,7 +83,12 @@ export function RouteSheet() {
   const setDrawerOpen = useUiStore((s) => s.setDrawerOpen)
   const searchQuery = useUiStore((s) => s.searchQuery)
   const setSearchQuery = useUiStore((s) => s.setSearchQuery)
+  const searchOpen = useUiStore((s) => s.searchOpen)
+  const setSearchOpen = useUiStore((s) => s.setSearchOpen)
+  const setSelectedStopId = useUiStore((s) => s.setSelectedStopId)
+  const setAddByPinOpen = useUiStore((s) => s.setAddByPinOpen)
   const setSetupOpen = useUiStore((s) => s.setSetupOpen)
+  const { addSuggestion, addFromClipboard } = useAddStops()
 
   const sheetRef = useRef<HTMLElement>(null)
   const headerBlockRef = useRef<HTMLDivElement>(null)
@@ -326,6 +334,16 @@ export function RouteSheet() {
   if (!route) return null
 
   const scrollable = listScrolls(snap)
+  /**
+   * Search replaces the list rather than filtering it in place.
+   *
+   * Filtering the route list would mean the sequence numbers stayed but the
+   * rows between them vanished — a list reading 03, 07, 24 with a continuous
+   * timeline connector drawn down its side, implying a route that does not
+   * exist. Search is a different question, so it gets a different view, and
+   * the connector stays honest.
+   */
+  const searchActive = searchOpen || searchQuery.trim().length > 0
 
   return (
     <aside
@@ -362,12 +380,24 @@ export function RouteSheet() {
         <SheetHeader
           snap={snap}
           routeName={route.name}
+          placeholder={searchPlaceholder(route.stops.length)}
           stops={route.stops}
           optimized={route.optimized}
           searchQuery={searchQuery}
           onSearchQuery={setSearchQuery}
-          onSearchFocus={() => setSnap('full')}
-          onSearchTap={() => setSnap('full')}
+          onSearchFocus={() => {
+            setSnap('full')
+            setSearchOpen(true)
+          }}
+          onSearchTap={() => {
+            setSnap('full')
+            setSearchOpen(true)
+          }}
+          onSearchCancel={() => {
+            setSearchOpen(false)
+            setSearchQuery('')
+          }}
+          searchActive={searchActive}
           onMenu={() => setDrawerOpen(true)}
           onOverflow={() => setSetupOpen(true)}
         />
@@ -384,12 +414,47 @@ export function RouteSheet() {
         }`}
         style={{ touchAction: 'pan-y' }}
       >
-        <RouteList
-          route={route}
-          rows={rows}
-          scrollElementRef={listRef}
-          scrollToIndexRef={scrollToIndexRef}
-        />
+        {searchActive ? (
+          <SearchScreen
+            query={searchQuery}
+            rows={rows}
+            // Bias towards where this route actually is. The start anchor is
+            // the best cheap proxy for that; without a bias, "Station Road"
+            // returns a list from the other side of the country.
+            near={route.start ?? route.stops[0] ?? undefined}
+            onSelectStop={(id) => {
+              setSelectedStopId(id)
+              setSearchOpen(false)
+              setSearchQuery('')
+            }}
+            onAddSuggestion={(suggestion) => {
+              addSuggestion(suggestion)
+              // Clearing the field but staying in search is deliberate: adding
+              // stops is a repeated action, and a driver entering a round types
+              // several in a row. Closing after each one would cost a tap per
+              // stop to get back.
+              setSearchQuery('')
+            }}
+            onTile={(tile) => {
+              if (tile === 'paste') void addFromClipboard()
+              if (tile === 'map') {
+                // Get out of the way first: the pin flow is about looking at
+                // the map, and a sheet at `full` covers all of it.
+                setSearchOpen(false)
+                setSearchQuery('')
+                setSnap('collapsed')
+                setAddByPinOpen(true)
+              }
+            }}
+          />
+        ) : (
+          <RouteList
+            route={route}
+            rows={rows}
+            scrollElementRef={listRef}
+            scrollToIndexRef={scrollToIndexRef}
+          />
+        )}
       </div>
 
       {/*
