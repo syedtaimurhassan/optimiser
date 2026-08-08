@@ -30,7 +30,13 @@ const flag = (name) => args.includes(`--${name}`)
 const opt = (name, fallback) =>
   args.find((a) => a.startsWith(`--${name}=`))?.split('=')[1] ?? fallback
 
-const ENGINE = opt('engine', 'ortools')
+/**
+ * `--engine=all` runs every registered engine over every instance, which is
+ * what M9 needs: the question stopped being "how fast is the solver" and became
+ * "which of these solvers is better, on the same instance, at the same budget".
+ */
+const ENGINE = opt('engine', 'all')
+const ENGINE_LIST = ENGINE === 'all' ? ['ts', 'ts-workers', 'ortools'] : ENGINE.split(',')
 const QUICK = flag('quick')
 const REPS = Number(opt('reps', QUICK ? 1 : 3))
 const HEADED = flag('headed')
@@ -91,11 +97,9 @@ function buildGrid() {
 async function solveInPage(payload) {
   const seam = window.__bench
   if (!seam) throw new Error('bench seam missing — was the bundle built with VITE_BENCH_SEAM=1?')
-  if (seam.version !== 2) throw new Error(`bench seam version ${seam.version}, expected 2`)
-  const engine = seam.engines[payload.engine]
-  if (!engine) throw new Error(`unknown engine "${payload.engine}"`)
+  if (seam.version !== 4) throw new Error(`bench seam version ${seam.version}, expected 4`)
 
-  const { matrix, startNode, endNode, k, timeBudgetMs } = payload
+  const { engine, matrix, startNode, endNode, k, timeBudgetMs, seed } = payload
 
   // Sample the JS heap while the solver yields to the event loop. This misses
   // WASM linear memory, which is why measureUserAgentSpecificMemory is also
@@ -114,15 +118,13 @@ async function solveInPage(payload) {
     uaMemoryBefore = (await performance.measureUserAgentSpecificMemory?.())?.bytes ?? null
   } catch { /* unavailable without isolation, or blocked — not fatal */ }
 
-  const t0 = performance.now()
-  let visited = null
+  let outcome = null
   let error = null
   try {
-    visited = await engine(matrix, { startNode, endNode, k, timeBudgetMs })
+    outcome = await seam.solve(engine, matrix, { startNode, endNode, k, timeBudgetMs, seed })
   } catch (e) {
     error = String(e?.message ?? e)
   }
-  const wallMs = performance.now() - t0
 
   clearInterval(sampler)
   sample()
@@ -132,9 +134,13 @@ async function solveInPage(payload) {
   } catch { /* as above */ }
 
   return {
-    visited,
+    visited: outcome?.visited ?? null,
     error,
-    wallMs,
+    wallMs: outcome?.wallMs ?? 0,
+    progressReports: outcome?.progressReports ?? 0,
+    // The seam scores it too. Node scores it again from the raw sequence, and
+    // Node's answer is the one that counts — an engine never grades its own work.
+    seamObjective: outcome?.objective ?? null,
     peakJsHeapBytes: peakJsHeap,
     uaMemoryBeforeBytes: uaMemoryBefore,
     uaMemoryAfterBytes: uaMemoryAfter,
@@ -224,7 +230,9 @@ async function probeCrossOriginIsolation(browser) {
         ])
       const t0 = performance.now()
       try {
-        await withTimeout(window.__bench.warmUpUnguarded(), timeoutMs)
+        // Straight at the OR-Tools engine, with no guard of ours in the way,
+        // so the probe finds out what the WASM itself does without isolation.
+        await withTimeout(window.__bench.warmUpEngine('ortools'), timeoutMs)
         return { ok: true, ms: Math.round(performance.now() - t0) }
       } catch (e) {
         const msg = String(e?.message ?? e)
@@ -265,7 +273,7 @@ async function probeCrossOriginIsolation(browser) {
           [30, 22, 11, 0],
         ]
         const visited = await withTimeout(
-          window.__bench.engines.ortools(m, { startNode: 0, endNode: 3, k: 2, timeBudgetMs: 200 }),
+          window.__bench.solve('ortools', m, { startNode: 0, endNode: 3, k: 2, timeBudgetMs: 200 }),
           timeoutMs,
         )
         return { stage: 'solve', ok: true, visited }
@@ -366,17 +374,23 @@ async function main() {
   for (const spec of specs) {
     const instance = makeInstance(spec)
     const budget = spec.budget
+
+    for (const engineId of ENGINE_LIST) {
     const reps = []
 
     for (let rep = 0; rep < REPS; rep++) {
+      // A fresh page per rep, still. It is only OR-Tools that needs it (see
+      // the note above), but giving one engine a clean heap and another a used
+      // one would make the comparison measure the reload rather than the search.
       await reload()
       const raw = await page.evaluate(solveInPage, {
-        engine: ENGINE,
+        engine: engineId,
         matrix: instance.matrix,
         startNode: instance.startNode,
         endNode: instance.endNode,
         k: instance.k,
         timeBudgetMs: budget,
+        seed: instance.seed,
       })
 
       if (raw.error) {
@@ -385,16 +399,24 @@ async function main() {
       }
 
       const problems = validate(raw.visited, instance)
+      const objective = objectiveOf(raw.visited, instance.matrix, instance.n, SKIP_PENALTY)
+      const skipped = instance.n - raw.visited.length
       reps.push({
         rep,
         wallMs: Number(raw.wallMs.toFixed(1)),
-        objective: objectiveOf(raw.visited, instance.matrix, instance.n, SKIP_PENALTY),
+        objective,
+        // The travel cost alone. When K binds, the objective is dominated by a
+        // CONSTANT — 85 skipped stops is 850,000,000 of it — and two engines
+        // whose routes differ by 15% of the actual driving both read as
+        // "+0.00%". The arc cost is the part that varies.
+        arcs: objective - SKIP_PENALTY * skipped,
         visitedCount: raw.visited.length,
         skipped: instance.n - raw.visited.length,
         valid: problems.length === 0,
         problems,
         peakJsHeapBytes: raw.peakJsHeapBytes,
         uaMemoryAfterBytes: raw.uaMemoryAfterBytes,
+        progressReports: raw.progressReports,
       })
     }
 
@@ -406,6 +428,7 @@ async function main() {
 
     const summary = {
       id: instance.id,
+      engine: engineId,
       family: instance.family,
       n: instance.n,
       k: instance.k,
@@ -414,6 +437,8 @@ async function main() {
       reps: reps.length,
       medianWallMs: median(ok.map((r) => r.wallMs)),
       medianObjective: median(ok.map((r) => r.objective)),
+      medianArcs: median(ok.map((r) => r.arcs)),
+      medianSkipped: median(ok.map((r) => r.skipped)),
       bestObjective: ok.length ? Math.min(...ok.map((r) => r.objective)) : null,
       worstObjective: ok.length ? Math.max(...ok.map((r) => r.objective)) : null,
       medianVisited: median(ok.map((r) => r.visitedCount)),
@@ -426,12 +451,53 @@ async function main() {
 
     const objStr = summary.medianObjective === null ? 'FAILED' : summary.medianObjective.toLocaleString('en-US')
     console.log(
-      `  ${instance.id.padEnd(26)} ${String(summary.tier).padEnd(8)} ` +
-        `${String(summary.medianWallMs ?? '—').padStart(8)} ms  ` +
+      `  ${instance.id.padEnd(24)} ${engineId.padEnd(11)} ` +
+        `${String(summary.medianWallMs ?? '—').padStart(7)} ms  ` +
         `obj ${objStr.padStart(14)}  ` +
         `visited ${String(summary.medianVisited ?? '—').padStart(3)}/${instance.n}  ` +
         `${summary.allValid ? '✓' : '✗ INVALID'}`,
     )
+    }
+  }
+
+  // ---- engine comparison ----
+  //
+  // The whole point of --engine=all. Every engine is scored by the SAME referee
+  // on the SAME instance at the SAME budget, and the gap is stated against the
+  // best any of them managed — not against a published optimum, because the
+  // synthetic families have none. TSPLIB is where real gap-to-optimal lives.
+  if (ENGINE_LIST.length > 1) {
+    console.log('\n━━━ engine comparison (gap to best-of-all, per instance) ━━━\n')
+    const byInstance = new Map()
+    for (const run of runs) {
+      if (!byInstance.has(run.id)) byInstance.set(run.id, [])
+      byInstance.get(run.id).push(run)
+    }
+    const header = ['instance'.padEnd(24), ...ENGINE_LIST.map((e) => e.padStart(14))].join(' ')
+    console.log('  ' + header)
+    console.log('  (gap on travel cost; instances where engines skipped different counts are marked)')
+    const wins = Object.fromEntries(ENGINE_LIST.map((e) => [e, 0]))
+    for (const [id, group] of byInstance) {
+      const scored = group.filter((g) => g.medianObjective !== null)
+      if (scored.length === 0) continue
+      // Rank on the true objective — visiting one more stop always beats a
+      // prettier route — but MEASURE the gap on arcs when every engine skipped
+      // the same number, because then the penalty is a shared constant and only
+      // the driving differs.
+      const sameSkips = scored.every((g) => g.medianSkipped === scored[0].medianSkipped)
+      const field = sameSkips ? 'medianArcs' : 'medianObjective'
+      const best = Math.min(...scored.map((g) => g[field]))
+      const bestObjective = Math.min(...scored.map((g) => g.medianObjective))
+      for (const g of scored) if (g.medianObjective === bestObjective) wins[g.engine]++
+      const cells = ENGINE_LIST.map((e) => {
+        const run = group.find((g) => g.engine === e)
+        if (!run || run.medianObjective === null) return 'FAILED'.padStart(14)
+        const gap = ((run[field] - best) / best) * 100
+        return `${gap === 0 ? 'best' : '+' + gap.toFixed(2) + '%'}`.padStart(14)
+      })
+      console.log('  ' + [id.padEnd(24), ...cells].join(' ') + (sameSkips ? '' : '  (objective)')) 
+    }
+    console.log('\n  instances won: ' + ENGINE_LIST.map((e) => `${e} ${wins[e]}`).join('   '))
   }
 
   // ---- endurance: how many solves does one page survive? ----
@@ -450,7 +516,7 @@ async function main() {
     for (let i = 1; i <= 40; i++) {
       const t0 = performance.now()
       try {
-        await window.__bench.engines.ortools(matrix, { startNode, endNode, k, timeBudgetMs: 3000 })
+        await window.__bench.solve('ortools', matrix, { startNode, endNode, k, timeBudgetMs: 3000 })
         results.push({ solve: i, ok: true, ms: Math.round(performance.now() - t0) })
       } catch (e) {
         results.push({ solve: i, ok: false, error: String(e?.message ?? e), ms: Math.round(performance.now() - t0) })

@@ -24,3 +24,7 @@ dist-seamcheck
 *.njsproj
 *.sln
 *.sw?
+
+# TSPLIB instances are fetched on demand (npm run bench:tsplib), never committed —
+# the library publishes no licence, and downloading is not redistributing.
+bench/fixtures/tsplib/

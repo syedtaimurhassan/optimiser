@@ -72,6 +72,14 @@ export interface BenchSeam {
     degraded: boolean
   }>
   warmUp: () => Promise<void>
+  /**
+   * Warm ONE engine by name, bypassing selection.
+   *
+   * The cross-origin-isolation probe needs to ask what OR-Tools' WebAssembly
+   * does on an un-isolated page, which it cannot do through `warmUp` now that
+   * the registry would hand it a TypeScript engine that has nothing to warm.
+   */
+  warmUpEngine: (engineId: string) => Promise<void>
   /** Names of every engine this build can run. */
   engineIds: () => string[]
   /**
@@ -155,6 +163,12 @@ window.__bench = {
   },
 
   warmUp: () => activeSelection().engine.warmUp(),
+
+  warmUpEngine: async (engineId) => {
+    const build = ENGINES[engineId]
+    if (!build) throw new Error(`unknown engine "${engineId}"`)
+    await (await build()).warmUp()
+  },
 
   engineIds: () => Object.keys(ENGINES),
 
