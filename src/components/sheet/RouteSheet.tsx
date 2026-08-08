@@ -28,6 +28,7 @@ import { RouteList } from './RouteList'
 import { SearchScreen } from '../search/SearchScreen'
 import { EmptyRouteState } from './EmptyRouteState'
 import { CopyStopsSheet } from '../routes/CopyStopsSheet'
+import { ImportStopsSheet } from '../search/ImportStopsSheet'
 import { copySourceRoutes } from '../../lib/copyStops'
 import { useAddStops } from '../../hooks/useAddStops'
 
@@ -95,6 +96,7 @@ export function RouteSheet() {
   const addStops = useRoutesStore((s) => s.addStops)
   const allRoutes = useRoutesStore((s) => s.routes)
   const [copyOpen, setCopyOpen] = useState(false)
+  const [importOpen, setImportOpen] = useState(false)
 
   const sheetRef = useRef<HTMLElement>(null)
   const headerBlockRef = useRef<HTMLDivElement>(null)
@@ -494,6 +496,7 @@ export function RouteSheet() {
               setSearchOpen(true)
             }}
             onCopyFromPast={() => setCopyOpen(true)}
+            onImportFile={() => setImportOpen(true)}
           />
         ) : (
           <RouteList
@@ -544,6 +547,8 @@ export function RouteSheet() {
         destinationRouteId={route.id}
         onCopy={(copied) => addStops(copied)}
       />
+
+      <ImportStopsSheet open={importOpen} onClose={() => setImportOpen(false)} />
     </aside>
   )
 }

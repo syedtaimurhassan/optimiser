@@ -1,6 +1,7 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useRef, useState } from 'react'
 import { getGeocodingService } from '../lib/geocoding'
 import type { Suggestion } from '../lib/geocoding/types.ts'
+import type { ImportedRow } from '../lib/importRows.ts'
 import { parsePastedAddresses } from '../lib/pasteAddresses.ts'
 import { useRoutesStore, type NewStopInput } from '../store/routesStore'
 
@@ -21,6 +22,8 @@ export interface BatchProgress {
   /** Addresses that could not be geocoded, verbatim, so they can be retried. */
   failures: string[]
   running: boolean
+  /** True when the run stopped because the user asked it to. */
+  cancelled?: boolean
 }
 
 const IDLE: BatchProgress = { done: 0, total: 0, failures: [], running: false }
@@ -28,6 +31,21 @@ const IDLE: BatchProgress = { done: 0, total: 0, failures: [], running: false }
 export function useAddStops() {
   const addStops = useRoutesStore((s) => s.addStops)
   const [progress, setProgress] = useState<BatchProgress>(IDLE)
+
+  /**
+   * Cancellation is a ref, not state.
+   *
+   * The loop below is a closure that starts once; a state value read inside it
+   * would be the value captured at the first render and would never become
+   * true, so Cancel would do nothing at all. A ref is the same object on every
+   * iteration, which is the only reason the flag is visible to a loop already
+   * in flight.
+   */
+  const cancelRef = useRef(false)
+
+  const cancel = useCallback(() => {
+    cancelRef.current = true
+  }, [])
 
   /** A suggestion already carries its coordinates, so this needs no lookup. */
   const addSuggestion = useCallback(
@@ -57,12 +75,15 @@ export function useAddStops() {
       const total = lines.length
       if (total === 0) return IDLE
 
+      cancelRef.current = false
       setProgress({ done: 0, total, failures: [], running: true })
 
       const created: NewStopInput[] = []
       const failures: string[] = []
+      let done = 0
 
-      for (const [index, line] of lines.entries()) {
+      for (const line of lines) {
+        if (cancelRef.current) break
         try {
           const [best] = await service.autocomplete(line, { limit: 1 })
           if (best) {
@@ -73,16 +94,59 @@ export function useAddStops() {
         } catch {
           failures.push(line)
         }
-        setProgress({ done: index + 1, total, failures: [...failures], running: true })
+        done++
+        setProgress({ done, total, failures: [...failures], running: true })
       }
 
+      // Whatever resolved before the cancel is still added. Throwing away
+      // forty good stops because the driver stopped the run on the forty-first
+      // would make Cancel more expensive than waiting.
       if (created.length) addStops(created)
 
-      const final: BatchProgress = { done: total, total, failures, running: false }
+      const final: BatchProgress = {
+        done,
+        total,
+        failures,
+        running: false,
+        cancelled: cancelRef.current,
+      }
       setProgress(final)
       return final
     },
     [addStops],
+  )
+
+  /**
+   * Import classified rows: coordinate rows go straight in, address rows are
+   * geocoded.
+   *
+   * Splitting them matters for spend. A file of 200 stops that already has
+   * coordinates costs nothing, and only the rows that genuinely need an
+   * answer are sent — which a naive "geocode every row" importer would not do.
+   */
+  const addFromImportedRows = useCallback(
+    async (rows: ImportedRow[]) => {
+      const direct = rows.filter((r) => r.point)
+      const toGeocode = rows.filter((r) => !r.point && r.query)
+
+      if (direct.length) {
+        addStops(
+          direct.map((r) => ({
+            lat: r.point!.lat,
+            lng: r.point!.lng,
+            address: r.address,
+          })),
+        )
+      }
+
+      if (toGeocode.length === 0) {
+        const final = { ...IDLE, done: 0, total: 0 }
+        setProgress(final)
+        return final
+      }
+      return addFromAddresses(toGeocode.map((r) => r.query!))
+    },
+    [addStops, addFromAddresses],
   )
 
   /**
@@ -108,5 +172,13 @@ export function useAddStops() {
 
   const resetProgress = useCallback(() => setProgress(IDLE), [])
 
-  return { addSuggestion, addFromAddresses, addFromClipboard, progress, resetProgress }
+  return {
+    addSuggestion,
+    addFromAddresses,
+    addFromImportedRows,
+    addFromClipboard,
+    cancel,
+    progress,
+    resetProgress,
+  }
 }

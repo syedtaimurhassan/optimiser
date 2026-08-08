@@ -1,6 +1,8 @@
 import Papa from 'papaparse'
-import type { LatLng, ParseResult } from '../types'
-import { toLatLngResult, type CoordReason } from './coordinates'
+import type { LatLng, ParseResult } from '../types.ts'
+import { toLatLngResult, type CoordReason } from './coordinates.ts'
+import { classifyRows, type ClassifiedRows, type Row as ImportRow } from './importRows.ts'
+import { parseXlsx } from './xlsx.ts'
 
 const reasonText = (reason: CoordReason, label: string, i: number) =>
   reason === 'range'
@@ -106,4 +108,77 @@ export function parseWaypointFile(file: File): Promise<ParseResult> {
   if (name.endsWith('.csv')) return parseCsv(file)
   if (file.type.includes('json')) return parseJson(file)
   return parseCsv(file)
+}
+
+// ──────────────────────────────────────────────── M6: the address importer
+
+/**
+ * The richer import path.
+ *
+ * `parseWaypointFile` above is unchanged and still the coordinate-only API —
+ * `routeStore.addWaypoints` and the M1 uploader both still call it, and both
+ * still behave exactly as they did. This is a SECOND entry point rather than a
+ * replacement, because the two answer different questions: the old one returns
+ * points, this one returns rows that may still need geocoding.
+ */
+
+/**
+ * Delimited text: CSV and TSV, told apart by Papa rather than by us.
+ *
+ * The text is read first and parsed as a STRING rather than handing Papa the
+ * `File`. Papa's file path goes through `FileReaderSync`, which only exists
+ * inside a worker — so passing a File makes this function unrunnable anywhere
+ * except a browser main thread, and untestable outside one. Reading first
+ * behaves identically in the browser and works everywhere else too.
+ */
+async function parseDelimited(file: File): Promise<ImportRow[]> {
+  const results = Papa.parse<ImportRow>(await file.text(), {
+    header: true,
+    skipEmptyLines: true,
+    // Empty string means "sniff it". This is the whole of TSV support: the
+    // format differs from CSV by one character, and Papa already detects it
+    // more reliably than a filename extension does.
+    delimiter: '',
+  })
+  return results.data
+}
+
+/** Rows from a JSON array, for parity with the coordinate importer. */
+async function parseJsonRows(file: File): Promise<ImportRow[]> {
+  const data: unknown = JSON.parse(await file.text())
+  if (!Array.isArray(data)) throw new Error('JSON root must be an array of objects.')
+  return data.filter((d): d is ImportRow => Boolean(d) && typeof d === 'object')
+}
+
+export interface ImportFileResult extends ClassifiedRows {
+  /** What the file was read as, for the report the user sees. */
+  format: 'csv' | 'xlsx' | 'json'
+}
+
+/**
+ * Read any supported file into classified rows.
+ *
+ * Errors are RETURNED, not thrown: a file that cannot be read at all is the
+ * same kind of event as a file with three bad rows, and the caller should have
+ * one thing to render rather than a try/catch and a result type.
+ */
+export async function importStopFile(file: File): Promise<ImportFileResult> {
+  const name = file.name.toLowerCase()
+  const format: ImportFileResult['format'] = name.endsWith('.xlsx')
+    ? 'xlsx'
+    : name.endsWith('.json')
+      ? 'json'
+      : 'csv'
+
+  try {
+    const rows =
+      format === 'xlsx'
+        ? await parseXlsx(file)
+        : format === 'json'
+          ? await parseJsonRows(file)
+          : await parseDelimited(file)
+    return { ...classifyRows(rows), format }
+  } catch (e) {
+    return { rows: [], needsGeocoding: 0, errors: [(e as Error).message], format }
+  }
 }

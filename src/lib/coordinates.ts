@@ -1,4 +1,4 @@
-import type { LatLng } from '../types'
+import type { LatLng } from '../types.ts'
 
 /**
  * Coerce an unknown value (string from CSV, number from JSON, null, etc.)

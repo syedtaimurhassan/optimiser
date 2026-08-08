@@ -17,11 +17,17 @@ import { PinPlusDashedIcon } from '../ui/icons'
 export interface EmptyRouteStateProps {
   onAddStops: () => void
   onCopyFromPast: () => void
+  onImportFile: () => void
   /** Hidden when there is no past route worth copying from. */
   canCopy: boolean
 }
 
-export function EmptyRouteState({ onAddStops, onCopyFromPast, canCopy }: EmptyRouteStateProps) {
+export function EmptyRouteState({
+  onAddStops,
+  onCopyFromPast,
+  onImportFile,
+  canCopy,
+}: EmptyRouteStateProps) {
   return (
     <div data-testid="empty-route" className="flex flex-col items-center px-4 pb-8 pt-10">
       <PinPlusDashedIcon className="h-14 w-14 text-on-surface-variant" />
@@ -42,6 +48,21 @@ export function EmptyRouteState({ onAddStops, onCopyFromPast, canCopy }: EmptyRo
           </FullWidthButton>
         )}
       </div>
+
+      {/*
+        Import is a text link, not a third button. The design names two
+        buttons and it is right to: a file import is a once-a-week action for
+        the few drivers who get a manifest, and giving it equal weight would
+        make the two common paths harder to pick out for everyone else.
+      */}
+      <button
+        type="button"
+        onClick={onImportFile}
+        data-testid="empty-import"
+        className="mt-4 min-h-touch rounded-pill px-3 text-label font-semibold text-primary active:bg-surface-variant"
+      >
+        Import from a file
+      </button>
     </div>
   )
 }
