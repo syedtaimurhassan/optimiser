@@ -1,4 +1,5 @@
 import { useSolverStore } from '../store/solverStore'
+import { EngineBadge } from './EngineBadge'
 
 /**
  * Frosted-glass overlay shown over the map while a route is being computed.
@@ -29,6 +30,9 @@ export function CalculatingOverlay() {
             Exploring route options to avoid a sub-optimal result — this can take
             a few seconds.
           </p>
+          {/* The one moment the engine is worth a user's attention: it is the
+              thing deciding how long they are looking at this overlay. */}
+          <EngineBadge className="mt-1.5" />
         </div>
       </div>
     </div>

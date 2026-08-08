@@ -4,6 +4,8 @@ import { formatReport, selfTest } from '../lib/device/capabilities'
 import { describeDb, SCHEMA_VERSION } from '../lib/persistence/db'
 import { getMigrationOutcome } from '../lib/persistence/boot'
 import { getRecentErrors } from '../lib/diagnostics/errorLog'
+import { useSolverStore } from '../store/solverStore'
+import { EngineBadge } from './EngineBadge'
 
 /**
  * Dev-only capability dump.
@@ -17,6 +19,7 @@ export function DiagnosticsPanel() {
   const tier = useDeviceStore((s) => s.tier)
   const ready = useDeviceStore((s) => s.ready)
   const probe = useDeviceStore((s) => s.probe)
+  const engine = useSolverStore((s) => s.engine)
 
   const [dbCounts, setDbCounts] = useState<Record<string, number> | null>(null)
   const [dbError, setDbError] = useState<string | null>(null)
@@ -40,6 +43,7 @@ export function DiagnosticsPanel() {
     `=== Route Optimiser diagnostics ===`,
     `generated  ${new Date().toISOString()}`,
     `tier       ${tier}${ready ? '' : ' (probing…)'}`,
+    `engine     ${engine.id} — ${engine.label}`,
     ``,
     formatReport(capabilities),
     ``,
@@ -66,6 +70,7 @@ export function DiagnosticsPanel() {
           Diagnostics · tier: <span className="font-mono">{tier}</span>
           {!ready && <span className="ml-1 font-normal text-slate-400">probing…</span>}
         </span>
+        <EngineBadge className="ml-auto" />
         <button
           type="button"
           onClick={async () => {

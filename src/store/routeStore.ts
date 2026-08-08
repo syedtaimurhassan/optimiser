@@ -4,13 +4,15 @@ import { useUiStore } from './uiStore'
 import type { AddressedStop, LatLng, Objective, OptimizedRoute, Favorite } from '../types'
 import { joinOrderedStopIds, planSelectiveRoute } from '../lib/planRoute'
 import { warmUpSolver } from '../lib/solver'
+import { activeSelection } from '../lib/compute/active'
+import { describeSelection } from '../lib/compute/registry'
 import { cumulativeArrivals, serviceSecFor } from '../lib/arrivals'
 import {
   END_KEY,
   matrixCacheKey,
   saveMatrix,
   START_KEY,
-  toCachedMatrix,
+  toCachedMatrixFlat,
 } from '../lib/costMatrix'
 
 /**
@@ -121,18 +123,23 @@ const ACTIONS = {
     if (match) routes().setStopStatus(match.id, 'delivered')
   },
 
+  /*
+    Warm up the engine the registry picked.
+
+    What used to be here: a `window.crossOriginIsolated` gate that, when false,
+    set a warning telling the driver to go and find Chrome. That was true of
+    OR-Tools — its WASM was built with pthreads and would not initialise without
+    SharedArrayBuffer — and it meant the app refused to optimise at all on iOS
+    Safari and Firefox. No engine in the production bundle needs isolation any
+    more, so the gate is gone rather than merely relaxed.
+  */
   warmUp: () => {
     const solver = useSolverStore.getState()
-    if (typeof window !== 'undefined' && window.crossOriginIsolated) {
-      warmUpSolver()
-        .then(() => solver.setReady(true))
-        .catch((e: unknown) => solver.setWarning((e as Error).message))
-    } else {
-      solver.setWarning(
-        'This browser did not enable the isolation the optimizer needs ' +
-          '(SharedArrayBuffer). Please use the latest Chrome or Edge.',
-      )
-    }
+    const selection = activeSelection()
+    solver.setEngine({ id: selection.engine.id, label: describeSelection(selection) })
+    warmUpSolver()
+      .then(() => solver.setReady(true))
+      .catch((e: unknown) => solver.setWarning((e as Error).message))
   },
 
   calculateRoute: async () => {
@@ -142,6 +149,8 @@ const ACTIONS = {
     if (!route) return
 
     solver.begin()
+    const controller = new AbortController()
+    solver.setAbortController(controller)
     try {
       const pending = route.stops.filter((s) => s.status === 'pending')
       const result = await planSelectiveRoute({
@@ -152,6 +161,11 @@ const ACTIONS = {
         objective: route.optimizeBy,
         timeBudgetMs: route.searchTierSec * 1000,
         onStatus: (msg) => solver.setStatus(msg),
+        signal: controller.signal,
+        // The search reports its own progress now, so "Optimizing route…" can
+        // say how it is getting on rather than only that it started.
+        onProgress: ({ elapsedMs }) =>
+          solver.setStatus(`Optimizing route… ${(elapsedMs / 1000).toFixed(1)}s`),
       })
 
       // Backfill the M2 fields the planner doesn't know about. `joinOrderedStopIds`
@@ -176,7 +190,7 @@ const ACTIONS = {
         return stop ? serviceSecFor(stop) : 0
       })
 
-      const { matrix, matrixWaypointIndex, ...planned } = result
+      const { matrix, matrixN, matrixWaypointIndex, ...planned } = result
       const optimized: OptimizedRoute = {
         ...planned,
         orderedStopIds,
@@ -204,7 +218,7 @@ const ACTIONS = {
           : (pending[index]?.id ?? END_KEY),
       )
       const cacheKey = matrixCacheKey(route.id, route.optimizeBy)
-      await saveMatrix(cacheKey, toCachedMatrix(matrix, matrixKeys, route.optimizeBy)).catch(
+      await saveMatrix(cacheKey, toCachedMatrixFlat(matrix, matrixN, matrixKeys, route.optimizeBy)).catch(
         (e: unknown) => console.warn('[routes] could not cache the cost matrix', e),
       )
 
@@ -213,6 +227,13 @@ const ACTIONS = {
       state.clearPending()
       solver.succeed()
     } catch (e) {
+      // A cancelled solve leaves the previous route exactly where it was. Only
+      // a genuine failure clears it, because a driver who cancels still needs
+      // the itinerary they were driving.
+      if ((e as Error).name === 'AbortError') {
+        solver.cancelled()
+        return
+      }
       routes().setOptimized(null)
       solver.fail((e as Error).message)
     }

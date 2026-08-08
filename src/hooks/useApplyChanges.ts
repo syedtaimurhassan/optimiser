@@ -1,7 +1,7 @@
 import { useCallback, useState } from 'react'
 import type { AddressedStop, OptimizedRoute, Route } from '../types'
 import { cumulativeArrivals, serviceSecFor } from '../lib/arrivals'
-import { END_KEY, START_KEY, matrixCacheKey, saveMatrix, toCachedMatrix } from '../lib/costMatrix'
+import { END_KEY, START_KEY, matrixCacheKey, saveMatrix, toCachedMatrixFlat } from '../lib/costMatrix'
 import { fetchRouteGeometry } from '../lib/routingService'
 import { joinOrderedStopIds, planSelectiveRoute } from '../lib/planRoute'
 import { addedStops, removedStopIds, stagedStops } from '../lib/staging'
@@ -120,6 +120,8 @@ export function useApplyChanges(route: Route | null) {
     const solver = useSolverStore.getState()
     setState({ running: 'reoptimise', error: null })
     solver.begin()
+    const controller = new AbortController()
+    solver.setAbortController(controller)
 
     const stops = committedStops(route)
     const pending = stops.filter((s) => s.status === 'pending')
@@ -133,9 +135,10 @@ export function useApplyChanges(route: Route | null) {
         objective: route.optimizeBy,
         timeBudgetMs: route.searchTierSec * 1000,
         onStatus: (message) => solver.setStatus(message),
+        signal: controller.signal,
       })
 
-      const { matrix, matrixWaypointIndex, ...planned } = result
+      const { matrix, matrixN, matrixWaypointIndex, ...planned } = result
       // The matrix's rows are labelled from the planner's POSITIONAL index
       // list, so a row knows which stop it is without the planner ever having
       // seen one.
@@ -161,7 +164,7 @@ export function useApplyChanges(route: Route | null) {
       }
 
       const cacheKey = matrixCacheKey(route.id, route.optimizeBy)
-      await saveMatrix(cacheKey, toCachedMatrix(matrix, matrixKeys, route.optimizeBy)).catch(
+      await saveMatrix(cacheKey, toCachedMatrixFlat(matrix, matrixN, matrixKeys, route.optimizeBy)).catch(
         (e: unknown) => console.warn('[routes] could not cache the cost matrix', e),
       )
 
@@ -171,6 +174,13 @@ export function useApplyChanges(route: Route | null) {
       setState(IDLE)
       return true
     } catch (e) {
+      // Cancelling leaves the staged changes staged, so the driver can commit
+      // them again rather than having to re-stage what they already reviewed.
+      if ((e as Error).name === 'AbortError') {
+        solver.cancelled()
+        setState(IDLE)
+        return false
+      }
       const message = (e as Error).message
       solver.fail(message)
       setState({ running: null, error: message })

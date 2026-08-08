@@ -8,6 +8,7 @@ import {
   matrixCost,
   missingKeys,
   toCachedMatrix,
+  toCachedMatrixFlat,
   withFallback,
   type MatrixPoint,
 } from './costMatrix.ts'
@@ -104,5 +105,36 @@ describe('matrixCacheKey', () => {
   test('is per route AND per objective — the two grids are different numbers', () => {
     assert.notEqual(matrixCacheKey('r1', 'duration'), matrixCacheKey('r1', 'distance'))
     assert.notEqual(matrixCacheKey('r1', 'duration'), matrixCacheKey('r2', 'duration'))
+  })
+})
+
+describe('toCachedMatrixFlat', () => {
+  test('takes the flat grid the compute path produces', () => {
+    const flat = Int32Array.from([0, 1, 2, 10, 0, 12, 20, 21, 0])
+    const cached = toCachedMatrixFlat(flat, 3, ['a', 'b', 'c'], 'duration')
+    assert.deepEqual(cached.costs, [0, 1, 2, 10, 0, 12, 20, 21, 0])
+    assert.equal(cached.n, 3)
+    assert.deepEqual(cached.keys, ['a', 'b', 'c'])
+  })
+
+  test('agrees cell for cell with the jagged builder', () => {
+    const flat = Int32Array.from(grid.flat())
+    assert.deepEqual(
+      toCachedMatrixFlat(flat, 3, ['a', 'b', 'c'], 'duration').costs,
+      toCachedMatrix(grid, ['a', 'b', 'c'], 'duration').costs,
+    )
+  })
+
+  test('refuses a key list that disagrees with the grid rather than padding', () => {
+    // A zero-filled row reads as "these two stops are next door", which is the
+    // most expensive possible thing to be silently wrong about.
+    const flat = new Int32Array(9)
+    assert.throws(() => toCachedMatrixFlat(flat, 3, ['a', 'b'], 'duration'), /3 rows but 2 keys/)
+    assert.throws(() => toCachedMatrixFlat(flat, 4, ['a', 'b', 'c', 'd'], 'duration'), /holds 9 cells/)
+  })
+
+  test('stores plain numbers, so a row written before M9 is the same shape', () => {
+    const cached = toCachedMatrixFlat(new Int32Array(4), 2, ['a', 'b'], 'distance')
+    assert.ok(Array.isArray(cached.costs))
   })
 })

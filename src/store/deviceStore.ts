@@ -4,6 +4,7 @@ import {
   detectAsync,
   type Capabilities,
 } from '../lib/device/capabilities'
+import { refreshActiveEngine } from '../lib/compute/active'
 
 /**
  * Coarse capability tier, so components ask "can this device cope" rather than
@@ -51,6 +52,11 @@ export const useDeviceStore = create<DeviceState>()((set, get) => ({
       const async = await detectAsync()
       set((s) => {
         const capabilities: Capabilities = { ...s.capabilities, ...async, asyncResolved: true }
+        // SIMD and threads are exactly the probes engine selection turns on, so
+        // this is the moment the registry can stop being pessimistic. Re-select
+        // here rather than letting each caller resolve for itself, or the
+        // pipeline and the badge would disagree during the gap.
+        refreshActiveEngine(capabilities)
         return { capabilities, tier: classify(capabilities), ready: true }
       })
     } catch {

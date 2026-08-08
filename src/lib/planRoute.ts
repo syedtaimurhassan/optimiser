@@ -5,7 +5,16 @@ import {
   fetchRouteGeometry,
   type Objective,
 } from './routingService'
-import { solveSelectiveTSP } from './solver'
+import { activeSelection } from './compute/active.ts'
+import { hilbertOrder } from './compute/hilbert.ts'
+import {
+  SKIP_PENALTY,
+  makeConstraints,
+  toSolveMatrix,
+  type SolveMatrix,
+  type SolveProgress,
+  type SolverEngine,
+} from './compute/solverPort.ts'
 import { haversine } from './optimize'
 
 /** Human-readable status of the current pipeline stage, for UI feedback. */
@@ -22,9 +31,22 @@ export interface PlanInput {
   targetK: number | null
   /** Minimize driving time or road distance. */
   objective: Objective
-  /** Wall-clock ceiling (ms) for the multi-start solver. */
+  /** Wall-clock ceiling (ms) for the search. */
   timeBudgetMs?: number
   onStatus?: PlanStatus
+  /**
+   * Which engine to solve with. Defaults to whatever the registry picked for
+   * this device.
+   *
+   * An argument rather than a lookup so the benchmark can run two engines over
+   * one instance without reaching into module state, and so a test can pass a
+   * stub without a browser.
+   */
+  engine?: SolverEngine
+  /** Live search progress, for a status line that means something. */
+  onProgress?: (progress: SolveProgress) => void
+  /** Cancels the solve. The returned promise rejects with an `AbortError`. */
+  signal?: AbortSignal
 }
 
 const sameCoord = (a: LatLng, b: LatLng) => a.lat === b.lat && a.lng === b.lng
@@ -80,8 +102,18 @@ export function joinOrderedStopIds<T extends LatLng & { id: string }>(
 export type PlannedRoute = Omit<OptimizedRoute, 'orderedStopIds' | 'arrivalSec'> & {
   legSeconds: number[]
   legMeters: number[]
-  /** The N×N cost grid the solve ran on, worth caching rather than refetching. */
-  matrix: number[][]
+  /**
+   * The N×N cost grid the solve ran on, flat and row-major (`m[i * n + j]`),
+   * worth caching rather than refetching.
+   *
+   * Flat rather than `number[][]` because M9 put the compute path on typed
+   * arrays end to end: the grid is converted once, here, at the boundary with
+   * the network adapter, and nothing downstream of that conversion ever sees a
+   * jagged array again.
+   */
+  matrix: Int32Array
+  /** Side of `matrix`. Carried because a flat buffer cannot report its own. */
+  matrixN: number
   /** Per matrix index: which `waypoints` entry it is, or null for an endpoint. */
   matrixWaypointIndex: (number | null)[]
 }
@@ -105,6 +137,9 @@ export async function planSelectiveRoute({
   objective,
   timeBudgetMs,
   onStatus,
+  engine,
+  onProgress,
+  signal,
 }: PlanInput): Promise<PlannedRoute> {
   // Candidates = uploaded stops, minus any that coincide with a chosen
   // endpoint. Their positions in the caller's array are carried alongside, so
@@ -147,16 +182,61 @@ export async function planSelectiveRoute({
 
   // 1) Cost grid (tiled + rate-limited for large sets).
   onStatus?.('Fetching cost matrix…')
-  const matrix = await fetchCostMatrix(points, objective, (done, total) => {
+  const rows = await fetchCostMatrix(points, objective, (done, total) => {
     onStatus?.(
       total > 1 ? `Fetching cost matrix… ${done}/${total}` : 'Fetching cost matrix…',
     )
   })
 
-  // 2) Optimize (best K + order), in-browser via OR-Tools WASM. This runs a
-  //    time-boxed multi-start search, so it intentionally takes a few seconds.
-  onStatus?.('Optimizing route (Deep Search)…')
-  const visited = await solveSelectiveTSP(matrix, { startNode, endNode, k, timeBudgetMs })
+  // The one conversion. Above this line the world is jagged arrays of doubles
+  // because that is what a JSON API returns; below it, everything is a flat
+  // Int32Array — including, from M10, WASM linear memory.
+  const n = points.length
+  const matrix = toSolveMatrix(rows)
+
+  /*
+    The matrix holds SECONDS on a duration objective and METRES on a distance
+    one, because only one OSRM table is fetched per solve and fetching two would
+    double the traffic for a number the driver never sees.
+
+    The port wants both, so the missing one is derived at the 8 m/s this
+    codebase already uses everywhere it has metres and needs seconds — see
+    `haversineCost` in costMatrix.ts and the offline branch below. The
+    alternative is passing metres in a field named `durations`, which would be
+    a lie that M11's time windows would then act on.
+  */
+  const solveMatrix: SolveMatrix =
+    objective === 'distance'
+      ? { n, durations: Int32Array.from(matrix, (metres) => Math.round(metres / 8)), distances: matrix }
+      : { n, durations: matrix }
+
+  const constraints = makeConstraints(n)
+  // A pinned endpoint is not a stop the optimiser may decline to visit.
+  if (startNode !== null) constraints.optional[startNode] = 0
+  if (endNode !== null) constraints.optional[endNode] = 0
+
+  // 2) Optimize (order, and which candidates to visit) — in-browser, on the
+  //    engine the registry picked for this device.
+  const solver = engine ?? activeSelection().engine
+  onStatus?.('Optimizing route…')
+  const solved = await solver.solve(
+    {
+      matrix: solveMatrix,
+      constraints,
+      endpoints: { start: startNode, end: endNode },
+      selectK: targetK == null ? null : k,
+      skipPenalty: SKIP_PENALTY,
+      objective,
+      budgetMs: timeBudgetMs ?? 3000,
+      // A space-filling-curve sort is the only thing in this pipeline that
+      // knows where the stops physically are; the matrix does not.
+      seedOrder: hilbertOrder(points),
+    },
+    onProgress,
+    signal,
+  )
+
+  const visited = Array.from(solved.order)
   const orderedWaypoints = visited.map((i) => points[i])
 
   // Real cost along the chosen route (sum of matrix cells), and the per-leg
@@ -165,7 +245,7 @@ export async function planSelectiveRoute({
   let matrixCost = 0
   const matrixLegs: number[] = []
   for (let i = 0; i < visited.length - 1; i++) {
-    const cell = matrix[visited[i]][visited[i + 1]]
+    const cell = matrix[visited[i] * n + visited[i + 1]]
     matrixLegs.push(cell)
     matrixCost += cell
   }
@@ -182,6 +262,7 @@ export async function planSelectiveRoute({
       legSeconds: road.legSeconds,
       legMeters: road.legMeters,
       matrix,
+      matrixN: n,
       matrixWaypointIndex,
       candidatesVisited: orderedWaypoints.length - fixedCount,
       candidatesTotal: candidates.length,
@@ -215,6 +296,7 @@ export async function planSelectiveRoute({
       // Still worth caching: the matrix came from OSRM Table and is real. Only
       // the GEOMETRY leg of the pipeline failed.
       matrix,
+      matrixN: n,
       matrixWaypointIndex,
       candidatesVisited: orderedWaypoints.length - fixedCount,
       candidatesTotal: candidates.length,
