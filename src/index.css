@@ -60,6 +60,30 @@
   --color-group-pink: #d6296e;
   --color-group-amber: #c77700;
 
+  /* ── The same palette, pastel ──
+   * The id chip in a list row is a pastel background with saturated text; the
+   * map's chip is the solid fill. Two treatments of one colour, because a
+   * column of 44 solid chips is a column of 44 shouts, while a solid chip on a
+   * busy map is exactly what has to win.
+   *
+   * The text colours are NOT decorative choices. A chip label is 13px bold,
+   * which is not "large text" under WCAG, so each pair clears 4.5:1 against
+   * its own container — computed, not eyeballed. Blue and purple survive at
+   * full saturation; amber has to darken a long way to get there.
+   */
+  --color-group-blue-container: #e4ecfa;
+  --color-on-group-blue-container: #1a5fd4; /* 4.86:1 */
+  --color-group-purple-container: #efe8fc;
+  --color-on-group-purple-container: #7b3fe4; /* 4.80:1 */
+  --color-group-teal-container: #e2f1f1;
+  --color-on-group-teal-container: #0c7777; /* 4.63:1 */
+  --color-group-green-container: #e3f0e8;
+  --color-on-group-green-container: #117a38; /* 4.61:1 */
+  --color-group-pink-container: #fae5ee;
+  --color-on-group-pink-container: #c52665; /* 4.58:1 */
+  --color-group-amber-container: #f8efe0;
+  --color-on-group-amber-container: #9b5d00; /* 4.65:1 */
+
   /* ── Type scale ──
    * Named by role, not by size, so a row title stays a row title when the
    * scale is retuned. The `--…--line-height` suffix is Tailwind v4's way of

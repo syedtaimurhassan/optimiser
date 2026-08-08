@@ -11,7 +11,7 @@ export { ListRow, type ListRowProps } from './ListRow'
 export { Chip, type ChipProps, type ChipTone } from './Chip'
 export { StatusPill } from './StatusPill'
 export { StatusBadge } from './StatusBadge'
-export { IdChip, type IdChipProps, type GroupColor } from './IdChip'
+export { IdChip, type IdChipProps, type IdChipVariant, type GroupColor } from './IdChip'
 export { SegmentedControl, type SegmentedControlProps, type SegmentedOption } from './SegmentedControl'
 export { Stepper, type StepperProps } from './Stepper'
 export {
