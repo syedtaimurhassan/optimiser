@@ -971,3 +971,218 @@ away. Leaving the expanded detents now exits search.
 6. **`DEFAULT_TTL_MS` in the cache is a licence decision**, not a performance
    one. 30 days is defensible under Geoapify + the OSMF guideline; LocationIQ's
    free plan would cap it at 48 hours.
+
+## M7 — The driver's surface: the stop carousel
+
+The milestone with the app's signature interaction in it. Stop detail stopped
+being a stub and became the surface a driver actually works in.
+
+### What changed
+
+- **The paged carousel.** One page per stop, swiped horizontally inside the
+  sheet, with the map camera moving in lockstep behind it.
+- **Stop detail states** — pending / delivered / failed, with the completion
+  card and the promotion/demotion of the primary action.
+- **The end location** as the last page, with a different grammar.
+- **Failure reasons**, which are our invention and are flagged as such below.
+- **Swipe a row** right for delivered, left for failed, again to undo.
+- **Edit stop**, with route-scoped groups, the settings list, and sticky
+  per-address defaults behind "Set Default ☆".
+- **The route menu** — Spoke's nine items, our information architecture.
+- **Real arrival times**, which `routeSummary.ts` had been asking for by name.
+
+`SCHEMA_VERSION` is still 5, and the zustand persist version is still 4.
+Everything M7 persists is additive: two optional fields on a stop, two on the
+optimised route, and one new top-level slice. A blob written before this simply
+lacks them and the shallow merge leaves the defaults in place.
+
+### The signature interaction, and what it cost
+
+The carousel is three DOM pages regardless of route length: the current one in
+normal flow — it is what gives the sheet's scroller its height — and the
+neighbours absolutely positioned at ±100%.
+
+**There is no local index state, and that is the interesting part.** The URL
+owns which page is showing. That sounds like it must cost a frame, but wouter's
+hash `navigate` dispatches `hashchange` SYNCHRONOUSLY and `pointerup` is a
+discrete event, so React flushes before paint and the slide starts on the frame
+the finger lifted. The usual answer — an echo of the index that "leads" the URL
+— is a trap: two swipes in quick succession leave the echo and the URL
+disagreeing, and the card visibly snaps back to a page the driver already left.
+
+On commit the NEW page is rendered in flow, the track is instantly placed where
+the finger left it *expressed in the new page's coordinates*, and only then
+transitioned to zero. The card carries on from where the thumb released it
+rather than jumping and starting again.
+
+### 🔴 The bug that took the longest, and would have taken longer on a device
+
+`RouteSheet` calls `setPointerCapture` in its `pointerdown`, before it knows
+what kind of gesture it has. It has to: dragging the sheet open moves the
+finger off the top of the sheet's own box, and without capture the moves stop
+arriving.
+
+But **pointer capture RETARGETS every later pointer event to the capturing
+element**. From that moment `pointermove` is dispatched at the sheet and travels
+only through the sheet's ancestors — a card nested inside it never receives one.
+The obvious implementation (a React `onPointerMove` on the card, `stopPropagation`
+once the gesture is ours) therefore has nothing to stop propagating. The card sits
+perfectly still while the sheet quietly decides the gesture was vertical.
+
+`useHorizontalDrag` listens on `window` in the CAPTURE phase instead, which runs
+before React's root listener whatever the target is, and stops propagation there.
+`pointerup` is deliberately allowed through — the sheet clears its drag in that
+handler, and swallowing the release leaks a drag that never ends.
+
+A second bug in the same hook: its "don't steal from a control" guard used
+`closest('[role="button"]')`, and a list row IS a `role="button"` — it has to be,
+the whole row is the tap target and it carries its own trailing controls. The
+guard matched the drag surface itself and declined every swipe on the list.
+`control !== e.currentTarget` is the fix and it is load-bearing.
+
+### Arrival times: where the clock is anchored
+
+`arrivalSec` was empty and `routeSummary.ts` said, in its own docstring, that M7
+should REPLACE its approximation rather than refine it. OSRM returns per-leg
+durations and distances on every route response and the M2 pipeline discarded
+them; keeping them is what makes an arrival real.
+
+The plan is stored RELATIVE — seconds from the route's start — because that is
+the only form that survives being stored: a route solved at 08:00 and opened at
+14:00 has not changed shape, only when it is happening.
+
+The anchor is the decision worth recording. **The next pending stop is reached in
+the time the leg into it takes, starting now.** Not its planned arrival, which
+would read "you are there now" and is true at exactly one instant; and not the
+route's planned start, which would leave a driver who set off late seeing times
+wrong by the same amount all day — precisely the failure that makes people stop
+believing an ETA.
+
+Handled stops get no ETA at all. An estimated arrival at a door you have already
+been to is not stale information, it is noise — and dropping it is what makes the
+completed state read as finished.
+
+The ETAs are computed ONCE per tick in `RouteSheet` and shared with the rows and
+the card. Two computations would anchor to two instants and let a row read 16:03
+while its own card read 16:04.
+
+### Where we deliberately diverge from Spoke
+
+- **The route menu's IA.** Spoke's is nine flat items with the only destructive
+  one rendered in the same black as the other eight — breaking the
+  red-means-destruction convention Spoke follows everywhere else in its own app.
+  Ours: three sections separated by a gap (share/move, reorder/renumber, bulk
+  in/out), and the destructive item alone, last, and red. All nine items and all
+  their behaviour are kept, as is the "…" convention.
+- **A map tap no longer discards the card.** In M4 selecting a stop only tinted
+  its marker and a map tap was the only way out. Now a marker tap opens the card
+  and the card has its own X, so a stray tap discarding it would be a hazard —
+  the map is exactly where a driver looks while the card is up.
+- **Swiping between stops REPLACES history; opening a stop PUSHES.** A round is
+  44 stops and can be 300; pushing each swipe would bury the route under a stack
+  the driver has to walk back through one card at a time. Browsing is not
+  navigating.
+
+### 🟡 Our invention: the failure reason
+
+Spoke's screenshots show the failed STATE but never the capture, so this is
+designed rather than copied, and two decisions are recorded rather than assumed:
+
+1. **The tap marks the stop immediately**; the reason sheet is a skippable
+   follow-up. A modal standing between the driver and the action they asked for
+   gets dismissed by reflex, and then the status is wrong — a missing reason is
+   visibly missing, a wrong status is not.
+2. **Five options, worded about the world rather than about blame** — "Nobody
+   home", not "Customer unavailable". These end up in a message to a dispatcher
+   and a driver should not have to accuse anyone to file one.
+
+A reason cannot outlive its failure: undo, restore-all and duplicate all clear
+it. The completion card offers "Add a reason" when it was skipped, so the one
+dismissible step is not also the only chance to take it.
+
+### Verified
+
+- 440 unit tests, `lint` and `build` clean.
+- **65/65 M7 checks** in Chromium, including the camera lockstep read off the
+  LIVE MapLibre camera, both cards on screen mid-flight, three DOM pages at 300
+  stops, every edit surviving a reload, and a new stop at a remembered address
+  arriving with its door code.
+- 58/58 M5, 41/41 M4, 42/42 M1. M3 is 50–51/52 for a reason that predates this
+  milestone; see Deferred. `bench:verify-seam` passes — `__ui`, `__bench` and
+  `__crash` are still absent from production.
+- Haptics: `navigator.vibrate` is feature-detected, never platform-branched.
+  The brief recorded "Android only", and as of 2026 that is no longer settled —
+  MDN's compat data carries an open report of it working on iOS Safari while
+  caniuse still shows none, and Apple has attached a user-gesture requirement.
+  Detecting the method makes the disagreement irrelevant.
+
+### 🔴 What the acceptance suite caught that nothing else would have
+
+**Three checks passed vacuously before they passed honestly**, and all three
+failed in a way that looked like a timing flake:
+
+1. Every swipe check dispatched touches at `y > 844`. The list is virtualised
+   with an overscan, so a row can be in the DOM with a rect far below the
+   viewport, and a synthetic touch there lands on nothing at all — silently.
+2. Every card selector matched THREE elements. A carousel holds three copies of
+   the same card, and Playwright taps the first, which is a full screen width
+   off to the left. `[data-page-role="current"]` scopes them now.
+3. The M7 fixture had to be respaced. The M5 one packs 300 stops into a few
+   hundred metres, and at zoom 16 two neighbours differ by a fraction of a
+   degree that rounds away — a camera check on that data passes whether the map
+   followed or not.
+
+### Deferred
+
+- **Photo capture** — the camera-plus icon is present and disabled. M13.
+- **Navigate is a URL stub** (`googleMapsSearchUrl`), as specified. M13.
+- **Share route copy, Transfer stops, Scan route manifest** — announced and
+  disabled in the menu, as specified.
+- **Change address** is announced and disabled in the edit form. M6 owns the
+  search screen and it lives inside the route sheet; reaching it from a
+  full-screen modal is a flow of its own.
+- **Real-device FPS and the thumb tests** are still outstanding — §15–17, now
+  three milestones old. The 88dp action row and the swipe are exactly the things
+  a desktop Chromium cannot judge.
+- **`labelLinesFor` still reads `stop.etaSec`**, which nothing sets. The map's
+  marker labels therefore show no ETA even though the sheet's do. Fixable by
+  feeding the same map in; not done because the marker label is already two
+  lines and a third would need a design decision.
+- 🟡 **M3's "tapping the exposed strip closes the drawer" fails**, and failed
+  identically at b7c2dea — the commit before this milestone, checked by building
+  that commit and running the suite against it. Left alone rather than fixed as
+  a side effect of unrelated work.
+
+  It cascades: the drawer is still open when the next check runs, so "Escape
+  closes the drawer" then fails intermittently too and M3 reports 50 or 51 of
+  52 depending on timing. One root cause, two symptoms. Worth an hour of
+  someone's time — a drawer that cannot be dismissed by tapping outside it is a
+  real defect, not just a failing assertion.
+- Amber/teal chip contrast (M5); cross-origin isolation (M0); desktop is still
+  the M1 sidebar.
+
+### What the next session needs to know
+
+1. **`useHorizontalDrag` listens on `window` in the capture phase, and that is
+   not an implementation detail.** Anything else that wants a horizontal gesture
+   inside the sheet must go through it, because a React handler on the element
+   will never fire — see the pointer-capture note above.
+2. **The URL is the source of truth for which stop is open.** `selectedStopId`
+   mirrors it, never the other way round. Anything that wants to open a stop
+   navigates; writing the selection directly is immediately overwritten.
+3. **`lib/stopDetail.ts` owns which actions are prominent.** The rule that the
+   primary slot holds exactly one thing is asserted there, not in the card. If a
+   new state needs a new arrangement, it belongs in that function.
+4. **Both routes in `routes.tsx` must keep pointing at the same component.**
+   Wouter's `Switch` reconciles them as one element only because the `component`
+   prop is identical; splitting them rebuilds the map on every stop opened.
+5. **Groups are ROUTE-SCOPED and address defaults are GLOBAL.** That asymmetry is
+   why `groupId` is excluded from a saved default — the id would resolve to a
+   different group, or to nothing, on tomorrow's route.
+6. **`retargetGroup` lives in the store's `updateStop`, not in the form**, so an
+   importer or a bulk edit gets the purple/teal rule too. A group the driver
+   chose is never overwritten; that is the invariant that makes it tolerable.
+7. **M8 inherits a live-editing form.** `EditStopSheet` writes straight through
+   and "Done" only closes. When staged changes arrive, that is the layer to put
+   them in — a form with its own draft on top would give the app two levels of
+   uncommitted state.
