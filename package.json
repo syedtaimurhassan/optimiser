@@ -25,6 +25,9 @@
     "presmoke:m4": "npm run bench:build",
     "smoke:m4": "node bench/m4-smoke.mjs",
     "map:perf": "node bench/m4-perf.mjs",
+    "presmoke:m5": "npm run bench:build",
+    "smoke:m5": "node bench/m5-smoke.mjs",
+    "list:perf": "node bench/m5-perf.mjs",
     "test": "node --test 'src/**/*.test.ts'",
     "test:watch": "node --test --watch 'src/**/*.test.ts'"
   },

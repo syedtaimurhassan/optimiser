@@ -203,10 +203,16 @@ export function RouteSheet() {
   const onPointerDown = useCallback(
     (e: ReactPointerEvent, fromList: boolean) => {
       if (e.button !== 0 || dragRef.current) return
-      // A tap on a control inside the header is that control's, not a drag.
-      if ((e.target as HTMLElement).closest('button, input, a, [role="button"], [role="radio"]')) {
-        return
-      }
+
+      // A tap on a control inside the header is that control's, not a drag —
+      // except the grab handle, which is itself a `role="button"` (it has to
+      // be: it is operable, and a bare div is invisible to a screen reader).
+      // Excluding it here is what silently swallowed every tap on the handle
+      // the first time this ran.
+      const control = (e.target as HTMLElement).closest(
+        'button, input, a, [role="button"], [role="radio"]',
+      )
+      if (control && !control.hasAttribute('data-sheet-handle')) return
 
       const el = sheetRef.current
       if (!el) return
@@ -346,6 +352,7 @@ export function RouteSheet() {
           aria-label={`Route sheet, ${snap}. Arrow keys to resize.`}
           onKeyDown={onHandleKeyDown}
           data-testid="sheet-handle"
+          data-sheet-handle=""
           className="flex h-6 cursor-grab items-center justify-center active:cursor-grabbing"
         >
           {/* 32×4dp, ~10dp from the top edge, per the design. */}

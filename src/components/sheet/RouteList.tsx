@@ -78,8 +78,18 @@ export function RouteList({ route, rows, scrollElementRef, scrollToIndexRef }: R
   })
 
   useEffect(() => {
+    /**
+     * Instant, not smooth — and this is a constraint, not a preference.
+     *
+     * Smooth scrolling and dynamic measurement are mutually exclusive here:
+     * the virtualiser measures rows as they enter the window, so a smooth
+     * scroll is animating towards an offset that is still being corrected
+     * underneath it. The first run of this landed 24 rows short of the stop it
+     * was asked for. Jumping is also the better behaviour for the control's
+     * actual job — a driver pressing "where am I" wants to be there.
+     */
     scrollToIndexRef.current = (index: number) =>
-      virtualizer.scrollToIndex(index, { align: 'center', behavior: 'smooth' })
+      virtualizer.scrollToIndex(index, { align: 'center' })
     return () => {
       scrollToIndexRef.current = null
     }

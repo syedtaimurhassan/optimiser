@@ -22,6 +22,9 @@ import {
   PencilIcon,
   TrashIcon,
 } from '../components/ui/icons'
+import { StopRow } from '../components/sheet/StopRow'
+import type { StopRowModel } from '../lib/routeList'
+import type { AddressedStop, StopStatus } from '../types'
 
 /**
  * Dev/bench-only gallery of every primitive.
@@ -96,6 +99,32 @@ export default function UiGalleryScreen() {
             <IdChip stopId="A1" color="green" />
             <IdChip stopId="B12" color="pink" />
             <IdChip stopId="C3" color="amber" />
+          </div>
+          {/* The list treatment. Every pair here clears 4.5:1 — see index.css. */}
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <IdChip stopId="D7" variant="pastel" />
+            <IdChip stopId="D7.1" color="purple" variant="pastel" />
+            <IdChip stopId="37" color="teal" variant="pastel" />
+            <IdChip stopId="A1" color="green" variant="pastel" />
+            <IdChip stopId="B12" color="pink" variant="pastel" />
+            <IdChip stopId="C3" color="amber" variant="pastel" />
+          </div>
+        </Section>
+
+        {/*
+          Every stop-row variant, side by side.
+
+          The list itself only shows the variants a given route happens to
+          contain, so checking that a failed pickup with a note still looks
+          right means finding one. Here they are all on one screen, in the
+          order they get harder: plain, note, tag, both, delivered, failed, and
+          the two-line title with a recipient.
+        */}
+        <Section title="StopRow — every variant">
+          <div className="overflow-hidden rounded-row bg-surface">
+            {GALLERY_ROWS.map((row) => (
+              <StopRow key={row.id} row={row} selected={row.id === 'g-selected'} onSelect={() => {}} />
+            ))}
           </div>
         </Section>
 
@@ -178,6 +207,76 @@ export default function UiGalleryScreen() {
     </div>
   )
 }
+
+/** A stop for the gallery. Nothing here is persisted; this screen is dev-only. */
+function galleryStop(id: string, status: StopStatus, patch: Partial<AddressedStop> = {}): AddressedStop {
+  return {
+    id,
+    stopId: id.replace('g-', '').slice(0, 4).toUpperCase(),
+    originalPosition: 1,
+    lat: 55.6,
+    lng: 12.5,
+    kind: 'delivery',
+    order: 'auto',
+    status,
+    statusHistory: [],
+    address: { title: 'Løvfrøvej 6', subtitle: 'Bagsværd, 2880', source: 'geocoder' },
+    ...patch,
+  }
+}
+
+function galleryRow(
+  id: string,
+  seq: string,
+  overrides: Partial<StopRowModel> & { stop: AddressedStop },
+): StopRowModel {
+  return {
+    kind: 'stop',
+    id,
+    seq,
+    eta: null,
+    title: overrides.stop.address?.title ?? '',
+    subtitle: overrides.stop.address?.subtitle ?? '',
+    color: 'blue',
+    tags: [],
+    note: null,
+    ...overrides,
+  }
+}
+
+const GALLERY_ROWS: StopRowModel[] = [
+  galleryRow('g-plain', '01', { stop: galleryStop('g-plain', 'pending') }),
+  galleryRow('g-note', '02', { stop: galleryStop('g-note', 'pending'), note: 'bike + boks' }),
+  galleryRow('g-first', '03', {
+    stop: galleryStop('g-first', 'pending', { order: 'first' }),
+    tags: ['first'],
+    color: 'purple',
+  }),
+  galleryRow('g-both', '04', {
+    stop: galleryStop('g-both', 'pending', { kind: 'pickup' }),
+    tags: ['pickup'],
+    note: 'mazda',
+    color: 'teal',
+    eta: '09:42',
+  }),
+  galleryRow('g-delivered', '05', { stop: galleryStop('g-delivered', 'delivered') }),
+  // The rule that is easiest to get backwards: the chip is the GROUP, the
+  // badge is the STATUS. A failed stop in a green group stays green.
+  galleryRow('g-failed', '06', {
+    stop: galleryStop('g-failed', 'failed', { groupId: 'green' }),
+    color: 'green',
+  }),
+  galleryRow('g-long', '07', {
+    stop: galleryStop('g-long', 'pending', {
+      address: { title: 'Rundgården 34, st. th.', subtitle: 'København NV, 2400', source: 'geocoder' },
+      recipient: 'Jette Kelbjørn',
+    }),
+    title: 'Rundgården 34, st. th. Jette Kelbjørn',
+    subtitle: 'København NV, 2400',
+    color: 'pink',
+  }),
+  galleryRow('g-selected', '08', { stop: galleryStop('g-selected', 'pending'), color: 'amber' }),
+]
 
 function Section({
   title,

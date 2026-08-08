@@ -82,8 +82,18 @@ const settle = async (page) => {
   await page.waitForTimeout(50)
 }
 
+/**
+ * Open the drawer from the FLOATING trigger specifically.
+ *
+ * This used to select on `button[aria-label="Your routes"]`, which stopped
+ * being unique in M5: the route sheet's header morphs to show a hamburger with
+ * the same accessible name. That is correct — only one of the two is ever
+ * exposed, since the other sits inside an `inert` layer — but a name-based
+ * selector cannot tell them apart, and this one silently began resolving to
+ * the hidden one and timing out against the layer covering it.
+ */
 async function openDrawer(page) {
-  await page.click('button[aria-label="Your routes"]')
+  await page.click('[data-testid="drawer-trigger"]')
   await settle(page)
 }
 
@@ -354,7 +364,7 @@ async function main() {
 
   await page.keyboard.press('Escape')
   await settle(page)
-  const trigger = await page.$eval('button[aria-label="Your routes"]', (el) => {
+  const trigger = await page.$eval('[data-testid="drawer-trigger"]', (el) => {
     const r = el.getBoundingClientRect()
     return { size: Math.min(r.width, r.height), top: r.top, left: r.left }
   })
@@ -378,7 +388,7 @@ async function main() {
   check('the drawer is closed before measuring the trigger', (await page.locator(DRAWER).count()) === 0)
 
   const underTrigger = await page.evaluate(() => {
-    const el = document.querySelector('button[aria-label="Your routes"]')
+    const el = document.querySelector('[data-testid="drawer-trigger"]')
     const r = el.getBoundingClientRect()
     const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2)
     return el.contains(hit) ? null : `${hit?.tagName}.${(hit?.className || '').toString().slice(0, 40)}`
@@ -386,7 +396,7 @@ async function main() {
   check('nothing overlaps the drawer trigger', underTrigger === null, underTrigger ?? 'trigger is on top')
 
   const mapControls = await page.evaluate(() => {
-    const el = document.querySelector('button[aria-label="Your routes"]')
+    const el = document.querySelector('[data-testid="drawer-trigger"]')
     const r = el.getBoundingClientRect()
     return [...document.querySelectorAll('.maplibregl-ctrl')].filter((c) => {
       const b = c.getBoundingClientRect()

@@ -540,7 +540,7 @@ async function main() {
   })))
 
   check('the drawer trigger sits on the same 16dp margin', ...(await mapState(page, () => {
-    const r = document.querySelector('[aria-label="Your routes"]')?.getBoundingClientRect()
+    const r = document.querySelector('[data-testid="drawer-trigger"]')?.getBoundingClientRect()
     if (!r) return [false, 'missing']
     return [Math.round(r.left) === 16 && Math.round(r.top) === 16, `${Math.round(r.left)},${Math.round(r.top)}`]
   })))

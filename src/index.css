@@ -135,6 +135,24 @@
    * sheet at md+, so there is nothing to clear.
    */
   --sheet-peek: 0px;
+
+  /*
+   * The height of the map's FAB column: two 44dp buttons and the 12dp gap
+   * between them.
+   *
+   * It is a token because two components need to agree on it and they are not
+   * in the same subtree — FabStack lays the column out, and CalculateFab has
+   * to sit clear of it while staying outside the map's error boundary (a
+   * crashed map must not take the primary action down with it). Getting this
+   * wrong is not subtle and not visible in a screenshot: the first version of
+   * the M5 offsets put the Calculate FAB exactly on top of the basemap button,
+   * and the M4 suite reported it as "Calculate route intercepts pointer
+   * events".
+   *
+   * If the stack ever gains a third button, change this with it. The M5 smoke
+   * suite asserts the two do not overlap.
+   */
+  --fab-stack-height: 6.25rem;
 }
 
 html,
