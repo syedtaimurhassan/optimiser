@@ -19,8 +19,12 @@ export const DB_NAME = 'route-optimiser'
  * Bump when the object-store layout or the persisted state shape changes.
  *   3 — M1: initial IndexedDB layout, migrated from localStorage "route-optimiser:v2"
  *   4 — M2: multi-route model with addressed stops and immutable stop IDs
+ *   5 — M6: `geocache` store for geocoding results
+ *
+ * 4 → 5 adds a store and touches no existing data, so it needs no entry in
+ * migrate.ts — the structural `upgrade` below is the whole migration.
  */
-export const SCHEMA_VERSION = 4
+export const SCHEMA_VERSION = 5
 
 /**
  * The key the Zustand `persist` blob lives under, inside the `meta` store.
@@ -81,12 +85,25 @@ export interface MetaRow {
   value: unknown
 }
 
+/**
+ * A cached geocoding response. `payload` is deliberately `unknown`: this store
+ * holds autocomplete lists, reverse-geocoded addresses and place details, and
+ * teaching the DB layer those shapes would couple it to the geocoding module.
+ * lib/geocoding/cache.ts owns the interpretation.
+ */
+export interface GeocacheRow {
+  key: string
+  createdAt: number
+  payload: unknown
+}
+
 interface OptimiserDB extends DBSchema {
   routes: { key: string; value: RouteRow; indexes: { dateISO: string } }
   matrices: { key: string; value: MatrixRow }
   photos: { key: string; value: PhotoRow }
   favorites: { key: string; value: FavoriteRow }
   meta: { key: string; value: MetaRow }
+  geocache: { key: string; value: GeocacheRow }
 }
 
 let dbPromise: Promise<IDBPDatabase<OptimiserDB>> | null = null
@@ -117,6 +134,9 @@ export function getDb(): Promise<IDBPDatabase<OptimiserDB>> {
         }
         if (!db.objectStoreNames.contains('meta')) {
           db.createObjectStore('meta', { keyPath: 'key' })
+        }
+        if (!db.objectStoreNames.contains('geocache')) {
+          db.createObjectStore('geocache', { keyPath: 'key' })
         }
         void oldVersion // M2 will branch on this for the 3 → 4 migration.
       },
@@ -206,13 +226,41 @@ export async function deletePhoto(ref: string): Promise<void> {
   await db.delete('photos', ref)
 }
 
+// --------------------------------------------------------------- geocache
+
+export async function getGeocache(key: string): Promise<GeocacheRow | undefined> {
+  const db = await getDb()
+  return db.get('geocache', key)
+}
+
+export async function putGeocache(row: GeocacheRow): Promise<void> {
+  const db = await getDb()
+  await db.put('geocache', row)
+}
+
+export async function deleteGeocache(key: string): Promise<void> {
+  const db = await getDb()
+  await db.delete('geocache', key)
+}
+
+export async function getGeocacheKeys(): Promise<string[]> {
+  const db = await getDb()
+  return db.getAllKeys('geocache')
+}
+
+/** Drop every cached geocoding result. Exposed through the diagnostics panel. */
+export async function clearGeocache(): Promise<void> {
+  const db = await getDb()
+  await db.clear('geocache')
+}
+
 // -------------------------------------------------------------- diagnostics
 
 /** Row counts per store — for the diagnostics panel. */
 export async function describeDb(): Promise<Record<string, number>> {
   const db = await getDb()
   const out: Record<string, number> = {}
-  for (const name of ['routes', 'matrices', 'photos', 'favorites', 'meta'] as const) {
+  for (const name of ['routes', 'matrices', 'photos', 'favorites', 'meta', 'geocache'] as const) {
     out[name] = await db.count(name)
   }
   return out
