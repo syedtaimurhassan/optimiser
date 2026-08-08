@@ -626,6 +626,154 @@ async function main() {
     page.url().split('#')[1],
   )
 
+  // ─────────────────────────────────────────────────── the edit form
+  console.log('\n━━━ edit stop ━━━\n')
+
+  /** Scope to the modal. The route list is still in the DOM behind it, and it
+   *  contains the words "Pickup" and "First" too. */
+  const FORM = '[role="dialog"] '
+
+  /**
+   * "Edit stop" lives in the demoted block at the BOTTOM of the card, which is
+   * below the fold at the `medium` detent a card opens to. Open the sheet and
+   * scroll to it — the alternative is a tap that times out on "element is
+   * outside of the viewport" and reads like a timing flake.
+   */
+  const openEditor = async () => {
+    await page.waitForSelector(CURRENT + '[data-testid="stop-detail"]', { timeout: 10_000 })
+    for (let i = 0; i < 6; i++) {
+      if ((await snapAttr(page)) === 'expanded') break
+      await page.tap('[data-testid="sheet-handle"]')
+      await settle(page)
+    }
+    const edit = page.locator(CURRENT + '[data-testid="stop-detail"] >> text=Edit stop')
+    await edit.scrollIntoViewIfNeeded()
+    await page.waitForTimeout(150)
+    await edit.tap()
+    await page.waitForSelector('[data-testid="edit-done"]', { timeout: 5_000 })
+  }
+
+  const formText = () =>
+    page.evaluate(() =>
+      document.querySelector('[data-testid="edit-done"]').closest('[role="dialog"]').textContent,
+    )
+
+  const selectedGroup = () =>
+    page.getAttribute('[data-testid="group-chips"] [data-selected="true"]', 'data-group-color')
+
+  await page.goto(`${page.url().split('#')[0]}#/route/${route.id}/stop/stop-20`, {
+    waitUntil: 'load',
+  })
+  await openEditor()
+
+  const initialText = await formText()
+  check(
+    'defaults read as words, not blanks',
+    initialText.includes('Anytime') &&
+      initialText.includes('Default (1 min)') &&
+      initialText.includes('Not set'),
+  )
+
+  await page.tap(FORM + '>> text=Pickup')
+  await page.waitForTimeout(300)
+  check(
+    'making a stop a pickup moves it into the purple group by itself',
+    (await selectedGroup()) === 'purple',
+    await selectedGroup(),
+  )
+
+  await page.tap('[data-testid="group-chips"] >> text=Multiple parcels')
+  await page.waitForTimeout(200)
+  await page.tap(FORM + '>> text=Delivery')
+  await page.waitForTimeout(300)
+  check(
+    'a group the driver chose is never overwritten by the automatic rule',
+    (await selectedGroup()) === 'teal',
+    await selectedGroup(),
+  )
+
+  await page.tap('[data-testid="edit-access"]')
+  await page.waitForSelector('[data-testid="text-picker-input"]', { timeout: 5_000 })
+  await page.fill('[data-testid="text-picker-input"]', '1234#')
+  await page.tap('[data-testid="text-picker-save"]')
+  await page.waitForTimeout(300)
+
+  await page.tap(FORM + '>> text=Estimated time at stop')
+  await page.waitForSelector('[data-testid="duration-300"]', { timeout: 5_000 })
+  await page.tap('[data-testid="duration-300"]')
+  await page.waitForTimeout(300)
+  check(
+    'a drill-down writes back through to the row that opened it',
+    (await formText()).includes('5 min'),
+  )
+
+  await page.tap('[data-testid="set-default"]')
+  await page.waitForTimeout(300)
+  check(
+    'Set Default lights up once the stop matches what is saved',
+    (await page.getAttribute('[data-testid="set-default"]', 'data-on')) === 'true',
+  )
+
+  // Everything must survive a reload. This is the definition of done, and it
+  // is the one thing a screenshot can never show.
+  await page.tap('[data-testid="edit-done"]')
+  await page.waitForTimeout(400)
+  await page.reload({ waitUntil: 'load' })
+  await openEditor()
+
+  const reloaded = await formText()
+  check(
+    'every edit survives a reload',
+    reloaded.includes('5 min') &&
+      (await page.getAttribute('[data-testid="set-default"]', 'data-on')) === 'true' &&
+      (await selectedGroup()) === 'teal',
+    `group=${await selectedGroup()}`,
+  )
+  await page.tap('[data-testid="edit-done"]')
+  await page.waitForTimeout(300)
+
+  // ──────────────────────────────── the sticky part of Set Default
+  console.log('\n━━━ sticky settings follow the address ━━━\n')
+
+  /*
+    Driven through the bench seam's routes store rather than through the UI.
+    Adding a stop at a known address means either a geocoder round trip or a
+    file import, and neither of those is what is under test — what is under
+    test is that a stop CREATED at a remembered address arrives already
+    knowing the door code.
+  */
+  const sticky = await page.evaluate(() => {
+    const store = window.__bench.routesStore.getState()
+    const source = store.routes[store.activeRouteId].stops.find((s) => s.id === 'stop-20')
+    store.addStops([{ lat: 55.9, lng: 12.9, address: { ...source.address } }])
+    const after = window.__bench.routesStore.getState()
+    const stops = after.routes[after.activeRouteId].stops
+    const created = stops[stops.length - 1]
+    return {
+      sourceCode: source.accessCodes,
+      code: created.accessCodes,
+      service: created.serviceTimeSec,
+      notes: created.notes ?? null,
+      group: created.groupId ?? null,
+    }
+  })
+
+  check(
+    'a NEW stop at a remembered address arrives with its access code',
+    sticky.code === '1234#' && sticky.sourceCode === '1234#',
+    `saved "${sticky.sourceCode}" → new stop "${sticky.code}"`,
+  )
+  check(
+    'and with the time at stop that was saved with it',
+    sticky.service === 300,
+    String(sticky.service),
+  )
+  check(
+    'but NOT with the group — groups are route-scoped and cannot travel',
+    sticky.group === null,
+    String(sticky.group),
+  )
+
   // ───────────────────────────────────────────────────────── errors
   console.log('\n━━━ no errors along the way ━━━\n')
   check('no uncaught page errors', pageErrors.length === 0, pageErrors.join(' | '))

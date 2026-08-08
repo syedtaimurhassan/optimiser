@@ -9,6 +9,7 @@ import { useUiStore } from '../../store/uiStore'
 import { titleFor } from '../../lib/routeList'
 import { StopCarousel } from './StopCarousel'
 import { FailureReasonSheet } from './FailureReasonSheet'
+import { EditStopSheet } from './EditStopSheet'
 import { StopDetailCard } from './StopDetailCard'
 import { EndLocationCard } from './EndLocationCard'
 
@@ -51,6 +52,7 @@ export function StopPages({ route, pages, index }: StopPagesProps) {
   const removeStop = useRoutesStore((s) => s.removeStop)
   const setRouteStatus = useRoutesStore((s) => s.setRouteStatus)
   const setStopEditorId = useUiStore((s) => s.setStopEditorId)
+  const editStopId = useUiStore((s) => s.stopEditorId)
 
   const close = useCallback(() => navigate(`/route/${route.id}`), [navigate, route.id])
 
@@ -138,10 +140,34 @@ export function StopPages({ route, pages, index }: StopPagesProps) {
   )
 
   const reasonStop = reasonStopId ? route.stops.find((s) => s.id === reasonStopId) : undefined
+  const editStop = editStopId ? route.stops.find((s) => s.id === editStopId) : undefined
 
   return (
     <>
       <StopCarousel pages={pages} index={index} onIndexChange={goToPage} renderPage={renderPage} />
+
+      {/*
+        The edit form lives here rather than on the screen because it acts on
+        the stop the carousel is showing — and because closing it must leave
+        the driver looking at that stop's card, which is only true if the card
+        is still mounted behind it.
+      */}
+      {editStop && (
+        <EditStopSheet
+          route={route}
+          stop={editStop}
+          onClose={() => setStopEditorId(null)}
+          onDuplicate={() => {
+            const created = duplicateStop(editStop.id)
+            setStopEditorId(null)
+            if (created) navigate(`/route/${route.id}/stop/${created}`, { replace: true })
+          }}
+          onRemove={() => {
+            setStopEditorId(null)
+            removeAndMoveOn(editStop.id)
+          }}
+        />
+      )}
 
       <FailureReasonSheet
         open={reasonStop !== undefined}

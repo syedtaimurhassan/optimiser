@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import { persist, createJSONStorage } from 'zustand/middleware'
 import type {
   Address,
+  AddressDefault,
   AddressedStop,
   LatLng,
   Objective,
@@ -26,6 +27,12 @@ import { indexedDbStorage } from '../lib/persistence/zustandStorage'
 import { ROUTES_PERSIST_KEY } from '../lib/persistence/db'
 import { bootPersistence } from '../lib/persistence/boot'
 import { toISODate, weekdayName } from '../lib/routeGrouping'
+import {
+  addressKey,
+  applyDefault,
+  defaultsFromStop,
+} from '../lib/addressDefaults'
+import { presetFor, presetHex, retargetGroup } from '../lib/groups'
 
 export const newId = (): string =>
   typeof crypto !== 'undefined' && crypto.randomUUID
@@ -52,6 +59,14 @@ interface RoutesState {
   favorites: Favorite[]
   /** Letter-block ("D7") or plain numeric ("37") stop labels. */
   stopIdMode: StopIdMode
+  /**
+   * Per-ADDRESS settings, remembered across routes and across days.
+   *
+   * Global rather than route-scoped on purpose — see lib/addressDefaults.ts.
+   * Keyed by `addressKey`, which folds Danish characters so a geocoded address
+   * and the same address typed from an ASCII keyboard are one door.
+   */
+  addressDefaults: Record<string, AddressDefault>
 
   // ── Route CRUD ──
   createRoute: (init?: Partial<Pick<Route, 'name' | 'dateISO'>>) => string
@@ -82,6 +97,16 @@ interface RoutesState {
   updateStop: (id: string, patch: Partial<AddressedStop>) => void
   resetStopIdsForActive: () => void
   setStopIdMode: (mode: StopIdMode) => void
+
+  // ── Sticky per-address settings ──
+  /** Remember this stop's settings for its address. Returns the key, or null. */
+  saveAddressDefault: (stopId: string) => string | null
+  /** Forget them. The star goes hollow and nothing is applied next time. */
+  clearAddressDefault: (key: string) => void
+
+  // ── Groups the driver picks, and the ones that pick themselves ──
+  /** Find a group by name+colour on the active route, creating it if absent. */
+  ensureGroup: (name: string, colorHex: string) => string | null
 
   // ── Status transitions (reversible, timestamped) ──
   setStopStatus: (id: string, status: StopStatus) => void
@@ -178,8 +203,9 @@ function makeStop(
   point: NewStopInput,
   stopId: string,
   originalPosition: number,
+  defaults: Record<string, AddressDefault> = {},
 ): AddressedStop {
-  return {
+  const base: AddressedStop = {
     id: newId(),
     stopId,
     originalPosition,
@@ -191,6 +217,28 @@ function makeStop(
     status: 'pending',
     statusHistory: [],
   }
+
+  /*
+    Sticky settings are applied HERE, at creation, rather than looked up when
+    the card renders. Two reasons, and the second is the important one:
+
+     - a stop is a value the driver then edits, and a default that kept
+       re-asserting itself would fight every edit;
+     - the whole mechanic is worth having because a manifest of 44 addresses
+       arrives already knowing the door codes. That only works if the defaults
+       land as the stops are made.
+  */
+  const key = addressKey(point.address, point)
+  // `kind` and `order` are already set above, so applyDefault's gap-filling
+  // would never reach them. Clearing them first is what lets a saved "this
+  // address is always a pickup" actually apply.
+  const seeded = key
+    ? applyDefault(
+        { ...base, kind: undefined, order: undefined } as unknown as AddressedStop,
+        defaults[key],
+      )
+    : base
+  return { ...base, ...seeded, kind: seeded.kind ?? 'delivery', order: seeded.order ?? 'auto' }
 }
 
 export const useRoutesStore = create<RoutesState>()(
@@ -200,6 +248,7 @@ export const useRoutesStore = create<RoutesState>()(
       activeRouteId: null,
       favorites: [],
       stopIdMode: 'letterBlock',
+      addressDefaults: {},
 
       // ── Route CRUD ──
 
@@ -372,7 +421,7 @@ export const useRoutesStore = create<RoutesState>()(
               const { stopId, originalPosition } = allocateAppendedStopId(highest, taken, s.stopIdMode)
               taken.add(stopId)
               highest = originalPosition
-              return makeStop(p, stopId, originalPosition)
+              return makeStop(p, stopId, originalPosition, s.addressDefaults)
             })
             return { ...r, stops: [...r.stops, ...added] }
           }),
@@ -392,7 +441,7 @@ export const useRoutesStore = create<RoutesState>()(
             const stopId = allocateInsertedStopId(nearStopId, r.stops.map((st) => st.stopId))
             // Inherits the neighbour's original position: it belongs to that
             // part of the original round, which is what "Originally 37th" means.
-            const stop = makeStop(point, stopId, r.stops[index].originalPosition)
+            const stop = makeStop(point, stopId, r.stops[index].originalPosition, s.addressDefaults)
             created = stop.id
             const stops = [...r.stops]
             stops.splice(index + 1, 0, stop)
@@ -468,8 +517,39 @@ export const useRoutesStore = create<RoutesState>()(
             // stopId and originalPosition are immutable by design: the only way
             // to change them is an explicit "Reset Stop IDs".
             const { stopId: _s, originalPosition: _o, id: _i, ...safe } = patch
-            stops[index] = { ...stops[index], ...safe }
-            return { ...r, stops }
+            const updated = { ...stops[index], ...safe }
+            stops[index] = updated
+
+            /*
+              Purple follows pickups, teal follows multi-parcel stops.
+
+              Applied here rather than in the edit form so that EVERY caller
+              gets it — the form, an importer, a future bulk edit — and so the
+              rule cannot be half-implemented in one of them. `retargetGroup`
+              decides; this performs, because creating a group is a store
+              write and lib/ never touches the store.
+
+              A group the driver chose deliberately is never overwritten; see
+              lib/groups.ts.
+            */
+            const changesAuto = 'kind' in safe || 'parcelCount' in safe
+            // An explicit groupId in the patch IS the deliberate choice, and
+            // must not be second-guessed by the rule in the same breath.
+            if (!changesAuto || 'groupId' in safe) return { ...r, stops }
+
+            const retarget = retargetGroup(updated, r.groups)
+            if (retarget === null) return { ...r, stops }
+            if ('clear' in retarget) {
+              stops[index] = { ...updated, groupId: undefined }
+              return { ...r, stops }
+            }
+
+            const preset = presetFor(retarget.auto)
+            const hex = presetHex(preset)
+            const existing = r.groups.find((g) => g.name === preset.name && g.colorHex === hex)
+            const group: StopGroup = existing ?? { id: newId(), name: preset.name, colorHex: hex }
+            stops[index] = { ...updated, groupId: group.id }
+            return { ...r, stops, groups: existing ? r.groups : [...r.groups, group] }
           }),
         ),
 
@@ -491,6 +571,48 @@ export const useRoutesStore = create<RoutesState>()(
         ),
 
       setStopIdMode: (mode) => set({ stopIdMode: mode }),
+
+      // ── Sticky per-address settings ──
+
+      saveAddressDefault: (stopId) => {
+        const state = get()
+        const route = state.activeRouteId ? state.routes[state.activeRouteId] : null
+        const stop = route?.stops.find((st) => st.id === stopId)
+        if (!stop) return null
+        const key = addressKey(stop.address, stop)
+        if (!key) return null
+        set((s) => ({
+          addressDefaults: { ...s.addressDefaults, [key]: defaultsFromStop(stop, Date.now()) },
+        }))
+        return key
+      },
+
+      clearAddressDefault: (key) =>
+        set((s) => {
+          if (!(key in s.addressDefaults)) return {}
+          const next = { ...s.addressDefaults }
+          delete next[key]
+          return { addressDefaults: next }
+        }),
+
+      /**
+       * Get-or-create, by NAME AND COLOUR.
+       *
+       * `addGroup` appends unconditionally, which is right for "the driver
+       * made a group" and wrong for the automatic ones: retargeting a pickup
+       * would otherwise add a second "Afternoon Pickup" to the route every
+       * time a stop qualified.
+       */
+      ensureGroup: (name, colorHex) => {
+        const state = get()
+        const route = state.activeRouteId ? state.routes[state.activeRouteId] : null
+        if (!route) return null
+        const existing = route.groups.find((g) => g.name === name && g.colorHex === colorHex)
+        if (existing) return existing.id
+        const group: StopGroup = { id: newId(), name, colorHex }
+        set((s) => withActiveRoute(s, (r) => ({ ...r, groups: [...r.groups, group] })))
+        return group.id
+      },
 
       // ── Status transitions ──
 
@@ -630,7 +752,7 @@ export const useRoutesStore = create<RoutesState>()(
             start: fav.startLocation,
             end: fav.endLocation,
             stops: fav.waypoints.map((p, i) =>
-              makeStop(p, stopIdForPosition(i + 1, s.stopIdMode), i + 1),
+              makeStop(p, stopIdForPosition(i + 1, s.stopIdMode), i + 1, s.addressDefaults),
             ),
             optimized: undefined,
             pending: undefined,
@@ -664,6 +786,10 @@ export const useRoutesStore = create<RoutesState>()(
         activeRouteId: s.activeRouteId,
         favorites: s.favorites,
         stopIdMode: s.stopIdMode,
+        // Additive, so no version bump: a blob written before M7 simply has no
+        // `addressDefaults` key, and zustand's shallow merge leaves the initial
+        // {} in place.
+        addressDefaults: s.addressDefaults,
       }),
     },
   ),

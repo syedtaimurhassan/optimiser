@@ -117,6 +117,26 @@ export interface AddressedStop extends LatLng {
   etaSec?: number
 }
 
+/**
+ * What a driver has told us about an ADDRESS, rather than about one delivery.
+ *
+ * Saved by "Set Default ☆" and applied whenever a stop is created at the same
+ * address on any route, on any day — which is the whole point, and why it is a
+ * global slice rather than something on a route. See lib/addressDefaults.ts
+ * for what is deliberately excluded (groups, notes, recipients).
+ */
+export interface AddressDefault {
+  kind: StopKind
+  order: OrderConstraint
+  parcelCount?: number
+  serviceTimeSec?: number
+  accessCodes?: string
+  packageFinder?: string
+  twOpenSec?: number
+  twCloseSec?: number
+  updatedAt: number
+}
+
 /** A colour-coded grouping, e.g. a building, a customer, or a run. */
 export interface StopGroup {
   id: string

@@ -24,6 +24,8 @@ export interface FullWidthButtonProps {
   variant?: ButtonVariant
   type?: 'button' | 'submit'
   disabled?: boolean
+  /** For the acceptance suites — a stable hook that is not the label text. */
+  testId?: string
   className?: string
 }
 
@@ -36,6 +38,7 @@ export function FullWidthButton({
   variant = 'primary',
   type = 'button',
   disabled = false,
+  testId,
   className = '',
 }: FullWidthButtonProps) {
   return (
@@ -43,6 +46,7 @@ export function FullWidthButton({
       type={type}
       onClick={onClick}
       disabled={disabled}
+      data-testid={testId}
       className={`flex w-full min-h-touch items-center justify-center gap-2 rounded-pill px-5 py-3.5 text-row font-semibold disabled:opacity-40 ${VARIANTS[variant]} ${className}`}
     >
       {children}
