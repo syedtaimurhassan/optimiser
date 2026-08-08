@@ -6,8 +6,8 @@ import type { LatLng } from '../types'
 import { MapController } from '../lib/map/controller'
 import { buildStopFeatures, collectChipSpecs, lastHandledStop, nextStopId } from '../lib/map/features'
 import { buildStopPages, pageIndexById } from '../lib/stopPages'
-import type { StagedKind } from '../lib/map/chipSpec'
 import { splitRouteGeometry } from '../lib/map/splitRoute'
+import { stagedKindByStopId, stagedRoute, stagedStops } from '../lib/staging'
 import { selectActiveRoute, useRoutesStore } from '../store/routesStore'
 import { useUiStore } from '../store/uiStore'
 import { MapControllerContext } from './map/MapControllerContext'
@@ -33,11 +33,22 @@ export function MapComponent() {
   const [controller, setController] = useState<MapController | null>(null)
 
   const route = useRoutesStore(selectActiveRoute)
+  /**
+   * The map draws the STAGED view, and that is the whole of M8's map work.
+   *
+   * Added stops appear as a "+" pin before they are on the route; removed ones
+   * stay put wearing a red chip with a trash glyph, keeping their number. The
+   * annotation IS the review — a stop that had simply vanished would be a
+   * change the driver could not inspect before applying it.
+   *
+   * The route line follows the PROVISIONAL plan when there is one, so the
+   * polyline and the ETAs on the sheet are describing the same journey.
+   */
   const { stops, groups, optimized } = useMemo(
     () => ({
-      stops: route?.stops ?? [],
+      stops: route ? stagedStops(route) : [],
       groups: route?.groups ?? [],
-      optimized: route?.optimized,
+      optimized: route?.pending?.provisional ?? route?.optimized,
     }),
     [route],
   )
@@ -125,10 +136,8 @@ export function MapComponent() {
 
   // ── Data ───────────────────────────────────────────────────────────────
 
-  const nextId = useMemo(
-    () => (route ? nextStopId({ stops: route.stops, optimized: route.optimized }) : null),
-    [route],
-  )
+  const orderable = useMemo(() => ({ stops, optimized }), [stops, optimized])
+  const nextId = useMemo(() => nextStopId(orderable), [orderable])
 
   /**
    * The carousel's pages, again.
@@ -139,32 +148,16 @@ export function MapComponent() {
    * would put the map's data in the screen's hands for the benefit of one
    * pill. `buildStopPages` is a single O(n) map over the stops.
    */
-  const pages = useMemo(() => (route ? buildStopPages(route) : []), [route])
+  const pages = useMemo(() => (route ? buildStopPages(stagedRoute(route)) : []), [route])
   const pageIndex = pageIndexById(pages, params.stopId ?? null)
   const currentPage = pageIndex === -1 ? null : pages[pageIndex]
   const previousPage = pageIndex > 0 ? pages[pageIndex - 1] : null
 
-  /**
-   * Edits staged since the last optimisation, as marker states.
-   *
-   * ⚠️ `PendingChange.stopId` is read here as the stop's `id` (the uuid), NOT
-   * as its display label. The field name says otherwise and nothing else in
-   * the codebase writes it yet, so this is the first decision on the matter:
-   * joining on the label is precisely the coordinate-as-identity bug class M2
-   * spent a milestone removing, and two stops can share a label after a
-   * "Reset Stop IDs". M6 owns staged edits — it should rename the field.
-   */
-  const staged = useMemo(() => {
-    const changes = route?.pending?.changes ?? []
-    if (changes.length === 0) return undefined
-    const byStop: Record<string, StagedKind> = {}
-    for (const change of changes) {
-      if (!change.stopId) continue
-      if (change.kind === 'add') byStop[change.stopId] = 'add'
-      else if (change.kind === 'remove') byStop[change.stopId] = 'remove'
-    }
-    return byStop
-  }, [route])
+  /** Edits staged since the last optimisation, as marker states. */
+  const staged = useMemo(
+    () => (route?.pending ? stagedKindByStopId(route.pending) : undefined),
+    [route?.pending],
+  )
 
   const featureInput = useMemo(
     () => ({ stops, groups, selectedStopId, nextStopId: nextId, staged }),
@@ -178,11 +171,11 @@ export function MapComponent() {
 
   useEffect(() => {
     if (!controller) return
-    const splitAt = route ? lastHandledStop({ stops: route.stops, optimized: route.optimized }) : null
+    const splitAt = lastHandledStop(orderable)
     controller.setRoute(
       splitRouteGeometry(optimized?.geometry ?? null, splitAt ? toLatLng(splitAt) : null),
     )
-  }, [controller, optimized, route])
+  }, [controller, optimized, orderable])
 
   useEffect(() => {
     controller?.setBasemap(basemap)

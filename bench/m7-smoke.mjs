@@ -776,10 +776,21 @@ async function main() {
   const sticky = await page.evaluate(() => {
     const store = window.__bench.routesStore.getState()
     const source = store.routes[store.activeRouteId].stops.find((s) => s.id === 'stop-20')
-    store.addStops([{ lat: 55.9, lng: 12.9, address: { ...source.address } }])
+    /*
+      `addStops` returns the ids it made, and from M8 that is the ONLY way to
+      find them: this route has been optimised, so the new stop is STAGED and
+      never lands in `stops` at all. Reaching in for "the last one" quietly
+      returned stop 300 and reported its missing door code as a failure of the
+      sticky-settings feature.
+    */
+    const [createdId] = store.addStops([
+      { lat: 55.9, lng: 12.9, address: { ...source.address } },
+    ])
     const after = window.__bench.routesStore.getState()
-    const stops = after.routes[after.activeRouteId].stops
-    const created = stops[stops.length - 1]
+    const route = after.routes[after.activeRouteId]
+    const created =
+      route.stops.find((s) => s.id === createdId) ??
+      route.pending?.changes.find((c) => c.kind === 'add' && c.stopId === createdId)?.stop
     return {
       sourceCode: source.accessCodes,
       code: created.accessCodes,
@@ -804,6 +815,14 @@ async function main() {
     sticky.group === null,
     String(sticky.group),
   )
+
+  /*
+    M8: adding to an optimised route stages. Clear it before going on, so the
+    rest of this suite measures the committed route rather than a preview —
+    and so the counts below mean what they say.
+  */
+  await page.evaluate(() => window.__bench.routesStore.getState().clearPending())
+  await page.waitForTimeout(200)
 
   // ────────────────────────────────────────────────── the arrival times
   console.log('\n━━━ arrival times ━━━\n')
@@ -931,7 +950,7 @@ async function main() {
   }))
   check(
     'each says how many it would take',
-    /\d/.test(removeCounts.delivered) && removeCounts.all.includes('301'),
+    /\d/.test(removeCounts.delivered) && removeCounts.all.includes('300'),
     `${removeCounts.delivered.trim()} / ${removeCounts.all.trim()}`,
   )
 
@@ -942,7 +961,7 @@ async function main() {
     // is still mounted underneath, so an unscoped read returns the menu's text.
     'and confirms by name and count before removing anything',
     (await page.textContent('[role="alertdialog"]')).includes('cannot be undone') &&
-      (await page.textContent('[role="alertdialog"]')).includes('301 stops'),
+      (await page.textContent('[role="alertdialog"]')).includes('300 stops'),
     (await page.textContent('[role="alertdialog"]')).slice(0, 80),
   )
   await page.tap('[data-testid="confirm-cancel"]')

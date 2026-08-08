@@ -86,6 +86,38 @@ function shareLeft(stops: readonly AddressedStop[], stopsLeft: number): number {
   return stops.length > 0 ? stopsLeft / stops.length : 1
 }
 
+/**
+ * Is the plan being read on a day it was not made for?
+ *
+ * ── Why this needs saying out loud ────────────────────────────────────────
+ *
+ * ETAs are anchored to NOW, not to the route's planned start — see
+ * lib/arrivals.ts for why that is the only anchor a driver keeps believing.
+ * The consequence is that a route solved on Tuesday morning and poked at
+ * 19:23 on Tuesday evening reports a finish of 19:56, which is arithmetically
+ * correct and looks like a bug.
+ *
+ * It is not a bug and it must not be silently corrected — a driver who set off
+ * late needs times that moved with them. But the app has to say what it is
+ * doing, in one line, or the driver concludes the clock is broken and stops
+ * reading it. This is the test for when to say it.
+ *
+ * The threshold is a whole hour: a round genuinely running forty minutes late
+ * is the normal case and needs no explanation.
+ */
+export const STALE_PLAN_SEC = 3600
+
+export function planIsStale(route: { dateISO: string; updatedAt: number }, nowMs: number): boolean {
+  const solvedToday = toLocalISODate(new Date(route.updatedAt)) === toLocalISODate(new Date(nowMs))
+  if (!solvedToday) return true
+  return nowMs - route.updatedAt > STALE_PLAN_SEC * 1000
+}
+
+/** Local calendar day, not UTC — the same rule `todayISO` follows. */
+function toLocalISODate(at: Date): string {
+  return `${at.getFullYear()}-${String(at.getMonth() + 1).padStart(2, '0')}-${String(at.getDate()).padStart(2, '0')}`
+}
+
 /** Epoch ms → "17:07" on the device's own clock, 24h, zero-padded. */
 export function clockAt(epochMs: number): string {
   const at = new Date(epochMs)

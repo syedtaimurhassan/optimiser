@@ -30,6 +30,34 @@ export interface PlanInput {
 const sameCoord = (a: LatLng, b: LatLng) => a.lat === b.lat && a.lng === b.lng
 
 /**
+ * Join a solved point order back to the stops it came from.
+ *
+ * The planner is coordinate-only by design, so the caller has to do this — and
+ * doing it twice, slightly differently, in two places is how the two ends of
+ * an itinerary quietly disagree. Hence one function.
+ *
+ * ── Two stops at one door ────────────────────────────────────────────────
+ *
+ * Coordinates cannot identify a stop: two deliveries to one building share one
+ * exactly. A plain `Map<"lat,lng", id>` therefore maps both ordered points to
+ * the FIRST stop and drops the second from the itinerary entirely. Consuming
+ * each match as it is used is what keeps the join one-to-one.
+ */
+export function joinOrderedStopIds<T extends LatLng & { id: string }>(
+  orderedWaypoints: readonly LatLng[],
+  candidates: readonly T[],
+): (string | null)[] {
+  const queued = new Map<string, string[]>()
+  for (const stop of candidates) {
+    const key = `${stop.lat},${stop.lng}`
+    const list = queued.get(key)
+    if (list) list.push(stop.id)
+    else queued.set(key, [stop.id])
+  }
+  return orderedWaypoints.map((point) => queued.get(`${point.lat},${point.lng}`)?.shift() ?? null)
+}
+
+/**
  * What the pipeline can produce on its own.
  *
  * `orderedStopIds` and `arrivalSec` are the two fields it cannot fill: it is

@@ -2,7 +2,7 @@ import { useRoutesStore, hydrateRoutesStore, SEARCH_TIERS_SEC } from './routesSt
 import { useSolverStore } from './solverStore'
 import { useUiStore } from './uiStore'
 import type { AddressedStop, LatLng, Objective, OptimizedRoute, Favorite } from '../types'
-import { planSelectiveRoute } from '../lib/planRoute'
+import { joinOrderedStopIds, planSelectiveRoute } from '../lib/planRoute'
 import { warmUpSolver } from '../lib/solver'
 import { cumulativeArrivals, serviceSecFor } from '../lib/arrivals'
 import {
@@ -154,17 +154,12 @@ const ACTIONS = {
         onStatus: (msg) => solver.setStatus(msg),
       })
 
-      // Backfill the M2 fields the planner doesn't know about yet. Coordinate
-      // lookup is the only join available until the planner is updated (M7);
-      // it is recorded as derived data, never relied on for identity.
-      const byCoord = new Map<string, string>()
-      for (const s of pending) {
-        const key = `${s.lat},${s.lng}`
-        if (!byCoord.has(key)) byCoord.set(key, s.id)
-      }
-      const orderedStopIds = result.orderedWaypoints.map(
-        (p) => byCoord.get(`${p.lat},${p.lng}`) ?? null,
-      )
+      // Backfill the M2 fields the planner doesn't know about. `joinOrderedStopIds`
+      // lives beside the planner because M8's commit path needs the identical
+      // join, and two hand-rolled copies of it drift: this one used to keep only
+      // the FIRST stop at a shared coordinate, which silently dropped the second
+      // delivery to a building from the itinerary altogether.
+      const orderedStopIds = joinOrderedStopIds(result.orderedWaypoints, pending)
 
       /*
         Arrival times, at last.

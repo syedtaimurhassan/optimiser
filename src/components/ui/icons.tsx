@@ -415,3 +415,19 @@ export const RenumberIcon = (props: IconProps) => (
     <path d="M4 15.5a1.6 1.6 0 1 1 2.6 1.2L4 20h3.2" />
   </Icon>
 )
+
+/** The "update" model: forward, along the sequence that already exists. */
+export const ArrowRightIcon = (props: IconProps) => (
+  <Icon {...props}>
+    <path d="M4 12h15" />
+    <path d="m13 6 6 6-6 6" />
+  </Icon>
+)
+
+/** The "reoptimise" model: round again, everything moves. */
+export const RefreshIcon = (props: IconProps) => (
+  <Icon {...props}>
+    <path d="M20 12a8 8 0 1 1-2.6-5.9" />
+    <path d="M20 4v4h-4" />
+  </Icon>
+)

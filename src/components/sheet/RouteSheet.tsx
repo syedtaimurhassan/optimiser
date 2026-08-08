@@ -20,6 +20,10 @@ import {
   type SnapOffsets,
 } from '../../lib/sheetSnap'
 import { buildRouteRows, nextStopRowIndex } from '../../lib/routeList'
+import { buildReviewRows } from '../../lib/reviewList'
+import { changeCount, stagedRoute } from '../../lib/staging'
+import { planIsStale } from '../../lib/routeSummary'
+import { GROUP_COLORS } from '../../lib/map/palette'
 import { liveEta } from '../../lib/arrivals'
 import { useNowTicker } from '../../hooks/useNowTicker'
 import { searchPlaceholder } from '../../lib/searchScreen'
@@ -36,6 +40,12 @@ import { ImportStopsSheet } from '../search/ImportStopsSheet'
 import { copySourceRoutes } from '../../lib/copyStops'
 import { useAddStops } from '../../hooks/useAddStops'
 import { StopPages } from '../stop/StopPages'
+import { ReviewChanges } from '../review/ReviewChanges'
+import { StagedBanner } from '../review/StagedBanner'
+import { ReviewHeader } from '../review/ReviewHeader'
+import { ReviewBottomBar } from '../review/ReviewBottomBar'
+import { ApplyChangesSheet } from '../review/ApplyChangesSheet'
+import type { ProvisionalState } from '../../hooks/useProvisionalRoute'
 import type { StopPage } from '../../lib/stopPages'
 
 /**
@@ -91,9 +101,12 @@ export interface RouteSheetProps {
   pages: StopPage[]
   /** Which page the URL names, or -1 when no stop is open. */
   pageIndex: number
+  /** The URL is on `/review`: the sheet shows the diff and the two actions. */
+  reviewing: boolean
+  provisional: ProvisionalState
 }
 
-export function RouteSheet({ pages, pageIndex }: RouteSheetProps) {
+export function RouteSheet({ pages, pageIndex, reviewing, provisional }: RouteSheetProps) {
   const [, navigate] = useLocation()
   const route = useRoutesStore(selectActiveRoute)
   const snap = useUiStore((s) => s.sheetSnap)
@@ -110,6 +123,11 @@ export function RouteSheet({ pages, pageIndex }: RouteSheetProps) {
   const [copyOpen, setCopyOpen] = useState(false)
   const [importOpen, setImportOpen] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
+  const [applyOpen, setApplyOpen] = useState(false)
+  const dropPendingChange = useRoutesStore((s) => s.dropPendingChange)
+  const clearPending = useRoutesStore((s) => s.clearPending)
+  const ensureGroup = useRoutesStore((s) => s.ensureGroup)
+  const updateStop = useRoutesStore((s) => s.updateStop)
 
   const sheetRef = useRef<HTMLElement>(null)
   const headerBlockRef = useRef<HTMLDivElement>(null)
@@ -130,19 +148,64 @@ export function RouteSheet({ pages, pageIndex }: RouteSheetProps) {
     finish pill uses, so every clock on the screen moves together.
   */
   const nowMs = useNowTicker()
+  /*
+    The STAGED view, and everything on the screen reads it.
+
+    The map already draws the provisional polyline and the finish pill already
+    reads the provisional plan, so a sheet still reading the committed one put
+    two different clocks on one screen — the end card saying 07:26 while the
+    pill said 07:25. That is the exact failure M7 recorded and solved by
+    computing the ETAs once; staging reintroduced it by giving the two halves
+    of the screen different plans to compute from.
+
+    Note what this does NOT do: it does not reorder anything. The frozen
+    sequence is preserved by construction, so the list looks the same with the
+    new stop inserted where the preview puts it. What is held back is the
+    COMMIT — the authoritative route is untouched, Discard is one assignment,
+    and no stop is renumbered until the driver says so.
+  */
+  const view = useMemo(() => (route ? stagedRoute(route) : null), [route])
   const etaByStopId = useMemo(
     () =>
-      route?.optimized
-        ? liveEta({ optimized: route.optimized, stops: route.stops, nowMs }).byStopId
+      view?.optimized
+        ? liveEta({ optimized: view.optimized, stops: view.stops, nowMs }).byStopId
         : undefined,
-    [route, nowMs],
+    [view, nowMs],
   )
 
   const rows = useMemo(
-    () => (route ? buildRouteRows({ route, etaByStopId }) : []),
-    [route, etaByStopId],
+    () => (view ? buildRouteRows({ route: view, etaByStopId }) : []),
+    [view, etaByStopId],
   )
   const nextIndex = useMemo(() => nextStopRowIndex(rows), [rows])
+
+  // The diff. Built only while it is on screen — a staged route spends most of
+  // its life not being reviewed, and these rows are not free at 300 stops.
+  const reviewRows = useMemo(
+    () => (route && reviewing ? buildReviewRows({ route, nowMs }) : []),
+    [route, reviewing, nowMs],
+  )
+  const changes = changeCount(route?.pending)
+
+  /**
+   * Reviewing means the sheet is all the way up, and stays there.
+   *
+   * The diff is the screen at that moment. Leaving it draggable would let a
+   * driver pull it down over the map and lose the bottom bar, which is the
+   * only way to resolve the state they are in.
+   */
+  useEffect(() => {
+    if (reviewing) setSnap('full')
+  }, [reviewing, setSnap])
+
+  /**
+   * A review with nothing left in it is not a screen. Undoing the last change
+   * — or discarding — lands back on the route rather than on an empty diff
+   * with an Apply button that cannot do anything.
+   */
+  useEffect(() => {
+    if (reviewing && route && changes === 0) navigate(`/route/${route.id}`, { replace: true })
+  }, [reviewing, route, changes, navigate])
 
   // Routes worth offering as a copy source. Computed here rather than inside
   // the sheet because the empty state needs the COUNT to decide whether to
@@ -437,7 +500,9 @@ export function RouteSheet({ pages, pageIndex }: RouteSheetProps) {
     [setSnap],
   )
 
-  if (!route) return null
+  // `view` is derived from `route`, so this is one guard, not two — it is
+  // written as two only because TypeScript cannot see the derivation.
+  if (!route || !view) return null
 
   const scrollable = listScrolls(snap)
   /**
@@ -483,12 +548,20 @@ export function RouteSheet({ pages, pageIndex }: RouteSheetProps) {
           <div aria-hidden="true" className="h-1 w-8 rounded-pill bg-outline" />
         </div>
 
+        {reviewing ? (
+          <ReviewHeader
+            count={changes}
+            onBack={() => navigate(`/route/${route.id}`)}
+            onOverflow={() => setMenuOpen(true)}
+          />
+        ) : (
+          <>
         <SheetHeader
           snap={snap}
           routeName={route.name}
-          placeholder={searchPlaceholder(route.stops.length)}
-          stops={route.stops}
-          optimized={route.optimized}
+          placeholder={searchPlaceholder(view.stops.length)}
+          stops={view.stops}
+          optimized={view.optimized}
           searchQuery={searchQuery}
           onSearchQuery={setSearchQuery}
           onSearchFocus={() => {
@@ -507,6 +580,23 @@ export function RouteSheet({ pages, pageIndex }: RouteSheetProps) {
           onMenu={() => setDrawerOpen(true)}
           onOverflow={() => setMenuOpen(true)}
         />
+
+            {/*
+              Inside the measured header block, deliberately. The collapsed
+              detent is measured from this block, so the peek grows by exactly
+              this row and the banner is readable with the sheet all the way
+              down — which is where it needs to be, because a driver who
+              staged a stop and then dropped the sheet to look at the map must
+              not lose the only route to applying it.
+            */}
+            <StagedBanner
+              count={changes}
+              computing={provisional.computing}
+              infeasible={!provisional.feasible}
+              onReview={() => navigate(`/route/${route.id}/review`)}
+            />
+          </>
+        )}
       </div>
 
       {/* The list. `pan-y` leaves native scrolling to the browser; `contain`
@@ -520,7 +610,32 @@ export function RouteSheet({ pages, pageIndex }: RouteSheetProps) {
         }`}
         style={{ touchAction: 'pan-y' }}
       >
-        {carouselOpen ? (
+        {reviewing ? (
+          /*
+            The diff REPLACES the list, exactly as the carousel does. Same
+            reason: the sheet is a fixed frame and its content changes inside
+            it, so the map behind never stops being the thing the driver is
+            reading the diff against.
+          */
+          <ReviewChanges
+            rows={reviewRows}
+            fromNow={planIsStale(route, nowMs)}
+            onUndo={dropPendingChange}
+            onSelectStop={(id) => navigate(`/route/${route.id}/stop/${id}`)}
+            onRecolour={(id, color) => {
+              // Blue is the DEFAULT group, not a group named "Blue" — the same
+              // rule the edit form's chip row follows, and the reason a stop
+              // with no group still renders blue everywhere.
+              if (color === 'blue') {
+                updateStop(id, { groupId: undefined })
+                return
+              }
+              const name = color.charAt(0).toUpperCase() + color.slice(1)
+              const group = ensureGroup(name, GROUP_COLORS[color])
+              if (group) updateStop(id, { groupId: group })
+            }}
+          />
+        ) : carouselOpen ? (
           /*
             The carousel REPLACES the list rather than floating over it. The
             captured frame that defines this interaction shows both cards at
@@ -528,7 +643,18 @@ export function RouteSheet({ pages, pageIndex }: RouteSheetProps) {
             is a fixed frame and the cards move inside it, which is only true
             if they are the sheet's content.
           */
-          <StopPages route={route} pages={pages} index={pageIndex} etaByStopId={etaByStopId} />
+          /*
+            The STAGED route, so the card and its edit form can find a stop the
+            driver has only just added. `AddByPin`'s "add and edit" opens the
+            form on a stop that is still in the change set — resolve it against
+            the committed stops and the form silently never opens.
+          */
+          <StopPages
+            route={view}
+            pages={pages}
+            index={pageIndex}
+            etaByStopId={etaByStopId}
+          />
         ) : searchActive ? (
           <SearchScreen
             query={searchQuery}
@@ -607,8 +733,26 @@ export function RouteSheet({ pages, pageIndex }: RouteSheetProps) {
         body it anchors to the viewport, which is what "bottom-right of the
         list" means.
       */}
+      {/*
+        Discard and Apply. Inside the sheet rather than portalled, unlike the
+        jump FAB: at `full` the sheet's own bottom edge IS the bottom of the
+        screen, and the bar has to move with the sheet if it is ever dragged.
+      */}
+      {reviewing && (
+        <ReviewBottomBar
+          count={changes}
+          busy={provisional.computing}
+          onDiscard={() => {
+            clearPending()
+            navigate(`/route/${route.id}`, { replace: true })
+          }}
+          onApply={() => setApplyOpen(true)}
+        />
+      )}
+
       {scrollable &&
         !carouselOpen &&
+        !reviewing &&
         nextIndex !== null &&
         createPortal(
           <button
@@ -637,6 +781,18 @@ export function RouteSheet({ pages, pageIndex }: RouteSheetProps) {
           setup panel directly; that panel is now one item inside this —
           "Reoptimise route…" — which is where it belongs. */}
       <RouteMenuSheet open={menuOpen} route={route} onClose={() => setMenuOpen(false)} />
+
+      {/* The commit sheet: two models, fourteen words of consequence. */}
+      <ApplyChangesSheet
+        open={applyOpen}
+        route={route}
+        count={changes}
+        onClose={() => setApplyOpen(false)}
+        onDone={() => {
+          setApplyOpen(false)
+          navigate(`/route/${route.id}`, { replace: true })
+        }}
+      />
     </aside>
   )
 }

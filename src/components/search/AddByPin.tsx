@@ -135,7 +135,11 @@ export function AddByPin({ initialCenter, onAdd, onAddAndEdit, onCancel }: AddBy
         </div>
 
         <div className="mt-4 space-y-2">
-          <FullWidthButton onClick={() => center && onAdd(center, address)} disabled={!center}>
+          <FullWidthButton
+            onClick={() => center && onAdd(center, address)}
+            disabled={!center}
+            testId="pin-add"
+          >
             Add stop
           </FullWidthButton>
           {/*

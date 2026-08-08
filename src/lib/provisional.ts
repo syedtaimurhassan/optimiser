@@ -4,7 +4,8 @@ import { cumulativeArrivals, serviceSecFor } from './arrivals.ts'
 import { END_KEY, START_KEY, type CostFn, type MatrixPoint } from './costMatrix.ts'
 import { applyMove, insertAll, type InsertContext, type StopTiming } from './insertStops.ts'
 import { allocateAppendedStopId, allocateInsertedStopId, type StopIdMode } from './stopIds.ts'
-import { frozenOrder, plannedStops, stagedStops } from './staging.ts'
+import { visitOrder } from './routeOrder.ts'
+import { frozenOrder, plannedStops, removedStopIds, stagedStops } from './staging.ts'
 
 /**
  * The preview: what the round would look like if you applied this.
@@ -122,23 +123,45 @@ export function buildProvisional(input: ProvisionalInput): ProvisionalResult | n
     sequence = applyMove(sequence, change.stopId, change.toIndex, pinnedFirst, pinnedLast)
   }
 
-  const legSeconds: number[] = []
-  const legMeters: number[] = []
+  const planLegs: number[] = []
+  const planMetres: number[] = []
   for (let i = 0; i < sequence.length - 1; i++) {
-    legSeconds.push(durationSec(sequence[i], sequence[i + 1]) ?? 0)
-    legMeters.push(metres?.(sequence[i], sequence[i + 1]) ?? 0)
+    planLegs.push(durationSec(sequence[i], sequence[i + 1]) ?? 0)
+    planMetres.push(metres?.(sequence[i], sequence[i + 1]) ?? 0)
   }
+  const planService = sequence.map((key) => {
+    const stop = byId.get(key)
+    return stop ? serviceSecFor(stop) : 0
+  })
+  const planArrivals = cumulativeArrivals({ legSeconds: planLegs, serviceSeconds: planService })
 
-  const orderedStopIds = sequence.map((key) => (byId.has(key) ? key : null))
-  const orderedWaypoints: LatLng[] = sequence.map((key) => {
+  /*
+    Handled stops go back into the ORDER, having been left out of the PLAN.
+
+    The plan must not drive to a door the van has already been to — that is why
+    `plannedStops` drops them. But the order is also what decides which stops
+    the carousel pages through and which the map draws, and staging one change
+    must not make twenty delivered stops disappear from the driver's list.
+
+    So they are spliced back in where the committed plan had them, costing
+    nothing: zero service, and an arrival that collapses forward onto the next
+    real stop, which keeps every array the same length and every total intact.
+    `liveEta` never surfaces an arrival for a handled stop anyway.
+  */
+  const { sequence: display, arrivalSec, legSeconds, legMeters } = restoreHandled({
+    route,
+    planned: sequence,
+    arrivals: planArrivals,
+    legs: planLegs,
+    metres: metres ? planMetres : undefined,
+    byId,
+  })
+
+  const orderedStopIds = display.map((key) => (byId.has(key) ? key : null))
+  const orderedWaypoints: LatLng[] = display.map((key) => {
     const stop = byId.get(key)
     if (stop) return { lat: stop.lat, lng: stop.lng }
     return (key === START_KEY ? route.start : route.end) ?? { lat: 0, lng: 0 }
-  })
-
-  const serviceSeconds = sequence.map((key) => {
-    const stop = byId.get(key)
-    return stop ? serviceSecFor(stop) : 0
   })
 
   const geometry: LineString = {
@@ -149,12 +172,12 @@ export function buildProvisional(input: ProvisionalInput): ProvisionalResult | n
   const optimized: OptimizedRoute = {
     orderedWaypoints,
     orderedStopIds,
-    arrivalSec: cumulativeArrivals({ legSeconds, serviceSeconds }),
+    arrivalSec,
     legSeconds,
-    legMeters: metres ? legMeters : undefined,
+    legMeters,
     geometry,
-    distanceMeters: metres ? legMeters.reduce((a, b) => a + b, 0) : 0,
-    durationSeconds: legSeconds.reduce((a, b) => a + b, 0),
+    distanceMeters: planMetres.reduce((a, b) => a + b, 0),
+    durationSeconds: planLegs.reduce((a, b) => a + b, 0),
     candidatesVisited: orderedStopIds.filter((id) => id !== null).length,
     candidatesTotal: all.length,
     // Straight legs and a matrix, not a road router. Both the summary strip
@@ -167,6 +190,106 @@ export function buildProvisional(input: ProvisionalInput): ProvisionalResult | n
     labels: labelsFor(sequence, byId, added, input.stopIdMode ?? 'letterBlock'),
     feasible: inserted.feasible,
   }
+}
+
+interface RestoreInput {
+  route: ProvisionalInput['route']
+  /** The planned sequence, pending stops and endpoints only. */
+  planned: readonly string[]
+  arrivals: readonly number[]
+  legs: readonly number[]
+  metres: readonly number[] | undefined
+  byId: ReadonlyMap<string, AddressedStop>
+}
+
+/**
+ * Put the already-handled stops back into the order, at no cost.
+ *
+ * Each one is inserted immediately before the first planned entry that follows
+ * it in the COMMITTED order, so a delivered stop keeps the position the driver
+ * remembers rather than being swept to one end. Its arrival collapses forward
+ * onto the entry after it — a handled stop never shows an ETA, so the value is
+ * never read, and collapsing forward is what keeps every leg total unchanged.
+ */
+function restoreHandled({ route, planned, arrivals, legs, metres, byId }: RestoreInput): {
+  sequence: string[]
+  arrivalSec: number[]
+  legSeconds: number[]
+  legMeters: number[] | undefined
+} {
+  const plannedSet = new Set(planned)
+  const removed = removedStopIds(route.pending)
+  /*
+    Two different reasons a stop is absent from the plan, and only ONE of them
+    comes back.
+
+    Handled: the van has been there, so it costs nothing and belongs in the
+    order. Staged for removal: it is about to stop existing, and putting it in
+    the order would make `liveEta` count it as still to come — the preview's
+    finish time would then include a stop the driver is removing, which is the
+    one number this whole screen exists to get right. The map still draws it,
+    wearing its red trash chip, from `stagedStops` rather than from the order.
+  */
+  const restorable = (stop: AddressedStop) =>
+    !plannedSet.has(stop.id) && byId.has(stop.id) && !removed.has(stop.id)
+
+  const committed = visitOrder({ stops: route.stops, optimized: route.optimized })
+  const handled = committed.filter(restorable)
+
+  if (handled.length === 0) {
+    return {
+      sequence: [...planned],
+      arrivalSec: [...arrivals],
+      legSeconds: [...legs],
+      legMeters: metres ? [...metres] : undefined,
+    }
+  }
+
+  // Where each handled stop goes: before the next committed entry that IS in
+  // the plan. Nothing after it survives, so it goes at the end.
+  const before = new Map<string, string[]>()
+  const trailing: string[] = []
+  for (const [index, stop] of committed.entries()) {
+    if (!restorable(stop)) continue
+    const successor = committed.slice(index + 1).find((s) => plannedSet.has(s.id))
+    if (!successor) {
+      trailing.push(stop.id)
+      continue
+    }
+    const list = before.get(successor.id)
+    if (list) list.push(stop.id)
+    else before.set(successor.id, [stop.id])
+  }
+
+  const sequence: string[] = []
+  const arrivalSec: number[] = []
+  const legSeconds: number[] = []
+  const legMeters: number[] | undefined = metres ? [] : undefined
+
+  for (const [i, key] of planned.entries()) {
+    for (const handledId of before.get(key) ?? []) {
+      sequence.push(handledId)
+      // Collapses forward onto the stop that follows it.
+      arrivalSec.push(arrivals[i] ?? 0)
+      legSeconds.push(0)
+      legMeters?.push(0)
+    }
+    sequence.push(key)
+    arrivalSec.push(arrivals[i] ?? 0)
+    if (i < planned.length - 1) {
+      legSeconds.push(legs[i] ?? 0)
+      legMeters?.push(metres?.[i] ?? 0)
+    }
+  }
+
+  for (const handledId of trailing) {
+    sequence.push(handledId)
+    arrivalSec.push(arrivals[arrivals.length - 1] ?? 0)
+    legSeconds.push(0)
+    legMeters?.push(0)
+  }
+
+  return { sequence, arrivalSec, legSeconds, legMeters }
 }
 
 /**

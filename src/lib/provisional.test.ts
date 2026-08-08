@@ -129,6 +129,46 @@ describe('buildProvisional', () => {
     assert.deepEqual(result.optimized.orderedStopIds, ['a', 'c', 'd'])
   })
 
+  /**
+   * The plan must not drive to a door the van has been to, but the ORDER is
+   * also what decides which stops the carousel pages through. Staging one
+   * change must not make twenty delivered stops vanish from the list, so they
+   * come back at zero cost — and in the position the driver remembers.
+   */
+  test('handled stops stay in the order, at no cost', () => {
+    const handled = [
+      { ...stop('a', 'D6', 36), status: 'delivered' as const },
+      stop('b', 'D7', 37),
+      { ...stop('c', 'D8', 38), status: 'failed' as const },
+      stop('d', 'D9', 39),
+    ]
+    const r = route([addOf('n1')], { stops: handled, optimized: solved(['a', 'b', 'c', 'd']) })
+    const result = build(r)!
+    assert.deepEqual(result.optimized.orderedStopIds, ['a', 'b', 'n1', 'c', 'd'])
+    assert.equal(result.optimized.arrivalSec.length, 5)
+    assert.equal(result.optimized.legSeconds?.length, 4)
+  })
+
+  /**
+   * A removal is the OTHER reason a stop is absent from the plan, and it must
+   * not come back: `liveEta` would count it as still to come, so the preview's
+   * finish time would include a stop the driver is removing — the one number
+   * this screen exists to get right. The map still draws it from `stagedStops`.
+   */
+  test('a stop staged for removal does NOT come back with them', () => {
+    const handled = [
+      { ...stop('a', 'D6', 36), status: 'delivered' as const },
+      stop('b', 'D7', 37),
+      stop('c', 'D8', 38),
+      stop('d', 'D9', 39),
+    ]
+    const r = route([change({ kind: 'remove', stopId: 'c' })], {
+      stops: handled,
+      optimized: solved(['a', 'b', 'c', 'd']),
+    })
+    assert.deepEqual(build(r)!.optimized.orderedStopIds, ['a', 'b', 'd'])
+  })
+
   test('endpoints are null entries, as they are on a real solve', () => {
     const r = route([addOf('n1')], { start: { lat: 1, lng: 1 }, end: { lat: 2, lng: 2 } })
     const result = build(r)!

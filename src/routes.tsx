@@ -85,6 +85,15 @@ export function AppRoutes() {
           nothing unmounts. Point the two paths at different components and the
           map is destroyed and rebuilt on every stop you open.
         */}
+        {/*
+          Review is a third path onto the SAME component, for the same reason.
+          It is not a screen either: the map stays up behind it showing the "+"
+          pins and the red trash chips, and the provisional ETAs on the sheet
+          describe the polyline the map is drawing. Give it its own component
+          and the map is destroyed and rebuilt every time a driver opens the
+          diff — which on a staged round is exactly when they are looking at it.
+        */}
+        <Route path="/route/:routeId/review" component={RouteWorkScreen} />
         <Route path="/route/:routeId/stop/:stopId" component={RouteWorkScreen} />
         <Route path="/route/:routeId" component={RouteWorkScreen} />
 

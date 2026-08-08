@@ -32,16 +32,31 @@ import { visitOrder } from './routeOrder.ts'
  */
 
 /**
- * The fields whose value the plan depends on.
+ * The fields whose value the plan actually depends on TODAY.
  *
- * `lat`/`lng` change the distances. The time window and service time change
- * feasibility and every arrival downstream. `order` pins the stop to an end of
- * the route. `kind` decides pickup-before-delivery, which the solver will use
- * when it learns to.
+ * `lat`/`lng`/`address` change the distances. `serviceTimeSec` changes every
+ * arrival downstream. The time window changes whether a gap is feasible at
+ * all. Those six are exactly what `lib/provisional.ts` reads, and the list is
+ * defined by that rather than by what sounds route-ish.
  *
- * Everything absent from this list — notes, access codes, recipient, parcel
- * finder, group, photos, status — writes straight through, as it did before
- * this milestone.
+ * ── Two fields that are deliberately NOT here ─────────────────────────────
+ *
+ * `order` ("First"/"Last") and `kind` ("Pickup") both sound like they belong,
+ * and neither one currently reaches the plan: `planSelectiveRoute` takes its
+ * endpoints from the route's own anchors and never looks at `order`, and
+ * nothing anywhere honours pickup-before-delivery. Staging them would put
+ * changes on the review screen that provably move nothing — the exact
+ * "diff full of noise" failure the split exists to avoid.
+ *
+ * `kind` has a second reason: it drives the automatic purple/teal group rule
+ * in the store, which operates on the committed stop. Staging it would leave
+ * the rule reading a value the driver has already changed.
+ *
+ * When M9–M11 teach the solver about pinned order and pickups, they belong in
+ * this list, and this comment is the note that says so.
+ *
+ * Everything else — notes, access codes, recipient, parcel finder, group,
+ * parcel count, photos, status — writes straight through, as before.
  */
 const PLAN_FIELDS = [
   'lat',
@@ -50,8 +65,6 @@ const PLAN_FIELDS = [
   'twOpenSec',
   'twCloseSec',
   'serviceTimeSec',
-  'order',
-  'kind',
 ] as const satisfies readonly (keyof AddressedStop)[]
 
 /** Does this patch need reviewing, or can it just be written? */
@@ -199,6 +212,27 @@ export function stagedStops(route: StagedRoute): AddressedStop[] {
     return patch ? { ...stop, ...patch } : stop
   })
   return added.length === 0 ? merged : [...merged, ...added]
+}
+
+/**
+ * The whole route as the map, the carousel and the edit form see it.
+ *
+ * One function rather than three call sites doing the same two substitutions,
+ * because the two have to move together: a carousel built from the staged
+ * stops but ordered by the COMMITTED plan puts the new stop at the end of the
+ * swipe run instead of where the preview says it goes, and the map would then
+ * fly to a different stop than the card is showing.
+ *
+ * Returns the route itself when nothing is staged, so every downstream
+ * `useMemo` keyed on it stays stable.
+ */
+export function stagedRoute<T extends StagedRoute>(route: T): T {
+  if (!route.pending || route.pending.changes.length === 0) return route
+  return {
+    ...route,
+    stops: stagedStops(route),
+    optimized: route.pending.provisional ?? route.optimized,
+  }
 }
 
 /** One stop as the staged view sees it, or null when it is not on the route. */

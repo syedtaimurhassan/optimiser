@@ -16,6 +16,7 @@
  */
 import { solveSelectiveTSP, warmUpSolver, SKIP_PENALTY } from './lib/solver'
 import { useRoutesStore } from './store/routesStore'
+import { useUiStore } from './store/uiStore'
 import { initRouting, setWorkerBridgeEnabled } from 'or-tools-wasm/routing'
 
 export interface BenchSolveOptions {
@@ -34,6 +35,15 @@ export interface BenchSeam {
    * needing UI that does not exist until M3.
    */
   routesStore: typeof useRoutesStore
+  /**
+   * The transient UI store.
+   *
+   * M8's acceptance suite needs to open the add-by-pin flow and the edit form,
+   * both of which are store flags reached through gestures that are the
+   * subject of OTHER checks. Driving them directly here keeps a staging check
+   * from failing because a tile moved four pixels.
+   */
+  uiStore: typeof useUiStore
   skipPenalty: number
   isCrossOriginIsolated: () => boolean
   warmUp: () => Promise<void>
@@ -57,8 +67,9 @@ declare global {
 }
 
 window.__bench = {
-  version: 2,
+  version: 3,
   routesStore: useRoutesStore,
+  uiStore: useUiStore,
   skipPenalty: SKIP_PENALTY,
   isCrossOriginIsolated: () => globalThis.crossOriginIsolated === true,
   warmUp: () => warmUpSolver(),

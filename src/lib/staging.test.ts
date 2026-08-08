@@ -77,10 +77,10 @@ describe('stagesPlan', () => {
     assert.equal(stagesPlan({ twOpenSec: 32400 }), true)
   })
 
-  test('so do the coordinates, the service time and the order constraint', () => {
+  test('so do the coordinates, the address and the service time', () => {
     assert.equal(stagesPlan({ lat: 55.7 }), true)
+    assert.equal(stagesPlan({ lng: 12.6 }), true)
     assert.equal(stagesPlan({ serviceTimeSec: 300 }), true)
-    assert.equal(stagesPlan({ order: 'first' }), true)
   })
 
   /**
@@ -93,6 +93,18 @@ describe('stagesPlan', () => {
     assert.equal(stagesPlan({ notes: 'bike + boks' }), false)
     assert.equal(stagesPlan({ recipient: 'Jette' }), false)
     assert.equal(stagesPlan({ parcelCount: 3 }), false)
+  })
+
+  /**
+   * The two that sound like they belong and provably do not. Neither reaches
+   * the plan today: the planner takes its endpoints from the route's own
+   * anchors and never reads `order`, and nothing honours pickup-before-
+   * delivery. Staging them would put changes on the review screen that move
+   * nothing at all. M9–M11 should move them in when the solver learns them.
+   */
+  test('nor do "First"/"Last" or "Pickup" — the solver does not read either yet', () => {
+    assert.equal(stagesPlan({ order: 'first' }), false)
+    assert.equal(stagesPlan({ kind: 'pickup' }), false)
   })
 })
 

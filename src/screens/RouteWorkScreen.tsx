@@ -1,5 +1,5 @@
 import { useEffect, useMemo } from 'react'
-import { Link, useLocation, useParams } from 'wouter'
+import { Link, useLocation, useParams, useRoute } from 'wouter'
 import { Sidebar } from '../components/Sidebar'
 import { RouteSheet } from '../components/sheet/RouteSheet'
 import { RouteSetupSheet } from '../components/sheet/RouteSetupSheet'
@@ -14,6 +14,8 @@ import { RoutesDrawer } from '../components/routes/RoutesDrawer'
 import { useRoutesStore } from '../store/routesStore'
 import { useUiStore } from '../store/uiStore'
 import { buildStopPages, pageIndexById } from '../lib/stopPages'
+import { stagedRoute } from '../lib/staging'
+import { useProvisionalRoute } from '../hooks/useProvisionalRoute'
 
 /**
  * The route working screen: map + controls, for the route named in the URL.
@@ -38,6 +40,7 @@ export function RouteWorkScreen() {
   const pageId = params.stopId ?? null
 
   const [, navigate] = useLocation()
+  const [reviewing] = useRoute('/route/:routeId/review')
   // Keyed on the URL's id, not the active one: during a deep link the active
   // route is still the previous one for a frame, and pages built from it would
   // resolve this URL's stop against the wrong route.
@@ -47,7 +50,20 @@ export function RouteWorkScreen() {
   const setActiveRoute = useRoutesStore((s) => s.setActiveRoute)
   const setSelectedStopId = useUiStore((s) => s.setSelectedStopId)
 
-  const pages = useMemo(() => (route ? buildStopPages(route) : []), [route])
+  /**
+   * The preview, kept in step with the change set.
+   *
+   * It runs HERE rather than inside the sheet because it is a property of the
+   * route being open, not of any one surface: the map's polyline, the sheet's
+   * ETAs and the review screen's rows all read the same provisional plan, and
+   * a hook mounted inside one of them would stop computing the moment that one
+   * unmounted — which is precisely what opening a stop card does.
+   */
+  const provisional = useProvisionalRoute(route)
+
+  // Built from the STAGED view so a stop the driver has just added is
+  // swipeable, openable and in the position the preview says it goes.
+  const pages = useMemo(() => (route ? buildStopPages(stagedRoute(route)) : []), [route])
   const pageIndex = pageIndexById(pages, pageId)
   const page = pageIndex === -1 ? null : pages[pageIndex]
 
@@ -118,12 +134,18 @@ export function RouteWorkScreen() {
         legacy panels stay reachable on a phone through the sheet's overflow —
         see RouteSetupSheet.
       */}
-      <RouteSheet pages={pages} pageIndex={pageIndex} />
+      <RouteSheet
+        pages={pages}
+        pageIndex={pageIndex}
+        reviewing={Boolean(reviewing)}
+        provisional={provisional}
+      />
       <Sidebar />
       <RouteSetupSheet />
 
-      {/* Calculate FAB — mobile only */}
-      <CalculateFab />
+      {/* Calculate FAB — mobile only. Hidden while reviewing: solving from
+          under a diff would apply the changes by a side door. */}
+      {!reviewing && <CalculateFab />}
 
       {/* The routes drawer, the control that opens it, and the create/edit
           modal that opens over it. All three portal to the body, so their

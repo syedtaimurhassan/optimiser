@@ -745,7 +745,16 @@ export const useRoutesStore = create<RoutesState>()(
       saveAddressDefault: (stopId) => {
         const state = get()
         const route = state.activeRouteId ? state.routes[state.activeRouteId] : null
-        const stop = route?.stops.find((st) => st.id === stopId)
+        /*
+          The STAGED stop, not the committed one.
+
+          "Set Default ☆" means "remember what I have just set". A driver who
+          changes the time at this door to five minutes and then stars it is
+          asking for five minutes to be remembered — and the change is sitting
+          in the change set, so reading the committed stop would silently save
+          the value they just replaced.
+        */
+        const stop = route ? stagedStop(route, stopId) : null
         if (!stop) return null
         const key = addressKey(stop.address, stop)
         if (!key) return null
@@ -791,6 +800,34 @@ export const useRoutesStore = create<RoutesState>()(
       setStopStatus: (id, status) =>
         set((s) =>
           withActiveRoute(s, (r) => {
+            /*
+              A stop that is still staged can be delivered before it is applied
+              — the driver added the door they were standing at, then knocked.
+              The status folds into the add, because there is no row in `stops`
+              to write it to and silently doing nothing would leave the card
+              showing "pending" after a deliberate tap.
+            */
+            if (stagedAddIds(r).has(id)) {
+              const stop = stagedStop(r, id)!
+              if (stop.status === status) return null
+              return {
+                ...r,
+                pending: stage(r, [
+                  {
+                    kind: 'edit',
+                    stopId: id,
+                    patch: {
+                      status,
+                      statusHistory: [...stop.statusHistory, { status, atMs: Date.now() }],
+                      ...(status === 'failed'
+                        ? null
+                        : { failureReason: undefined, failureNote: undefined }),
+                    },
+                  },
+                ]),
+              }
+            }
+
             const index = r.stops.findIndex((st) => st.id === id)
             if (index === -1) return null
             const stop = r.stops[index]
