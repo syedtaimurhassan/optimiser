@@ -1442,3 +1442,139 @@ The same pattern was fixed in `MapComponent`'s "add and edit" flow.
    dropped the second delivery to a building from the itinerary entirely.
 6. **`PLAN_FIELDS` is a claim about the solver, not about the domain.** When
    M9–M11 teach it pinned order and pickups, `order` and `kind` go back in.
+
+## M9 — The seam: one port, four tiers, and an engine that beats the old one
+
+The milestone that stopped the app knowing what its optimiser was. Everything
+above `lib/compute/` now speaks only `SolveRequest` and `SolveResult`; below it,
+engines can be TypeScript, workers, WebAssembly or a hosted service, and several
+can coexist and be compared on the same instance by the same referee.
+
+The headline is not the abstraction, though. It is that the replacement engine
+is **better than the thing it replaced**, and that the app stopped telling iOS
+and Firefox users to go and find Chrome.
+
+### What changed
+
+- **`lib/compute/solverPort.ts`** — the interfaces, the `SKIP_PENALTY`, and the
+  referee. The matrix is a flat `Int32Array` indexed `m[i*n+j]`, everywhere.
+- **`lib/compute/engineTs.ts`** — a real engine: cheapest-insertion construction,
+  2-opt + Or-opt(1–3) over K-nearest candidate lists with don't-look bits,
+  add/drop/swap, ruin-and-recreate, driven by ILS with a double-bridge kick.
+- **`lib/compute/registry.ts`** — tiers A–D from M1's capability detector, with
+  claimed and resolved tiers tracked separately.
+- **`lib/compute/engineTsWorkers.ts`** — tier B, the default: N seeded workers,
+  best-of, with a protocol built for transferables because M10 will reuse it.
+- **`lib/compute/engineOrToolsLegacy.ts`** — the old solver, behind the same
+  interface, reachable only from the dev seam. It is the correctness oracle now.
+- **Cancellation that cancels**, and progress that reports.
+- **`coi-serviceworker` off the production path.**
+- **The benchmark runs every engine**, and TSPLIB gives an absolute gap.
+
+### The numbers
+
+TSPLIB, 1 s budget, gap to **proven optimum** — the only absolute measurement in
+the harness, and the reason it was worth adding:
+
+| engine | mean gap | worst | optimal on |
+|---|---|---|---|
+| `ts` (tier D) | 0.45% | 2.71% | 7/12 |
+| **`ts-workers` (tier B, default)** | **0.13%** | 0.93% | **9/12** |
+| `ortools` | 1.54% | 4.23% | 2/12 |
+
+On the M0 grid, instances where OR-Tools produces the best route fell from 6 to
+4 of 18 as the search was fixed. On the real 107-point OSRM instance at K=20 the
+worker pool beats OR-Tools by 15.7% of travel cost, and does it in 3 s where
+OR-Tools takes 3.6 s.
+
+### What surprised me
+
+**The old solver was worse than a plain local search, and by a lot.** M0
+predicted it — best-of-seven *construction* with no local search, because the
+WASM binding never forwarded a metaheuristic — but a 14% improvement in a tenth
+of the time on the first instance I measured was still startling. OR-Tools is
+excellent software; we were never running the part of it that does the work.
+
+**Asymmetry makes the textbook 2-opt delta wrong, not merely imprecise.**
+Reversing a segment flips every arc inside it, and the usual four-term delta
+silently omits the cost of turning it round. An engine using it accepts losing
+moves and cannot tell. Forward/backward prefix sums make the exact term O(1) for
+any (i,j); the tests exhaust every legal (i,j) against a full recompute rather
+than sampling, which is the only reason I trust it.
+
+**Two bugs were in the driver, not the moves, and both were invisible.** Three
+independent draws for the double-bridge cut points collided about half the time
+on a short route, so the perturbation quietly did nothing while still counting
+as a failed iteration. And exhausting patience *returned* rather than
+restarting, so an 8-stop instance quit after 40 perturbations with 119 ms of its
+budget unspent and settled 17% above an optimum it could have brute-forced. Both
+only showed up because the tests brute-force small instances.
+
+**The decoy family earned its keep.** Both TS engines returned *identical*
+routes there from different seeds — the signature of every seed falling into one
+trap. When K binds, the expensive question is which stops, not their order, and
+neither a double bridge nor a 1-for-1 swap can answer it: trading one ring stop
+for one cluster stop 18 km away pays the whole detour to gain one delivery, so
+every individual swap is correctly rejected and the route never leaves the ring.
+Ruin-and-recreate with a forced random seed, plus a 2% uphill drift allowed only
+when the cap binds, is what got out.
+
+**The skip penalty hid the differences it was meant to expose.** With 85 stops
+skipped, the objective carries a constant 850,000,000, and two engines whose
+driving differs by 15% both report "+0.00%". The bench now measures gaps on
+travel cost when the skipped counts match.
+
+### Verified
+
+- 591 unit tests. Deltas checked against a full recompute over **every** legal
+  (i,j), segment, gap and orientation on asymmetric fixtures. Exact optimum found
+  on 360/360 brute-forced instances at n=7–9.
+- In a real browser, against the pruned bundle: engine selection, the worker
+  pool, progress reports, and cancellation at **74 ms**.
+- **With `coi-serviceworker` 404'd** — what an iOS Safari visitor to GitHub Pages
+  actually gets — `crossOriginIsolated` false, `SharedArrayBuffer` undefined, and
+  a 14-node instance solved correctly. That configuration threw before M9.
+- `bench:verify-seam` passes and now also asserts no OR-Tools symbols and no
+  `.wasm` in production output. `or-tools-wasm` is a devDependency.
+
+### Deferred
+
+- 🟡 **The tier-D engine still trails on two decoy instances** (+6.3% at n=25,
+  +9.2% at n=50). The shipped default is tier B, which wins or ties both; a
+  single-core device gets the weaker answer. Fixing it properly means a stronger
+  selection neighbourhood, which is M10 work.
+- **No tier A or C engine exists.** A Turbo-capable phone runs Fast and the badge
+  says so. M10 fills C, M15 fills A.
+- **VRPTW is parsed and not scored.** Solomon and Gehring-Homberger have a
+  hierarchical objective (vehicles first, then distance) plus windows and
+  capacity; with all of that relaxed, a gap number answers a different question.
+  The parser and SINTEF's best-known table are in `bench/lib/vrptw.mjs` for M11.
+- **`scripts/prune-wasm.mjs` is now a no-op for production** — nothing it prunes
+  reaches `dist` any more. Left in place; the bench build still uses it.
+- **The OR-Tools heap leak is unchanged** — the endurance probe still dies around
+  solve #12. It no longer affects users, because users no longer run OR-Tools.
+- Everything M8 deferred: the move gesture, photo capture, Navigate, real-device
+  FPS, `labelLinesFor` reading an unset `etaSec`.
+
+### What the next session needs to know
+
+1. **`SolverEngine` is the contract, and `toResult` is where every engine ends.**
+   A new engine returns an order; cost, distance and arrivals are computed once,
+   for everyone, so two engines cannot disagree about what a route is worth.
+2. **Nothing trusts an engine's own score.** The worker pool re-validates and
+   re-scores every worker's answer before letting it win, and Node re-scores
+   everything the browser returns. Keep it that way.
+3. **The flat matrix is the whole point.** `planRoute` converts once, at the
+   boundary with the network adapter. M10 copies that buffer straight into WASM
+   linear memory with one `set()`. Do not reintroduce `number[][]` below that line.
+4. **The tour is an array with a position index so M11 can add Vidal's four
+   labels** (duration, time warp, earliest start, latest start) to the same
+   prefix arrays the 2-opt reversal term already uses. A linked list has no
+   index, so it has no prefixes, and M11 would be a rewrite. The exact
+   concatenation recurrences are transcribed in the M10 research notes.
+5. **Cancellation latency is the yield interval** (~12 ms). M10's WASM engine
+   cannot yield mid-call, so it must chunk its solve — and because M9 removed
+   cross-origin isolation there is no `SharedArrayBuffer` for a shared cancel
+   flag. Poll between chunks.
+6. **`npm run bench` needs `npm run bench:tsplib:fetch` once**, and the TSPLIB
+   cache is gitignored on purpose.
