@@ -111,7 +111,11 @@ async function main() {
 
     const expectedStores = ['routes', 'matrices', 'photos', 'favorites', 'meta']
     check('all 5 object stores created', expectedStores.every((s) => state.stores.includes(s)), state.stores.join(', '))
-    check('schemaVersion is 4', state.schemaVersion === 4, `got ${state.schemaVersion}`)
+    // 5 since M6 added the geocache store. This assertion is the ONE place the
+    // shipped schema version is checked against a literal, so it has to move
+    // with it — it said 4 for a whole milestone and reported a passing app as
+    // broken.
+    check('schemaVersion is 5', state.schemaVersion === 5, `got ${state.schemaVersion}`)
     check('one route row created', state.routeCount === 1, `got ${state.routeCount}`)
     check('route carries all 3 stops', state.routeStops === 3, `got ${state.routeStops}`)
     check('route dated today', state.routeDateISO === new Date().toISOString().slice(0, 10), String(state.routeDateISO))
@@ -198,7 +202,7 @@ async function main() {
         hasMap: document.querySelector('.maplibregl-canvas') !== null,
       }
     })
-    check('schemaVersion stamped on fresh install', fresh.schemaVersion === 4, `got ${fresh.schemaVersion}`)
+    check('schemaVersion stamped on fresh install', fresh.schemaVersion === 5, `got ${fresh.schemaVersion}`)
     check('app renders the map', fresh.hasMap)
     await context.close()
   }
@@ -398,10 +402,26 @@ async function main() {
     await page.waitForFunction(() => document.body.innerText.includes('Settings'), null, { timeout: 30_000 })
     check('deep link #/settings resolves on cold load', true)
 
-    await page.goto(`${server.url}#/route/current/stop/a1`, { waitUntil: 'load', timeout: 60_000 })
-    await page.waitForFunction(() => document.body.innerText.includes('Stop detail'), null, { timeout: 30_000 })
-    const params = await page.evaluate(() => document.body.innerText)
-    check('deep link to stop detail resolves', params.includes('a1'), 'stop id rendered from URL params')
+    /*
+      M7 replaced the stop-detail STUB with a state of the working screen, so
+      this can no longer look for a screen title. What it can still check is
+      the thing this block is actually about: that the URL shape resolves.
+
+      A stop id that names nothing falls back to its route rather than to a
+      dead end — which is the behaviour a shared link needs after the stop it
+      pointed at has been deleted.
+    */
+    await page.goto(server.url, { waitUntil: 'load', timeout: 60_000 })
+    await page.waitForFunction(() => location.hash.includes('/route/'), null, { timeout: 30_000 })
+    const routeId = await page.evaluate(() => location.hash.split('/route/')[1].split('/')[0])
+
+    await page.goto(`${server.url}#/route/${routeId}/stop/nope`, { waitUntil: 'load', timeout: 60_000 })
+    await page.waitForFunction(
+      (id) => location.hash === `#/route/${id}`,
+      routeId,
+      { timeout: 30_000 },
+    )
+    check('a deep link to a stop that no longer exists falls back to its route', true)
 
     await page.goto(`${server.url}#/nonsense`, { waitUntil: 'load', timeout: 60_000 })
     await page.waitForFunction(() => document.body.innerText.includes('Page not found'), null, { timeout: 30_000 })

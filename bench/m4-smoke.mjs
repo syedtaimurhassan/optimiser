@@ -558,11 +558,33 @@ async function main() {
       document.querySelector('[data-testid="fab-contextual"]')?.getAttribute('data-fab'),
     )
 
-  // Tap empty map to clear the selection made above, and the FAB should go
-  // back to offering the route overview.
+  /*
+    M7 changed what a tap on empty map means, deliberately.
+
+    In M4 selecting a stop only tinted its marker, and a tap on the map was the
+    only way to clear it. From M7 a marker tap OPENS that stop's card — the URL
+    owns which one is open — and the card has its own X. A stray tap on the map
+    discarding the card a driver is working in would be a hazard rather than an
+    affordance, especially since the map is exactly where they look while the
+    card is up.
+
+    So the rule is now: with a card open, a tap on empty map does nothing, and
+    the FAB keeps offering to recentre on the stop being looked at.
+  */
   await page.mouse.click(30, 120)
   await page.waitForTimeout(700)
-  check('deselecting returns the FAB to "fit route"', (await fabFor()) === 'fit-route', await fabFor())
+  check(
+    'with a stop card open, a tap on empty map does NOT discard it',
+    (await fabFor()) === 'focus-stop',
+    await fabFor(),
+  )
+
+  // Closing the card properly does return the FAB to the route overview.
+  await page.evaluate(() => {
+    location.hash = location.hash.replace(/\/stop\/.*$/, '')
+  })
+  await page.waitForTimeout(700)
+  check('closing the card returns the FAB to "fit route"', (await fabFor()) === 'fit-route', await fabFor())
 
   console.log('\n━━━ the recenter cycle ━━━\n')
 
