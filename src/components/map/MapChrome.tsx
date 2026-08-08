@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useMemo } from 'react'
+import { useCallback, useEffect } from 'react'
 import type { AddressedStop, OptimizedRoute } from '../../types'
 import { BASEMAPS, type BasemapId } from '../../lib/map/basemap'
 import { contextualFab } from '../../lib/map/camera'
+import { pageLabel, type StopPage } from '../../lib/stopPages'
 import { useGeolocation } from '../../hooks/useGeolocation'
 import { useUiStore } from '../../store/uiStore'
 import { useMapController } from './MapControllerContext'
@@ -28,7 +29,10 @@ import { PeekPill } from './PeekPill'
 export interface MapChromeProps {
   stops: AddressedStop[]
   selectedStopId: string | null
-  onSelectStop: (id: string | null) => void
+  /** The page BEFORE the one the carousel is showing, or null. */
+  previousPage: StopPage | null
+  /** Go back one page. Only called when `previousPage` is set. */
+  onPreviousPage: () => void
   /** The solve, for the finish estimate. Undefined on an unsolved route. */
   optimized: OptimizedRoute | undefined
 }
@@ -36,7 +40,8 @@ export interface MapChromeProps {
 export function MapChrome({
   stops,
   selectedStopId,
-  onSelectStop,
+  previousPage,
+  onPreviousPage,
   optimized,
 }: MapChromeProps) {
   const controller = useMapController()
@@ -74,22 +79,21 @@ export function MapChrome({
     setBasemap(order[(order.indexOf(basemap) + 1) % order.length])
   }, [basemap, setBasemap])
 
-  // The item before the selected one, in the route's own order. M7 replaces
-  // this with the carousel's notion of "previous", which will also cover the
-  // end location; until then the previous stop is the honest answer.
-  const previous = useMemo(() => {
-    if (!selectedStopId) return null
-    const index = stops.findIndex((s) => s.id === selectedStopId)
-    return index > 0 ? stops[index - 1] : null
-  }, [stops, selectedStopId])
-
   return (
     <>
+      {/* Never conditional on the selection: finish time is the one number a
+          driver wants all day, and a pill that came and went would make them
+          hunt for it. */}
       <FinishPill stops={stops} optimized={optimized} />
 
+      {/*
+        The carousel's previous page, which is now the honest answer — M4 had
+        to guess from the stop array, and could not name the end location at
+        all. The pill both TELLS you what is behind you and takes you there.
+      */}
       <PeekPill
-        label={previous ? `${previous.stopId} ${previous.address?.title ?? ''}`.trim() : null}
-        onClick={() => previous && onSelectStop(previous.id)}
+        label={previousPage ? pageLabel(previousPage) : null}
+        onClick={onPreviousPage}
       />
 
       <FabStack

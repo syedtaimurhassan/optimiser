@@ -101,6 +101,18 @@ export interface AddressedStop extends LatLng {
   status: StopStatus
   statusHistory: StatusChange[]
 
+  /**
+   * Why a delivery failed — a short reason from a picklist, plus free text.
+   *
+   * OUR INVENTION. Spoke's screenshots show the failed state but never the
+   * capture, so the flow is designed rather than copied: the tap marks the
+   * stop immediately and the reason is a skippable follow-up. Cleared whenever
+   * the stop leaves the failed state, so a stop can never display a reason for
+   * a failure that has been undone.
+   */
+  failureReason?: string
+  failureNote?: string
+
   /** Derived from the last optimisation. Recomputed, never authoritative. */
   etaSec?: number
 }

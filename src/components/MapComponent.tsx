@@ -5,6 +5,7 @@ import 'maplibre-gl/dist/maplibre-gl.css'
 import type { LatLng } from '../types'
 import { MapController } from '../lib/map/controller'
 import { buildStopFeatures, collectChipSpecs, lastHandledStop, nextStopId } from '../lib/map/features'
+import { buildStopPages, pageIndexById } from '../lib/stopPages'
 import type { StagedKind } from '../lib/map/chipSpec'
 import { splitRouteGeometry } from '../lib/map/splitRoute'
 import { selectActiveRoute, useRoutesStore } from '../store/routesStore'
@@ -43,7 +44,6 @@ export function MapComponent() {
 
   const selectedStopId = useUiStore((s) => s.selectedStopId)
   const basemap = useUiStore((s) => s.basemap)
-  const setSelectedStopId = useUiStore((s) => s.setSelectedStopId)
   const { placementMode, setPlacementMode } = useUiStore(
     useShallow((s) => ({
       placementMode: s.mapPlacementMode,
@@ -131,6 +131,20 @@ export function MapComponent() {
   )
 
   /**
+   * The carousel's pages, again.
+   *
+   * RouteWorkScreen builds these too, and this is a deliberate second pass
+   * rather than a prop. MapComponent is prop-less by design — it reads the
+   * active route straight from the store — and threading a page array through
+   * would put the map's data in the screen's hands for the benefit of one
+   * pill. `buildStopPages` is a single O(n) map over the stops.
+   */
+  const pages = useMemo(() => (route ? buildStopPages(route) : []), [route])
+  const pageIndex = pageIndexById(pages, params.stopId ?? null)
+  const currentPage = pageIndex === -1 ? null : pages[pageIndex]
+  const previousPage = pageIndex > 0 ? pages[pageIndex - 1] : null
+
+  /**
    * Edits staged since the last optimisation, as marker states.
    *
    * ⚠️ `PendingChange.stopId` is read here as the stop's `id` (the uuid), NOT
@@ -199,6 +213,20 @@ export function MapComponent() {
     controller.focusStop(stop.id)
   }, [controller, selectedStopId, stops])
 
+  /**
+   * The end page's camera.
+   *
+   * Every other page moves the camera through `selectedStopId`, which the map
+   * already follows. The end location is not a stop and highlights no marker,
+   * so it is the one page that has to ask — and it asks with the same 400ms
+   * ease as the rest, so the lockstep is unbroken at the end of the round.
+   */
+  useEffect(() => {
+    if (!controller || currentPage?.kind !== 'end') return
+    controller.resetRecenterCycle()
+    controller.focusPoint(currentPage.point)
+  }, [controller, currentPage])
+
   // Camera requests from outside the map — the itinerary, search results.
   // The map consumes the intent and clears it, so a repeat request to the
   // same place still fires (the nonce is what makes that work).
@@ -234,7 +262,12 @@ export function MapComponent() {
         <MapChrome
           stops={stops}
           selectedStopId={selectedStopId}
-          onSelectStop={setSelectedStopId}
+          previousPage={previousPage}
+          onPreviousPage={() => {
+            if (previousPage) {
+              navigate(`/route/${params.routeId}/stop/${previousPage.id}`, { replace: true })
+            }
+          }}
           optimized={optimized}
         />
 
@@ -259,7 +292,13 @@ export function MapComponent() {
                 useRoutesStore.getState().activeRouteId ?? ''
               ]?.stops
               const created = stops?.[stops.length - 1]
-              if (created) setSelectedStopId(created.id)
+              // Open its card AND its edit form: "add and edit" promised the
+              // form, and landing on the card behind it means dismissing the
+              // form leaves the driver looking at the stop they just made.
+              if (created) {
+                navigate(`/route/${params.routeId}/stop/${created.id}`)
+                useUiStore.getState().setStopEditorId(created.id)
+              }
             }}
             onCancel={() => setAddByPinOpen(false)}
           />

@@ -118,7 +118,7 @@ export function RouteWorkScreen() {
         legacy panels stay reachable on a phone through the sheet's overflow —
         see RouteSetupSheet.
       */}
-      <RouteSheet />
+      <RouteSheet pages={pages} pageIndex={pageIndex} />
       <Sidebar />
       <RouteSetupSheet />
 

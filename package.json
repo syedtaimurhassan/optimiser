@@ -28,6 +28,8 @@
     "presmoke:m5": "npm run bench:build",
     "smoke:m5": "node bench/m5-smoke.mjs",
     "list:perf": "node bench/m5-perf.mjs",
+    "presmoke:m7": "npm run bench:build",
+    "smoke:m7": "node bench/m7-smoke.mjs",
     "test": "node --test 'src/**/*.test.ts'",
     "test:watch": "node --test --watch 'src/**/*.test.ts'"
   },

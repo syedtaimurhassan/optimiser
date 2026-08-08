@@ -32,6 +32,8 @@ import { CopyStopsSheet } from '../routes/CopyStopsSheet'
 import { ImportStopsSheet } from '../search/ImportStopsSheet'
 import { copySourceRoutes } from '../../lib/copyStops'
 import { useAddStops } from '../../hooks/useAddStops'
+import { StopPages } from '../stop/StopPages'
+import type { StopPage } from '../../lib/stopPages'
 
 /**
  * The persistent bottom sheet.
@@ -81,7 +83,14 @@ const TAP_PX = 8
 const SETTLE_MS = 260
 const EASE = 'cubic-bezier(0.2, 0, 0, 1)'
 
-export function RouteSheet() {
+export interface RouteSheetProps {
+  /** The carousel's pages, built by the screen from the URL's route. */
+  pages: StopPage[]
+  /** Which page the URL names, or -1 when no stop is open. */
+  pageIndex: number
+}
+
+export function RouteSheet({ pages, pageIndex }: RouteSheetProps) {
   const [, navigate] = useLocation()
   const route = useRoutesStore(selectActiveRoute)
   const snap = useUiStore((s) => s.sheetSnap)
@@ -194,6 +203,30 @@ export function RouteSheet() {
   }, [snap, searchOpen, searchQuery, setSearchOpen, setSearchQuery])
 
   /**
+   * Opening a stop card opens the sheet enough to read it.
+   *
+   * Only on the OPEN transition, and only from `collapsed` — swiping between
+   * pages must not resize the sheet, and a driver who has dragged the sheet
+   * somewhere deliberately keeps it there. `medium` is the detent this design
+   * was named for: enough card to act on, enough map to watch it pan.
+   */
+  const carouselOpen = pageIndex >= 0
+  // Seeded FALSE, not with the current value: a deep link straight at a stop
+  // mounts with the carousel already open, and seeding it true meant the sheet
+  // stayed collapsed with the card entirely off-screen below the fold.
+  const carouselWasOpen = useRef(false)
+  useEffect(() => {
+    if (carouselOpen && !carouselWasOpen.current) {
+      setSearchOpen(false)
+      setSearchQuery('')
+      // Read rather than subscribe: this wants the detent at the moment the
+      // card opened, and depending on `snap` would re-run it mid-drag.
+      if (useUiStore.getState().sheetSnap === 'collapsed') setSnap('medium')
+    }
+    carouselWasOpen.current = carouselOpen
+  }, [carouselOpen, setSnap, setSearchOpen, setSearchQuery])
+
+  /**
    * Publish the collapsed height so anything floating over the map can clear
    * it. M4's FAB stack hard-coded 128px to clear the old sheet's 116px peek,
    * and the two numbers had no way to stay related. Now there is one number
@@ -224,6 +257,7 @@ export function RouteSheet() {
 
   interface Drag {
     pointerId: number
+    startX: number
     startY: number
     startOffset: number
     lastY: number
@@ -264,6 +298,7 @@ export function RouteSheet() {
 
       dragRef.current = {
         pointerId: e.pointerId,
+        startX: e.clientX,
         startY: e.clientY,
         startOffset: currentOffset(),
         lastY: e.clientY,
@@ -296,10 +331,22 @@ export function RouteSheet() {
     drag.lastT = e.timeStamp
 
     if (drag.mode === 'undecided') {
-      if (Math.abs(dy) < SLOP_PX) return
+      const dx = e.clientX - drag.startX
+      if (Math.max(Math.abs(dx), Math.abs(dy)) < SLOP_PX) return
+
       const list = listRef.current
       const atTop = (list?.scrollTop ?? 0) <= 0
-      drag.mode = !listScrolls(snapRef.current) || (atTop && dy > 0) ? 'sheet' : 'list'
+      // A gesture that has travelled further across than down is never the
+      // sheet's. The carousel and the row swipe both stop propagation once
+      // they claim one, so in practice this handler stops hearing about it —
+      // but a horizontal drag starting on a control they decline to claim
+      // still reaches here, and dragging the sheet open sideways is a bug.
+      drag.mode =
+        Math.abs(dx) > Math.abs(dy)
+          ? 'list'
+          : !listScrolls(snapRef.current) || (atTop && dy > 0)
+            ? 'sheet'
+            : 'list'
 
       // Taking the gesture means the list must stop scrolling for its
       // duration — otherwise a drag that reverses upward would scroll the list
@@ -450,7 +497,16 @@ export function RouteSheet() {
         }`}
         style={{ touchAction: 'pan-y' }}
       >
-        {searchActive ? (
+        {carouselOpen ? (
+          /*
+            The carousel REPLACES the list rather than floating over it. The
+            captured frame that defines this interaction shows both cards at
+            the same sheet height with the map panned behind them — the sheet
+            is a fixed frame and the cards move inside it, which is only true
+            if they are the sheet's content.
+          */
+          <StopPages route={route} pages={pages} index={pageIndex} />
+        ) : searchActive ? (
           <SearchScreen
             query={searchQuery}
             rows={rows}
@@ -529,6 +585,7 @@ export function RouteSheet() {
         list" means.
       */}
       {scrollable &&
+        !carouselOpen &&
         nextIndex !== null &&
         createPortal(
           <button

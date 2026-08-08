@@ -20,6 +20,7 @@ export {
   type DemotedActionGroupProps,
 } from './DemotedActionGroup'
 export { FullWidthButton, type ButtonVariant, type FullWidthButtonProps } from './FullWidthButton'
-export { ActionRow3Up, type QuickAction } from './ActionRow3Up'
+export { ActionRow3Up, type QuickAction, type ActionVariant } from './ActionRow3Up'
+export { GroupDot } from './GroupDot'
 export { ConfirmDialog, type ConfirmDialogProps } from './ConfirmDialog'
 export { useScrollLock } from './useScrollLock'

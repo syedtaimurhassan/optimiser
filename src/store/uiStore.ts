@@ -90,7 +90,20 @@ interface UiState {
    */
   setupOpen: boolean
 
+  /**
+   * The stop whose Edit form is open, or null.
+   *
+   * A store flag rather than a route: the form has no deep-link requirement,
+   * and giving it a URL would mean the working screen — and the map with it —
+   * unmounting behind a modal that is dismissed rather than navigated back
+   * from. It is opened from three places (the card's rows, the card's demoted
+   * block, and the row swipe's follow-up), which is the other reason it is
+   * state rather than a prop.
+   */
+  stopEditorId: string | null
+
   setDrawerOpen: (open: boolean) => void
+  setStopEditorId: (id: string | null) => void
   openRouteEditor: (target: RouteEditorTarget) => void
   closeRouteEditor: () => void
   setOverflowRouteId: (routeId: string | null) => void
@@ -127,8 +140,10 @@ export const useUiStore = create<UiState>()((set) => ({
   overflowRouteId: null,
   confirmDeleteRouteId: null,
   setupOpen: false,
+  stopEditorId: null,
 
   setDrawerOpen: (drawerOpen) => set({ drawerOpen }),
+  setStopEditorId: (stopEditorId) => set({ stopEditorId }),
   // Opening the editor closes the overflow sheet it was launched from —
   // leaving both up would stack two modals over the same route.
   openRouteEditor: (routeEditor) => set({ routeEditor, overflowRouteId: null }),

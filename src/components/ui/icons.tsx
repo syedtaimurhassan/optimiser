@@ -294,3 +294,124 @@ export const ClipboardIcon = (props: IconProps) => (
     <path d="M9 15h4" />
   </Icon>
 )
+
+/**
+ * ── M7: the stop card, the edit form and the route menu ──────────────────
+ *
+ * The two parcel glyphs carry their own mark colour, and that is deliberate:
+ * the box is neutral because a parcel is not good or bad, while the tick and
+ * the cross ARE the semantic colours. Baking them in means the pair reads the
+ * same on the stop card, in a list row and anywhere later — nobody has to
+ * remember to colour them, and nobody can colour them wrongly.
+ */
+
+/** A parcel, unmarked. */
+export const ParcelIcon = (props: IconProps) => (
+  <Icon {...props}>
+    <path d="M3.5 7.5 12 3l8.5 4.5v9L12 21l-8.5-4.5z" />
+    <path d="M3.5 7.5 12 12l8.5-4.5M12 12v9" />
+  </Icon>
+)
+
+/** A parcel, delivered. The tick is green wherever this is used. */
+export const ParcelCheckIcon = (props: IconProps) => (
+  <Icon {...props}>
+    <path d="M3.5 7.5 12 3l8.5 4.5v5" />
+    <path d="M3.5 7.5 12 12v9l-8.5-4.5z" />
+    <path className="text-success" stroke="currentColor" d="m14 17.5 2.2 2.2 4.3-4.6" />
+  </Icon>
+)
+
+/** A parcel, failed. The cross is red wherever this is used. */
+export const ParcelCrossIcon = (props: IconProps) => (
+  <Icon {...props}>
+    <path d="M3.5 7.5 12 3l8.5 4.5v5" />
+    <path d="M3.5 7.5 12 12v9l-8.5-4.5z" />
+    <path className="text-danger" stroke="currentColor" d="m14.5 15.5 5.5 5.5M20 15.5 14.5 21" />
+  </Icon>
+)
+
+/** Hand off to a navigation app. */
+export const NavigateIcon = (props: IconProps) => (
+  <Icon {...props}>
+    <path d="M21 3 3 10.5l7.5 3L13.5 21z" />
+  </Icon>
+)
+
+/** Step a status change back. */
+export const UndoIcon = (props: IconProps) => (
+  <Icon {...props}>
+    <path d="M4 8h11a5 5 0 0 1 0 10H9" />
+    <path d="m8 4-4 4 4 4" />
+  </Icon>
+)
+
+/** Access code — the third input type sharing the notes row. */
+export const KeyIcon = (props: IconProps) => (
+  <Icon {...props}>
+    <circle cx="8" cy="14" r="4" />
+    <path d="m11 11 8-8M17 5l2 2M15 7l2 2" />
+  </Icon>
+)
+
+/** Attach a photo. Disabled until M13. */
+export const CameraPlusIcon = (props: IconProps) => (
+  <Icon {...props}>
+    <path d="M4 8h3l1.5-2h5L15 8h5v11H4z" />
+    <circle cx="12" cy="13.5" r="3" />
+    <path d="M18.5 3v4M16.5 5h4" />
+  </Icon>
+)
+
+/** Make this stop's settings the default for this address. */
+export const StarIcon = ({ filled = false, ...props }: IconProps & { filled?: boolean }) => (
+  <Icon {...props}>
+    <path
+      fill={filled ? 'currentColor' : 'none'}
+      d="m12 3.5 2.6 5.4 5.9.8-4.3 4.1 1 5.9-5.2-2.8-5.2 2.8 1-5.9L3.5 9.7l5.9-.8z"
+    />
+  </Icon>
+)
+
+/** Arrival window, and time at a stop. */
+export const ClockIcon = (props: IconProps) => (
+  <Icon {...props}>
+    <circle cx="12" cy="12" r="9" />
+    <path d="M12 7v5.2l3.2 2" />
+  </Icon>
+)
+
+/** Find the parcel in the van. */
+export const PackageSearchIcon = (props: IconProps) => (
+  <Icon {...props}>
+    <path d="M20.5 11V7.5L12 3 3.5 7.5v9L12 21l1.5-.8" />
+    <path d="M3.5 7.5 12 12v4" />
+    <circle cx="17.5" cy="16.5" r="3" />
+    <path d="m19.8 18.8 2.2 2.2" />
+  </Icon>
+)
+
+/** Print the round. */
+export const PrinterIcon = (props: IconProps) => (
+  <Icon {...props}>
+    <path d="M7 9V3h10v6" />
+    <path d="M7 18H5a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-2" />
+    <rect x="7" y="15" width="10" height="6" rx="1" />
+  </Icon>
+)
+
+/** Move stops to another route. */
+export const TransferIcon = (props: IconProps) => (
+  <Icon {...props}>
+    <path d="M4 8h12l-3-3M20 16H8l3 3" />
+  </Icon>
+)
+
+/** Renumber the round. */
+export const RenumberIcon = (props: IconProps) => (
+  <Icon {...props}>
+    <path d="M4 6h3v6M4 12h5" />
+    <path d="M13 7h7M13 12h7M13 17h7" />
+    <path d="M4 15.5a1.6 1.6 0 1 1 2.6 1.2L4 20h3.2" />
+  </Icon>
+)

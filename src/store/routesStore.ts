@@ -76,6 +76,7 @@ interface RoutesState {
   // ── Stop CRUD ──
   addStops: (points: NewStopInput[]) => void
   insertStopNear: (nearStopId: string, point: LatLng) => string | null
+  duplicateStop: (id: string) => string | null
   removeStop: (id: string) => void
   clearStops: () => void
   updateStop: (id: string, patch: Partial<AddressedStop>) => void
@@ -248,6 +249,8 @@ export const useRoutesStore = create<RoutesState>()(
             id: newId(),
             status: 'pending',
             statusHistory: [],
+            failureReason: undefined,
+            failureNote: undefined,
             photoRefs: undefined,
             etaSec: undefined,
           })),
@@ -399,6 +402,45 @@ export const useRoutesStore = create<RoutesState>()(
         return created
       },
 
+      /**
+       * "Duplicate stop" — a second parcel to the same address.
+       *
+       * Everything about WHERE and WHAT carries over; nothing about what
+       * happened carries over. The copy is pending with an empty history, and
+       * takes a decimal suffix off its source (D7 → D7.1) so no label already
+       * written on a parcel is invalidated. It lands immediately after the
+       * stop it came from, which is where a driver expects a second drop to
+       * the same door to be.
+       */
+      duplicateStop: (id) => {
+        let created: string | null = null
+        set((s) =>
+          withActiveRoute(s, (r) => {
+            const index = r.stops.findIndex((st) => st.id === id)
+            if (index === -1) return null
+            const source = r.stops[index]
+            const copy: AddressedStop = {
+              ...source,
+              id: newId(),
+              stopId: allocateInsertedStopId(source.stopId, r.stops.map((st) => st.stopId)),
+              status: 'pending',
+              statusHistory: [],
+              failureReason: undefined,
+              failureNote: undefined,
+              // Proof of a specific delivery. Sharing the keys would let
+              // deleting one copy destroy the other's evidence.
+              photoRefs: undefined,
+              etaSec: undefined,
+            }
+            created = copy.id
+            const stops = [...r.stops]
+            stops.splice(index + 1, 0, copy)
+            return { ...r, stops }
+          }),
+        )
+        return created
+      },
+
       removeStop: (id) =>
         set((s) =>
           withActiveRoute(s, (r) => {
@@ -468,6 +510,9 @@ export const useRoutesStore = create<RoutesState>()(
               ...stop,
               status,
               statusHistory: [...stop.statusHistory, { status, atMs: Date.now() }],
+              // A reason belongs to a failure, not to a stop. Leaving it
+              // behind would let a delivered stop display why it failed.
+              ...(status === 'failed' ? null : { failureReason: undefined, failureNote: undefined }),
             }
             return { ...r, stops }
           }),
@@ -483,12 +528,14 @@ export const useRoutesStore = create<RoutesState>()(
             if (stop.statusHistory.length === 0 && stop.status === 'pending') return null
             const history = stop.statusHistory.slice(0, -1)
             const stops = [...r.stops]
+            // Falling back to 'pending' is correct: an empty history means the
+            // stop has never left its initial state.
+            const status = history[history.length - 1]?.status ?? 'pending'
             stops[index] = {
               ...stop,
-              // Falling back to 'pending' is correct: an empty history means the
-              // stop has never left its initial state.
-              status: history[history.length - 1]?.status ?? 'pending',
+              status,
               statusHistory: history,
+              ...(status === 'failed' ? null : { failureReason: undefined, failureNote: undefined }),
             }
             return { ...r, stops }
           }),
@@ -501,7 +548,13 @@ export const useRoutesStore = create<RoutesState>()(
             stops: r.stops.map((st) =>
               st.status === 'pending'
                 ? st
-                : { ...st, status: 'pending' as const, statusHistory: [...st.statusHistory, { status: 'pending' as const, atMs: Date.now() }] },
+                : {
+                    ...st,
+                    status: 'pending' as const,
+                    statusHistory: [...st.statusHistory, { status: 'pending' as const, atMs: Date.now() }],
+                    failureReason: undefined,
+                    failureNote: undefined,
+                  },
             ),
           })),
         ),
