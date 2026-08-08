@@ -82,14 +82,38 @@ describe('claimedTier', () => {
 })
 
 describe('selectEngine', () => {
-  test('a bare browser still gets a working engine', () => {
-    const selection = selectEngine(caps({ wasm: false }))
+  test('a browser with no workers still gets a working engine', () => {
+    // Single core, no workers, no WebAssembly — the true floor.
+    const selection = selectEngine(caps({ wasm: false, workers: false, hardwareConcurrency: 1 }))
     assert.equal(selection.engine, engineTs)
     assert.equal(selection.tier, 'D')
     assert.equal(selection.degraded, false)
   })
 
+  test('a single-core device does not spawn a pool to race itself', () => {
+    const selection = selectEngine(caps({ hardwareConcurrency: 1 }))
+    assert.equal(selection.tier, 'D')
+  })
+
+  test('workers and more than one core get the pool', () => {
+    const selection = selectEngine(caps({ hardwareConcurrency: 4, wasmSimd: true }))
+    assert.equal(selection.tier, 'B')
+    assert.equal(selection.engine.id, 'ts-workers')
+    assert.equal(describeSelection(selection), 'Fast')
+  })
+
+  test('the pool does not need SIMD, even though the tier is defined by it', () => {
+    // claimedTier says this device is a C (WASM, no SIMD). The pure-TypeScript
+    // pool needs no vector instructions, so it runs anyway — a tier describes
+    // the device, `supported` describes the engine.
+    const selection = selectEngine(caps({ wasmSimd: false, hardwareConcurrency: 4 }))
+    assert.equal(selection.claimed, 'C')
+    assert.equal(selection.tier, 'B')
+    assert.equal(selection.degraded, false)
+  })
+
   test('a capable device with nothing built for it degrades, and says so', () => {
+    // Turbo-capable, but M9 registers no tier A engine, so it runs Fast.
     const selection = selectEngine(
       caps({
         crossOriginIsolated: true,
@@ -99,8 +123,21 @@ describe('selectEngine', () => {
       }),
     )
     assert.equal(selection.claimed, 'A')
-    assert.equal(selection.tier, 'D')
+    assert.equal(selection.tier, 'B')
     assert.equal(selection.degraded, true)
+    assert.equal(describeSelection(selection), 'Fast (device supports Turbo)')
+  })
+
+  test('a Turbo-capable device with no workers falls all the way to Basic', () => {
+    const selection = selectEngine(
+      caps({
+        crossOriginIsolated: true,
+        sharedArrayBuffer: true,
+        wasmSimd: true,
+        wasmThreads: true,
+        workers: false,
+      }),
+    )
     assert.equal(describeSelection(selection), 'Basic (device supports Turbo)')
   })
 
@@ -116,10 +153,11 @@ describe('selectEngine', () => {
       // SIMD present -> the tier B engine is chosen.
       const fast = selectEngine(caps({ wasmSimd: true }))
       assert.equal(fast.tier, 'B')
-      assert.equal(describeSelection(fast), 'Fast')
 
-      // SIMD absent -> it is not supported, so selection falls through to D.
-      const basic = selectEngine(caps({ wasmSimd: false }))
+      // SIMD absent -> not supported, so selection falls past it. The worker
+      // pool is also a B, so registration order within a tier decides; what
+      // matters is that an unsupported engine is never chosen.
+      const basic = selectEngine(caps({ wasmSimd: false, workers: false, hardwareConcurrency: 1 }))
       assert.equal(basic.tier, 'D')
     } finally {
       // Registering is global; leaving it behind would make the ORDER of the
@@ -142,7 +180,7 @@ describe('selectEngine', () => {
     let built = 0
     registerEngine({
       id: 'expensive',
-      tier: 'C',
+      tier: 'A',
       create: () => {
         built++
         return engineTs
@@ -150,7 +188,7 @@ describe('selectEngine', () => {
       supported: () => false,
     })
     try {
-      selectEngine(caps())
+      selectEngine(caps({ workers: false, hardwareConcurrency: 1 }))
       assert.equal(built, 0, 'an unsupported engine was constructed anyway')
     } finally {
       unregisterEngine('expensive')

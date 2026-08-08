@@ -1,5 +1,6 @@
 import type { Capabilities } from '../device/capabilities.ts'
 import { engineTs } from './engineTs.ts'
+import { TsWorkerPool, workerCount } from './engineTsWorkers.ts'
 import type { SolverEngine } from './solverPort.ts'
 
 /**
@@ -107,6 +108,31 @@ export function unregisterEngine(id: string): boolean {
 export function registeredEngines(): readonly RegisteredEngine[] {
   return REGISTRY
 }
+
+/**
+ * Tier B. The same search, N seeds, best-of.
+ *
+ * Needs workers and nothing else — notably not SIMD, despite `claimedTier`
+ * using SIMD to decide whether a device is a B. That is not an inconsistency:
+ * the tier describes what the DEVICE can do, while `supported` describes what
+ * this ENGINE needs, and a pure-TypeScript pool needs no vector instructions.
+ * Gating it on SIMD would deny a perfectly good four-core phone its cores over
+ * a capability it was never going to use.
+ */
+registerEngine({
+  id: 'ts-workers',
+  tier: 'B',
+  create: () => {
+    if (!pool) {
+      pool = new TsWorkerPool(workerCount(navigator?.hardwareConcurrency ?? null))
+    }
+    return pool
+  },
+  supported: (caps) => caps.workers && (caps.hardwareConcurrency ?? 1) > 1,
+})
+
+/** One pool per session; spawning a second set of workers helps nobody. */
+let pool: TsWorkerPool | null = null
 
 /** Tier D. Needs nothing, which is the point of it. */
 registerEngine({
