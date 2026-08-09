@@ -34,6 +34,8 @@
 //! handed integers and returns integers. `lib/compute/` on the TypeScript side
 //! owns every question about what those integers mean.
 
+pub mod construct;
+pub mod localsearch;
 pub mod matrix;
 pub mod problem;
 pub mod rng;
