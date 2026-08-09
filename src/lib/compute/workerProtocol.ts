@@ -24,7 +24,7 @@ import type { Objective } from '../../types'
  */
 
 /** Bumped when the shape changes, so a stale worker fails loudly. */
-export const PROTOCOL_VERSION = 2
+export const PROTOCOL_VERSION = 3
 
 /**
  * Which engine the worker should run.
@@ -58,6 +58,8 @@ export interface SolveWorkerRequest {
   objective: Objective
   budgetMs: number
   seed: number
+  /** Seconds from local midnight. Windows mean nothing without it. */
+  departAtSec: number
 }
 
 export interface CancelWorkerRequest {

@@ -15,7 +15,12 @@ use crate::tour::Tour;
 /// Pinned ends go in first and stay put. Mandatory nodes are offered before
 /// optional ones because they are going in regardless, and inserting them into
 /// a fuller route is more expensive and no better.
-pub fn construct(problem: &Problem, tour: &mut Tour, seed_order: Option<&[i32]>) {
+pub fn construct(
+    problem: &Problem,
+    tour: &mut Tour,
+    seed_order: Option<&[i32]>,
+    tw_penalty: i64,
+) {
     tour.len = 0;
     for slot in tour.pos.iter_mut() {
         *slot = -1;
@@ -52,11 +57,11 @@ pub fn construct(problem: &Problem, tour: &mut Tour, seed_order: Option<&[i32]>)
     // Stable, so the seed order survives within each class.
     offered.sort_by_key(|&node| problem.optional[node as usize]);
 
-    insert_all(problem, tour, &offered);
+    insert_all(problem, tour, &offered, tw_penalty);
 }
 
 /// Offer each node once, cheapest gap, stopping at the cap.
-fn insert_all(problem: &Problem, tour: &mut Tour, offered: &[i32]) {
+fn insert_all(problem: &Problem, tour: &mut Tour, offered: &[i32], tw_penalty: i64) {
     let mut optional_in = 0usize;
     for &node in offered {
         let node = node as usize;
@@ -64,8 +69,8 @@ fn insert_all(problem: &Problem, tour: &mut Tour, offered: &[i32]) {
         if optional && optional_in >= problem.cap {
             continue;
         }
-        let (at, _) = tour.best_insertion(problem, node);
-        tour.insert_at(problem, node, at);
+        let placed = tour.best_insertion(problem, node, tw_penalty);
+        tour.insert_at(problem, node, placed.at);
         if optional {
             optional_in += 1;
         }
@@ -77,7 +82,7 @@ fn insert_all(problem: &Problem, tour: &mut Tour, offered: &[i32]) {
 /// A double bridge explores the basin around one solution. When that basin is
 /// exhausted the way out is a different construction entirely, which is what
 /// this is for.
-pub fn restart(problem: &Problem, tour: &mut Tour, rng: &mut Rng) {
+pub fn restart(problem: &Problem, tour: &mut Tour, rng: &mut Rng, tw_penalty: i64) {
     let n = problem.n();
     let mut offered: Vec<i32> = (0..n as i32).collect();
     for i in (1..n).rev() {
@@ -86,7 +91,7 @@ pub fn restart(problem: &Problem, tour: &mut Tour, rng: &mut Rng) {
     }
     // `construct` re-filters the pinned ends and re-sorts mandatory-first, so
     // the shuffle only ever reorders nodes within their class.
-    construct(problem, tour, Some(&offered));
+    construct(problem, tour, Some(&offered), tw_penalty);
 }
 
 /// Fill to the cap, cheapest insertion first, from whatever is still out.
@@ -94,7 +99,7 @@ pub fn restart(problem: &Problem, tour: &mut Tour, rng: &mut Rng) {
 /// Unlike `construct`, this picks the globally cheapest (node, gap) pair on each
 /// pass rather than taking nodes in a fixed order — it is repairing a route that
 /// already has a shape, so the question is which absent node fits it best.
-pub fn greedy_refill(problem: &Problem, tour: &mut Tour) {
+pub fn greedy_refill(problem: &Problem, tour: &mut Tour, tw_penalty: i64) {
     loop {
         if tour.optional_visited(problem) >= problem.cap {
             return;
@@ -106,11 +111,11 @@ pub fn greedy_refill(problem: &Problem, tour: &mut Tour) {
             if !problem.is_optional(node) || tour.pos[node] >= 0 {
                 continue;
             }
-            let (at, cost) = tour.best_insertion(problem, node);
-            if cost < best_cost {
-                best_cost = cost;
+            let placed = tour.best_insertion(problem, node, tw_penalty);
+            if placed.cost < best_cost {
+                best_cost = placed.cost;
                 best_node = node;
-                best_at = at;
+                best_at = placed.at;
             }
         }
         if best_node == usize::MAX {
@@ -151,7 +156,7 @@ mod tests {
         let n = 14;
         let problem = problem_with(n, 2, None, None, None);
         let mut tour = Tour::new(n);
-        construct(&problem, &mut tour, None);
+        construct(&problem, &mut tour, None, 0);
 
         assert_eq!(tour.len, n);
         let mut seen = tour.snapshot();
@@ -169,7 +174,7 @@ mod tests {
         ] {
             let problem = problem_with(n, 4, None, start, end);
             let mut tour = Tour::new(n);
-            construct(&problem, &mut tour, None);
+            construct(&problem, &mut tour, None, 0);
 
             assert_eq!(tour.len, n);
             if let Some(s) = start {
@@ -186,7 +191,7 @@ mod tests {
         let n = 20;
         let problem = problem_with(n, 6, Some(5), Some(0), Some(19));
         let mut tour = Tour::new(n);
-        construct(&problem, &mut tour, None);
+        construct(&problem, &mut tour, None, 0);
 
         // Two mandatory endpoints plus at most five optional nodes.
         assert_eq!(tour.optional_visited(&problem), 5);
@@ -201,11 +206,11 @@ mod tests {
         let problem = problem_with(n, 8, None, None, None);
 
         let mut plain = Tour::new(n);
-        construct(&problem, &mut plain, None);
+        construct(&problem, &mut plain, None, 0);
 
         let reversed: Vec<i32> = (0..n as i32).rev().collect();
         let mut seeded = Tour::new(n);
-        construct(&problem, &mut seeded, Some(&reversed));
+        construct(&problem, &mut seeded, Some(&reversed), 0);
 
         assert_eq!(seeded.len, n);
         let mut seen = seeded.snapshot();
@@ -221,7 +226,7 @@ mod tests {
         let n = 18;
         let problem = problem_with(n, 10, Some(9), Some(0), None);
         let mut tour = Tour::new(n);
-        construct(&problem, &mut tour, None);
+        construct(&problem, &mut tour, None, 0);
         assert_eq!(tour.optional_visited(&problem), 9);
 
         // Tear out three, then refill.
@@ -235,7 +240,7 @@ mod tests {
         }
         assert_eq!(tour.optional_visited(&problem), 6);
 
-        greedy_refill(&problem, &mut tour);
+        greedy_refill(&problem, &mut tour, 0);
         assert_eq!(tour.optional_visited(&problem), 9);
         assert_eq!(tour.order[0], 0);
     }
@@ -248,7 +253,7 @@ mod tests {
         let mut rng = Rng::new(99);
 
         for _ in 0..25 {
-            restart(&problem, &mut tour, &mut rng);
+            restart(&problem, &mut tour, &mut rng, 0);
             assert_eq!(tour.order[0], 2);
             assert_eq!(tour.order[tour.len - 1], 11);
             assert_eq!(tour.optional_visited(&problem), 6);

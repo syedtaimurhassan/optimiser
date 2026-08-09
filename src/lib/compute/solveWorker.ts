@@ -68,6 +68,7 @@ function rebuild(request: SolveWorkerRequest): SolveRequest {
     skipPenalty: request.skipPenalty,
     objective: request.objective,
     budgetMs: request.budgetMs,
+    departAtSec: request.departAtSec,
     seed: request.seed,
     seedOrder: request.seedOrder ? new Int32Array(request.seedOrder) : undefined,
   }

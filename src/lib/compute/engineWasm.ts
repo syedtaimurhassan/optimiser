@@ -1,4 +1,6 @@
 import {
+  DEFAULT_DEPART_SEC,
+  TW_NEVER,
   abortError,
   capacityFor,
   costMatrixFor,
@@ -172,6 +174,18 @@ export class WasmEngine implements SolverEngine {
     if (signal?.aborted) throw abortError()
 
     const { start, end } = resolveEndpoints(request)
+    /*
+      The schedule is only handed over when some stop can actually be missed.
+
+      An opening time makes the driver wait and a service time is constant over a
+      fixed set of stops, so neither can change which order is best — sending
+      them anyway would make the engine allocate a second n² matrix and a segment
+      tree to discover that. The engine applies the same test internally; this
+      one just avoids the 4 MB copy at n = 1000.
+    */
+    const { twCloseSec, twOpenSec, serviceTimeSec } = request.constraints
+    const scheduled = twCloseSec.some((close) => close < TW_NEVER)
+
     const driver = module.createDriver({
       n,
       // The engine sees ONE matrix — the one the objective is measured in.
@@ -186,6 +200,14 @@ export class WasmEngine implements SolverEngine {
       seed: (request.seed ?? 0x9e3779b9) >>> 0,
       seedOrder: request.seedOrder,
       flags: STRATEGY_FLAGS[this.options.strategy ?? 'ils'],
+      // Seconds, always, even when the objective is measured in metres — and a
+      // separate buffer even when it holds the same numbers as `cost`, because
+      // guided local search writes its arc penalties into `cost` in place.
+      time: scheduled ? request.matrix.durations : undefined,
+      serviceTimeSec: scheduled ? serviceTimeSec : undefined,
+      twOpenSec: scheduled ? twOpenSec : undefined,
+      twCloseSec: scheduled ? twCloseSec : undefined,
+      departAtSec: request.departAtSec ?? DEFAULT_DEPART_SEC,
     })
 
     const startedAt = Date.now()

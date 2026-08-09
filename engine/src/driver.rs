@@ -53,6 +53,33 @@ const GLS_ALPHA_PERMILLE: i64 = 25;
 /// the i32 the augmented matrix is stored in.
 const MAX_PENALTY: u16 = 8_000;
 
+/// How hard the time-window penalty is pushed each way.
+///
+/// ── Why it is adaptive at all ─────────────────────────────────────────────
+///
+/// A fixed coefficient cannot work, because it has to convert SECONDS OF
+/// LATENESS into the units the objective is measured in — and those are seconds
+/// on one route and metres on another, differing by three orders of magnitude.
+/// Worse, the right value depends on the instance: too low and the search
+/// settles into a comfortable late route; too high and it behaves like a
+/// feasibility-preserving search, which is the exact failure the time-warp
+/// relaxation exists to avoid.
+///
+/// So it hunts. Infeasible local optimum → push up; feasible → let it decay, so
+/// the search drifts back towards the boundary and keeps exploring routes that
+/// are briefly late on the way to being good. 5/4 and 4/5 are deliberately
+/// gentle: the penalty should move over tens of iterations, not two.
+const TW_PENALTY_UP: (i64, i64) = (5, 4);
+const TW_PENALTY_DOWN: (i64, i64) = (4, 5);
+
+/// Ceiling on the time-window penalty.
+///
+/// Chosen so the objective cannot overflow rather than for search reasons: warp
+/// is bounded by roughly n × a day ≈ 10⁸ seconds, and 10⁹ × 10⁸ is 10¹⁷, an
+/// order of magnitude inside i64. A penalty at this ceiling has long since
+/// stopped conveying information anyway.
+const MAX_TW_PENALTY: i64 = 1_000_000_000;
+
 /// GLS has no natural stopping point, so it needs one.
 ///
 /// Deliberately huge. A GLS iteration is a two-node wake and a short descent,
@@ -125,9 +152,31 @@ pub struct Driver {
     rng: Rng,
     seed_order: Option<Vec<i32>>,
 
+    /*
+      ── Two bests, because "cheapest" and "on time" are different questions ──
+
+      `best_feasible` is the cheapest route that meets EVERY window. If one
+      exists it is what the driver returns, always — handing back a cheaper late
+      route when an on-time one was found would be answering a question nobody
+      asked.
+
+      `best` is the fallback: the least-late route, and among equally late ones
+      the cheapest. It is what a genuinely over-constrained day gets, and the
+      host reports its lateness rather than hiding it.
+
+      With no windows the warp is always zero, `best_feasible` is the only one
+      that ever fills, and the behaviour is exactly M10's.
+    */
     best: Vec<i32>,
     best_objective: i64,
+    /// Lateness of the route in `best`. Zero whenever windows do not bind.
+    best_warp: i64,
+    best_feasible: Vec<i32>,
+    best_feasible_objective: i64,
+
     current_objective: i64,
+    /// What a second of lateness currently costs, in arc units. See `adapt`.
+    tw_penalty: i64,
 
     phase: Phase,
     strategy: Strategy,
@@ -159,7 +208,11 @@ impl Driver {
             seed_order,
             best: Vec::new(),
             best_objective: i64::MAX,
+            best_warp: i64::MAX,
+            best_feasible: Vec::new(),
+            best_feasible_objective: i64::MAX,
             current_objective: i64::MAX,
+            tw_penalty: 0,
             phase: Phase::Construct,
             strategy,
             // The penalty array is n² u16 — 2 MB at n = 1000 — so it is only
@@ -189,7 +242,32 @@ impl Driver {
         while budget > 0 {
             match self.phase {
                 Phase::Construct => {
-                    construct(&self.problem, &mut self.tour, self.seed_order.as_deref());
+                    /*
+                      Seed the time-window penalty from the instance's own scale.
+
+                      One second of lateness starts out costing about one average
+                      arc, which is the only starting point that means the same
+                      thing whether the matrix holds seconds or metres. A fixed
+                      constant would be invisible on one instance and
+                      overwhelming on the other; `adapt` takes it from here.
+
+                      Construction runs twice for this: once unpenalised to learn
+                      the scale, then again with the penalty in hand, because a
+                      first route built with no regard for the clock can be so
+                      late that the descent spends its whole budget climbing out.
+                    */
+                    if self.problem.windows_bind() && self.tw_penalty == 0 {
+                        construct(&self.problem, &mut self.tour, self.seed_order.as_deref(), 0);
+                        let arcs = (self.tour.len.saturating_sub(1)).max(1) as i64;
+                        self.tw_penalty = (self.tour.cost() / arcs).max(1);
+                        self.search.set_tw_penalty(self.tw_penalty);
+                    }
+                    construct(
+                        &self.problem,
+                        &mut self.tour,
+                        self.seed_order.as_deref(),
+                        self.tw_penalty,
+                    );
 
                     // Adopt the constructed route as `best` IMMEDIATELY, before
                     // descending.
@@ -201,9 +279,8 @@ impl Driver {
                     // no route at all and would have to report failure. At
                     // n = 60 that window opened on the very first call, because
                     // construction alone costs more than a small chunk's budget.
-                    self.best = self.tour.snapshot();
-                    self.best_objective = self.true_objective();
-                    self.current_objective = self.best_objective;
+                    self.record_best();
+                    self.current_objective = self.penalised();
 
                     // The drift is a property of the QUESTION, not of a
                     // particular route: it is zero unless some optional stop is
@@ -290,17 +367,66 @@ impl Driver {
         sum + self.problem.skip_penalty * skipped
     }
 
+    /// The route's lateness, in seconds. Zero when no window can be missed.
+    #[inline]
+    fn warp(&self) -> i64 {
+        self.tour.time_warp(&self.problem)
+    }
+
+    /// What the SEARCH compares: the real objective plus the current price of
+    /// being late.
+    ///
+    /// Not comparable across iterations once `adapt` has moved the penalty,
+    /// which is exactly why `best` and `best_feasible` are judged on their own
+    /// unpenalised terms instead.
+    fn penalised(&self) -> i64 {
+        self.true_objective() + self.tw_penalty.saturating_mul(self.warp())
+    }
+
     /// Adopt the current route if it is genuinely the best seen. Shared by both
     /// strategies, and the only place `best` is ever written after construction.
+    ///
+    /// Two bests, judged on two criteria that never move:
+    ///   - feasible routes compete on cost alone;
+    ///   - everything else competes on lateness first and cost second.
+    /// Neither uses the adaptive penalty, so a route recorded early is still
+    /// comparable with one recorded a thousand iterations later.
     fn record_best(&mut self) -> bool {
         let objective = self.true_objective();
-        if objective < self.best_objective {
+        let warp = self.warp();
+        let mut improved = false;
+
+        if warp == 0 && objective < self.best_feasible_objective {
+            self.best_feasible_objective = objective;
+            self.best_feasible = self.tour.snapshot();
+            improved = true;
+        }
+        if (warp, objective) < (self.best_warp, self.best_objective) {
+            self.best_warp = warp;
             self.best_objective = objective;
             self.best = self.tour.snapshot();
-            true
-        } else {
-            false
+            improved = true;
         }
+        improved
+    }
+
+    /// Move the price of lateness towards the feasibility boundary.
+    ///
+    /// Called at every local optimum, with that optimum's own lateness rather
+    /// than the best-so-far — the penalty is steering the SEARCH, and where the
+    /// search currently is, is the only thing it can steer.
+    fn adapt(&mut self, warp: i64) {
+        if !self.problem.windows_bind() {
+            return;
+        }
+        let (up_n, up_d) = TW_PENALTY_UP;
+        let (down_n, down_d) = TW_PENALTY_DOWN;
+        self.tw_penalty = if warp > 0 {
+            ((self.tw_penalty * up_n) / up_d + 1).min(MAX_TW_PENALTY)
+        } else {
+            ((self.tw_penalty * down_n) / down_d).max(1)
+        };
+        self.search.set_tw_penalty(self.tw_penalty);
     }
 
     // ────────────────────────────────────────────────── guided local search
@@ -309,11 +435,13 @@ impl Driver {
     /// worse place to be.
     fn settle_gls(&mut self) {
         self.iterations += 1;
+        let warp = self.warp();
         if self.record_best() {
             self.since_improvement = 0;
         } else {
             self.since_improvement += 1;
         }
+        self.adapt(warp);
 
         // GLS has no natural end — every local optimum can be penalised again —
         // so without this a five-stop route would sit there burning the full
@@ -397,12 +525,14 @@ impl Driver {
 
     /// A descent has converged. Judge it, and decide whether to carry on.
     fn settle_ils(&mut self) {
-        let objective = self.tour.objective(&self.problem);
+        // The PENALISED objective, so a route that is cheap only because it is
+        // late does not look like an improvement. `record_best` still judges
+        // what to keep on unpenalised terms.
+        let objective = self.penalised();
+        let warp = self.warp();
         self.iterations += 1;
 
-        if objective < self.best_objective {
-            self.best_objective = objective;
-            self.best = self.tour.snapshot();
+        if self.record_best() {
             self.current_objective = objective;
             self.since_improvement = 0;
             self.barren_restarts = 0;
@@ -424,8 +554,13 @@ impl Driver {
             let best = std::mem::take(&mut self.best);
             self.tour.restore(&self.problem, &best);
             self.best = best;
-            self.current_objective = self.best_objective;
+            // Recomputed rather than reused: `best_objective` is unpenalised so
+            // that it stays comparable across iterations, and `current_objective`
+            // is penalised so that the drift test above compares like with like.
+            self.current_objective = self.penalised();
         }
+
+        self.adapt(warp);
 
         if self.barren_restarts >= BARREN_RESTARTS {
             if self.strategy == Strategy::IlsThenGls {
@@ -453,7 +588,7 @@ impl Driver {
             // optimum on an eight-stop instance it could have solved
             // exhaustively — it quit after forty perturbations with 119 ms of
             // its budget unspent.
-            restart(&self.problem, &mut self.tour, &mut self.rng);
+            restart(&self.problem, &mut self.tour, &mut self.rng, self.tw_penalty);
             self.since_improvement = 0;
             self.barren_restarts += 1;
             return;
@@ -544,21 +679,44 @@ impl Driver {
         }
         if !absent.is_empty() && self.tour.optional_visited(&self.problem) < self.problem.cap {
             let seed = absent[self.rng.below(absent.len())];
-            let (at, _) = self.tour.best_insertion(&self.problem, seed);
-            self.tour.insert_at(&self.problem, seed, at);
+            let placed = self.tour.best_insertion(&self.problem, seed, self.tw_penalty);
+            self.tour.insert_at(&self.problem, seed, placed.at);
         }
 
-        greedy_refill(&self.problem, &mut self.tour);
+        greedy_refill(&self.problem, &mut self.tour, self.tw_penalty);
     }
 
     // ────────────────────────────────────────────────────────── reporting
 
+    /// The answer: on time if we ever found one, least-late otherwise.
     pub fn best(&self) -> &[i32] {
-        &self.best
+        if self.best_feasible.is_empty() {
+            &self.best
+        } else {
+            &self.best_feasible
+        }
     }
 
     pub fn best_objective(&self) -> i64 {
-        self.best_objective
+        if self.best_feasible.is_empty() {
+            self.best_objective
+        } else {
+            self.best_feasible_objective
+        }
+    }
+
+    /// Lateness of the route `best()` returns, in seconds. Zero when it is on
+    /// time, which is also the only value a problem without windows can report.
+    pub fn best_time_warp(&self) -> i64 {
+        if self.best_feasible.is_empty() {
+            if self.best_warp == i64::MAX {
+                0
+            } else {
+                self.best_warp
+            }
+        } else {
+            0
+        }
     }
 
     pub fn iterations(&self) -> u32 {

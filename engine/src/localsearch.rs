@@ -43,6 +43,21 @@ pub struct LocalSearch {
     tail: usize,
     /// Set when the queue drained and a selection pass is the next thing owed.
     selection_pending: bool,
+    /*
+      ── What a second of lateness costs, in arc units ─────────────────────
+
+      The search minimises `arcs + skip_penalty × skipped + tw_penalty × warp`,
+      and walks THROUGH infeasibility rather than around it. That is the whole
+      reason the time-warp formulation exists: a feasibility-preserving search
+      cannot cross a tightly-constrained instance, because every route between
+      two good ones is briefly late and would be rejected.
+
+      The driver raises this when the answer it is converging on is infeasible
+      and lets it decay when it is not, so the search spends its time near the
+      boundary rather than deep inside either region. Zero means "arcs only",
+      which is exactly the M10 search.
+    */
+    tw_penalty: i64,
 }
 
 impl LocalSearch {
@@ -53,6 +68,38 @@ impl LocalSearch {
             head: 0,
             tail: 0,
             selection_pending: true,
+            tw_penalty: 0,
+        }
+    }
+
+    pub fn set_tw_penalty(&mut self, penalty: i64) {
+        self.tw_penalty = penalty;
+    }
+
+    pub fn tw_penalty(&self) -> i64 {
+        self.tw_penalty
+    }
+
+    /// What a move's effect on the schedule is worth, in arc units.
+    ///
+    /// Zero whenever there is no window to miss, which is the common case and
+    /// must cost nothing: no segment-tree query, no second matrix read, no
+    /// branch beyond this one.
+    #[inline(always)]
+    fn warp_cost(&self, problem: &Problem, after: impl FnOnce() -> i64, before: i64) -> i64 {
+        if !problem.windows_bind() || self.tw_penalty == 0 {
+            return 0;
+        }
+        self.tw_penalty * (after() - before)
+    }
+
+    /// The route's lateness right now, or 0 when nothing can be late.
+    #[inline(always)]
+    fn warp_now(&self, problem: &Problem, tour: &Tour) -> i64 {
+        if !problem.windows_bind() || self.tw_penalty == 0 {
+            0
+        } else {
+            tour.time_warp(problem)
         }
     }
 
@@ -197,6 +244,20 @@ impl LocalSearch {
         let p = p as usize;
         let lo = tour.lo(problem);
         let hi = tour.hi(problem);
+        let warp_now = self.warp_now(problem, tour);
+
+        // The penalised delta of reversing i..=j. The arc term is exact and
+        // O(1); the schedule term is O(log n) and is only reached when a window
+        // can actually be missed.
+        let improves = |search: &Self, tour: &Tour, i: usize, j: usize| {
+            let arcs = tour.reverse_delta(problem, i, j);
+            // Short-circuit: with no schedule to worry about, a losing arc delta
+            // is a losing move and there is nothing to query.
+            if !problem.windows_bind() || search.tw_penalty == 0 {
+                return arcs < 0;
+            }
+            arcs + search.warp_cost(problem, || tour.warp_after_reverse(problem, i, j), warp_now) < 0
+        };
 
         for slot in 0..problem.candidates.width {
             let c = problem.candidates.of(a)[slot] as usize;
@@ -207,7 +268,7 @@ impl LocalSearch {
             let q = q as usize;
 
             // `a` before `c`: reverse (p+1 ..= q), creating the arc a → c.
-            if q >= p + 1 && p + 1 >= lo && q <= hi && tour.reverse_delta(problem, p + 1, q) < 0 {
+            if q >= p + 1 && p + 1 >= lo && q <= hi && improves(self, tour, p + 1, q) {
                 tour.apply_reverse(problem, p + 1, q);
                 self.wake(tour, a);
                 self.wake(tour, c);
@@ -215,7 +276,7 @@ impl LocalSearch {
             }
 
             // `c` before `a`: reverse (q+1 ..= p), creating the arc c → a.
-            if p >= q + 1 && q + 1 >= lo && p <= hi && tour.reverse_delta(problem, q + 1, p) < 0 {
+            if p >= q + 1 && q + 1 >= lo && p <= hi && improves(self, tour, q + 1, p) {
                 tour.apply_reverse(problem, q + 1, p);
                 self.wake(tour, a);
                 self.wake(tour, c);
@@ -243,6 +304,7 @@ impl LocalSearch {
         if p < lo {
             return false;
         }
+        let warp_now = self.warp_now(problem, tour);
 
         for seg in 1..=MAX_SEGMENT {
             if p + seg - 1 > hi || tour.len < seg + 1 {
@@ -275,7 +337,14 @@ impl LocalSearch {
                         if reversed && seg == 1 {
                             continue;
                         }
-                        if tour.or_opt_delta(problem, p, seg, u, reversed) < 0 {
+                        let arcs = tour.or_opt_delta(problem, p, seg, u, reversed);
+                        let delta = arcs
+                            + self.warp_cost(
+                                problem,
+                                || tour.warp_after_or_opt(problem, p, seg, u, reversed),
+                                warp_now,
+                            );
+                        if delta < 0 {
                             let moved: Vec<i32> = tour.order[p..p + seg].to_vec();
                             tour.apply_or_opt(problem, p, seg, u, reversed);
                             for node in moved {
@@ -314,6 +383,16 @@ impl LocalSearch {
             if !problem.is_optional(node) {
                 continue;
             }
+            /*
+              Arcs alone, deliberately — no warp relief. See `tour::Insertion`.
+
+              Dropping a stop does relieve lateness, often by a lot, and pricing
+              that relief in makes it a rational move: the time-window penalty
+              climbs whenever the route is late, so on a day that cannot be done
+              on time it eventually exceeds the skip penalty and abandoning a
+              delivery becomes the cheapest thing available. That is not a
+              trade-off this app is allowed to make on the driver's behalf.
+            */
             if tour.removal_gain(problem, p) - problem.skip_penalty > 0 {
                 tour.remove_at(problem, p);
                 improved = true;
@@ -329,9 +408,12 @@ impl LocalSearch {
                 if tour.optional_visited(problem) >= problem.cap {
                     break;
                 }
-                let (at, cost) = tour.best_insertion(problem, node);
-                if cost - problem.skip_penalty < 0 {
-                    tour.insert_at(problem, node, at);
+                // The position comes from the penalised cost, the decision from
+                // the arcs — symmetrically with the drop above, and for the same
+                // reason: lateness decides where a stop goes, not whether.
+                let placed = tour.best_insertion(problem, node, self.tw_penalty);
+                if placed.arcs - problem.skip_penalty < 0 {
+                    tour.insert_at(problem, node, placed.at);
                     self.wake(tour, node);
                     improved = true;
                 }
@@ -373,6 +455,7 @@ impl LocalSearch {
                 let mut worst_at = usize::MAX;
                 let mut worst_gain = i64::MIN;
                 let hi = tour.hi(problem);
+                let warp_now = self.warp_now(problem, tour);
                 for p in tour.lo(problem)..=hi {
                     if p >= tour.len {
                         break;
@@ -380,7 +463,8 @@ impl LocalSearch {
                     if !problem.is_optional(tour.order[p] as usize) {
                         continue;
                     }
-                    let gain = tour.removal_gain(problem, p);
+                    let gain = tour.removal_gain(problem, p)
+                        - self.warp_cost(problem, || tour.warp_after_remove(problem, p), warp_now);
                     if gain > worst_gain {
                         worst_gain = gain;
                         worst_at = p;
@@ -392,10 +476,18 @@ impl LocalSearch {
 
                 let leaving = tour.order[worst_at] as usize;
                 tour.remove_at(problem, worst_at);
-                let (at, cost) = tour.best_insertion(problem, node);
+                let placed = tour.best_insertion(problem, node, self.tw_penalty);
 
-                if cost - worst_gain < 0 {
-                    tour.insert_at(problem, node, at);
+                /*
+                  The penalised cost on BOTH sides, unlike drop and add.
+
+                  A swap keeps the number of stops the same, so lateness cannot
+                  be bought here by abandoning anybody — it is a genuine choice
+                  between two stops, and which of them the schedule can actually
+                  accommodate is exactly the right thing to decide it on.
+                */
+                if placed.cost - worst_gain < 0 {
+                    tour.insert_at(problem, node, placed.at);
                     self.wake(tour, node);
                     self.wake(tour, leaving);
                     improved = true;
@@ -458,7 +550,7 @@ mod tests {
             let n = 30;
             let problem = problem_with(n, seed, None, Some(0), Some(29));
             let mut tour = Tour::new(n);
-            construct(&problem, &mut tour, None);
+            construct(&problem, &mut tour, None, 0);
             let before = tour.objective(&problem);
 
             descend(&problem, &mut tour);
@@ -487,7 +579,7 @@ mod tests {
             let n = 25;
             let problem = problem_with(n, seed, None, None, None);
             let mut tour = Tour::new(n);
-            construct(&problem, &mut tour, None);
+            construct(&problem, &mut tour, None, 0);
             descend(&problem, &mut tour);
 
             let mut recomputed = 0i64;
@@ -509,11 +601,11 @@ mod tests {
             let problem = problem_with(n, seed, None, Some(0), None);
 
             let mut whole = Tour::new(n);
-            construct(&problem, &mut whole, None);
+            construct(&problem, &mut whole, None, 0);
             descend(&problem, &mut whole);
 
             let mut chunked = Tour::new(n);
-            construct(&problem, &mut chunked, None);
+            construct(&problem, &mut chunked, None, 0);
             let mut search = LocalSearch::new(n);
             search.reset(&problem, &chunked);
             loop {
@@ -539,7 +631,7 @@ mod tests {
             let n = 30;
             let problem = problem_with(n, seed, Some(10), Some(0), Some(29));
             let mut tour = Tour::new(n);
-            construct(&problem, &mut tour, None);
+            construct(&problem, &mut tour, None, 0);
             descend(&problem, &mut tour);
 
             assert!(
@@ -558,7 +650,7 @@ mod tests {
         for n in 2..5usize {
             let problem = problem_with(n, 3, None, Some(0), Some(n - 1));
             let mut tour = Tour::new(n);
-            construct(&problem, &mut tour, None);
+            construct(&problem, &mut tour, None, 0);
             descend(&problem, &mut tour);
             assert_eq!(tour.order[0], 0);
             assert_eq!(tour.order[tour.len - 1], (n - 1) as i32);

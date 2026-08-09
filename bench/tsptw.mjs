@@ -150,6 +150,11 @@ for (const { set, file, instance, bound } of selected) {
             twOpenSec: path.twOpenSec,
             twCloseSec: path.twCloseSec,
             serviceTimeSec: path.serviceTimeSec,
+            // Every customer must be visited; a short route is a wrong answer,
+            // not a cheap one.
+            allMandatory: true,
+            // Both libraries start their clock at zero, not at the app's 08:00.
+            departAtSec: 0,
           },
         },
       )

@@ -202,6 +202,33 @@ impl<'a> Chain<'a> {
     }
 }
 
+/// Where an absent node would go, and what putting it there is worth.
+///
+/// ── Two costs, because they answer different questions ────────────────────
+///
+/// `cost` includes the price of any lateness the insertion causes and decides
+/// WHERE the node goes. `arcs` is travel alone and decides WHETHER it goes at
+/// all — and that separation is load-bearing.
+///
+/// Judging "whether" on the penalised cost lets the search buy punctuality by
+/// abandoning a delivery: the time-window penalty is adaptive and climbs
+/// whenever the route is late, so on a day that cannot be done on time it
+/// eventually exceeds the skip penalty, and dropping a stop becomes the cheapest
+/// move available. Measured, not imagined — it emptied 21 of 25 TSPTW instances
+/// down to a handful of nodes before this split existed.
+///
+/// So the rule is: **lateness decides where a stop goes, never whether it goes.**
+/// A driver who cannot make every window wants to be told that, not to find a
+/// parcel still in the van.
+#[derive(Clone, Copy, Debug)]
+pub struct Insertion {
+    pub at: usize,
+    /// Arc cost plus the priced lateness. For choosing a position.
+    pub cost: i64,
+    /// Arc cost alone. For deciding whether the stop is worth visiting.
+    pub arcs: i64,
+}
+
 pub struct Tour {
     /// Matrix indices in visiting order. Only `len` entries are live.
     pub order: Vec<i32>,
@@ -727,14 +754,62 @@ impl Tour {
 
     // ─────────────────────────────────────────────── add / drop / swap
 
-    /// Cheapest gap for an absent node, as (gap index, cost).
-    pub fn best_insertion(&self, problem: &Problem, node: usize) -> (usize, i64) {
+    /// Total lateness the route WOULD have with `node` inserted at gap `u`.
+    ///
+    /// O(1), and it stays O(1) because an insertion reorders nothing: the route
+    /// either side of the gap is exactly the prefix and suffix already tabulated.
+    pub fn warp_after_insert(&self, problem: &Problem, node: usize, u: usize) -> i64 {
+        debug_assert!(u <= self.len);
+        let mut chain = Chain::new(problem);
+        if u > 0 {
+            chain.push(&self.pre[u - 1], self.order[0] as usize, self.order[u - 1] as usize);
+        }
+        chain.push_node(node);
+        if let Some(tail) = self.tail(u) {
+            chain.push(tail, self.order[u] as usize, self.order[self.len - 1] as usize);
+        }
+        chain.time_warp()
+    }
+
+    /// Total lateness the route WOULD have with position `p` removed. O(1).
+    pub fn warp_after_remove(&self, problem: &Problem, p: usize) -> i64 {
+        debug_assert!(p < self.len);
+        let mut chain = Chain::new(problem);
+        if p > 0 {
+            chain.push(&self.pre[p - 1], self.order[0] as usize, self.order[p - 1] as usize);
+        }
+        if let Some(tail) = self.tail(p + 1) {
+            chain.push(tail, self.order[p + 1] as usize, self.order[self.len - 1] as usize);
+        }
+        chain.time_warp()
+    }
+
+    /// Cheapest gap for an absent node.
+    ///
+    /// `tw_penalty` prices a second of lateness in the same units as an arc. At
+    /// zero — or with no windows to miss — this is exactly the arc-only search
+    /// M10 shipped, which is what keeps a driver who set no windows paying
+    /// nothing for the machinery.
+    ///
+    /// Picking the cheapest gap by ARCS alone and hoping the schedule survives is
+    /// the obvious version and it is wrong in a specific way: on a tight route
+    /// the cheapest gap is very often the one that makes everything downstream
+    /// late, so the insertion looks free and costs the whole afternoon.
+    ///
+    /// Both costs come back because they answer different questions. See
+    /// `Insertion`.
+    pub fn best_insertion(&self, problem: &Problem, node: usize, tw_penalty: i64) -> Insertion {
         let m = &problem.matrix;
         let lo = self.lo_gap(problem);
         let hi = self.hi_gap(problem, self.len);
+        let warp_now = self.time_warp(problem);
+        let timed = problem.windows_bind() && tw_penalty != 0;
 
-        let mut best_at = lo;
-        let mut best_cost = i64::MAX;
+        let mut best = Insertion {
+            at: lo,
+            cost: i64::MAX,
+            arcs: i64::MAX,
+        };
         for u in lo..=hi {
             let left = if u > 0 {
                 Some(self.order[u - 1] as usize)
@@ -756,12 +831,15 @@ impl Tour {
             if let (Some(left), Some(right)) = (left, right) {
                 cost -= i64::from(m.at(left, right));
             }
-            if cost < best_cost {
-                best_cost = cost;
-                best_at = u;
+            let arcs = cost;
+            if timed {
+                cost += tw_penalty * (self.warp_after_insert(problem, node, u) - warp_now);
+            }
+            if cost < best.cost {
+                best = Insertion { at: u, cost, arcs };
             }
         }
-        (best_at, best_cost)
+        best
     }
 
     /// What removing the node at position `p` saves in arcs.
@@ -1037,7 +1115,7 @@ mod tests {
         tour.remove_at(&problem, 3);
         let shortened_cost = tour.cost();
 
-        let (at, cost) = tour.best_insertion(&problem, node);
+        let placed = tour.best_insertion(&problem, node, 0);
 
         // Check it against every gap, the slow way.
         let mut best = i64::MAX;
@@ -1046,10 +1124,11 @@ mod tests {
             candidate.insert(u, node as i32);
             best = best.min(recompute(&problem, &candidate) - shortened_cost);
         }
-        assert_eq!(cost, best);
+        assert_eq!(placed.cost, best);
+        assert_eq!(placed.arcs, best, "with no windows the two costs coincide");
 
-        tour.insert_at(&problem, node, at);
-        assert_eq!(tour.cost(), shortened_cost + cost);
+        tour.insert_at(&problem, node, placed.at);
+        assert_eq!(tour.cost(), shortened_cost + placed.cost);
     }
 
     // ───────────────────────────────────── Vidal labels (M11 groundwork)

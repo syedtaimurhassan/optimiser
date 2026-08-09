@@ -36,7 +36,7 @@ use std::alloc::{alloc, dealloc, Layout};
 
 use crate::driver::{Driver, Strategy};
 use crate::matrix::Matrix;
-use crate::problem::Problem;
+use crate::problem::{Problem, TimeData};
 
 /// i32 and u8 buffers both satisfy this, and it is what `Vec<i32>` would use.
 const ALIGN: usize = 4;
@@ -95,10 +95,25 @@ pub unsafe extern "C" fn engine_dealloc(ptr: *mut u8, bytes: u32) {
 /// `select_k` negative means "no cap". `start` and `end` negative mean "free".
 /// `flags` bit 0 (`FLAG_GLS`) selects guided local search; the default is ILS.
 ///
+/// ── The schedule is optional, and all of it or none of it ─────────────────
+///
+/// `time`, `service`, `tw_open` and `tw_close` are either all non-null or all
+/// null. All null means the caller has no schedule to honour, and the engine
+/// then builds no labels, allocates no segment tree, and runs exactly the search
+/// M10 measured. Any of them null is treated as all null rather than as an error
+/// with three of the four applied, because a half-applied schedule is a route
+/// that looks constrained and is not.
+///
+/// `time` is SECONDS and is a separate matrix even when the objective is already
+/// duration and the two hold identical numbers. Guided local search mutates
+/// `cost` in place to fold in its arc penalties; a schedule read from that would
+/// drift further from the truth with every penalty and do it invisibly.
+///
 /// # Safety
 /// `cost` must point to `n * n` readable `i32`s, `optional` to `n` readable
 /// `u8`s, and `seed_order` either to `seed_order_len` readable `i32`s or be
-/// null. None of them is retained.
+/// null. When non-null, `time` must point to `n * n` readable `i32`s and
+/// `service`, `tw_open` and `tw_close` to `n` each. None of them is retained.
 #[no_mangle]
 #[allow(clippy::too_many_arguments)]
 pub unsafe extern "C" fn engine_create(
@@ -113,6 +128,11 @@ pub unsafe extern "C" fn engine_create(
     seed_order: *const i32,
     seed_order_len: u32,
     flags: u32,
+    time: *const i32,
+    service: *const i32,
+    tw_open: *const i32,
+    tw_close: *const i32,
+    depart_at: i32,
 ) -> *mut Driver {
     let n = n as usize;
     if n < 2 || cost.is_null() || optional.is_null() {
@@ -143,7 +163,29 @@ pub unsafe extern "C" fn engine_create(
         }
     };
 
-    let problem = Problem::new(
+    let schedule = if time.is_null()
+        || service.is_null()
+        || tw_open.is_null()
+        || tw_close.is_null()
+    {
+        None
+    } else {
+        let widen = |ptr: *const i32| -> Vec<i64> {
+            unsafe { std::slice::from_raw_parts(ptr, n) }
+                .iter()
+                .map(|&v| i64::from(v))
+                .collect()
+        };
+        Some(TimeData::new(
+            Matrix::new(n, unsafe { std::slice::from_raw_parts(time, n * n) }.to_vec()),
+            widen(service),
+            widen(tw_open),
+            widen(tw_close),
+            i64::from(depart_at),
+        ))
+    };
+
+    let problem = Problem::with_time(
         Matrix::new(n, cells),
         optional,
         if select_k < 0 {
@@ -154,6 +196,7 @@ pub unsafe extern "C" fn engine_create(
         i64::from(skip_penalty),
         if start < 0 { None } else { Some(start as usize) },
         if end < 0 { None } else { Some(end as usize) },
+        schedule,
     );
 
     let strategy = if flags & FLAG_HYBRID != 0 {
@@ -248,6 +291,29 @@ pub unsafe extern "C" fn engine_best_objective(driver: *const Driver) -> f64 {
     unsafe { &*driver }.best_objective() as f64
 }
 
+/// Total lateness of the route `engine_best_ptr` returns, in seconds.
+///
+/// Zero means every window is met — and zero is the only value a problem with no
+/// windows can produce, so a host that always reads it needs no special case.
+///
+/// The driver keeps the best ON-TIME route separately from the best route
+/// overall and returns the on-time one whenever it found any, so a non-zero
+/// value here is a genuine statement that the day cannot be done as asked. The
+/// host is expected to say so rather than quietly present a late plan.
+///
+/// `f64` for the same reason as `engine_best_objective`: no BigInt marshalling.
+/// Lateness is bounded by roughly n × a day, which is nowhere near 2⁵³.
+///
+/// # Safety
+/// `driver` must be a live pointer from `engine_create`.
+#[no_mangle]
+pub unsafe extern "C" fn engine_time_warp(driver: *const Driver) -> f64 {
+    if driver.is_null() {
+        return 0.0;
+    }
+    unsafe { &*driver }.best_time_warp() as f64
+}
+
 /// Completed perturbation-and-descent cycles, for progress reporting.
 ///
 /// # Safety
@@ -297,6 +363,11 @@ mod tests {
                 std::ptr::null(),
                 0,
                 0,
+                std::ptr::null(),
+                std::ptr::null(),
+                std::ptr::null(),
+                std::ptr::null(),
+                0,
             );
             assert!(!driver.is_null());
 
@@ -334,19 +405,136 @@ mod tests {
 
     /// Bad input must produce a null handle, not a trap. A wasm trap is
     /// unrecoverable and would take the worker down with it.
+    /// No schedule, so every pointer after `flags` is null.
+    #[allow(clippy::too_many_arguments)]
+    unsafe fn create_untimed(
+        n: u32,
+        cost: *const i32,
+        optional: *const u8,
+        select_k: i32,
+        skip_penalty: i32,
+        start: i32,
+        end: i32,
+    ) -> *mut Driver {
+        unsafe {
+            engine_create(
+                n,
+                cost,
+                optional,
+                select_k,
+                skip_penalty,
+                start,
+                end,
+                0,
+                std::ptr::null(),
+                0,
+                0,
+                std::ptr::null(),
+                std::ptr::null(),
+                std::ptr::null(),
+                std::ptr::null(),
+                0,
+            )
+        }
+    }
+
     #[test]
     fn malformed_requests_return_null() {
         let cells = vec![0i32; 9];
         let optional = vec![1u8; 3];
         unsafe {
             // Fewer than two nodes.
-            assert!(engine_create(1, cells.as_ptr(), optional.as_ptr(), -1, 1, -1, -1, 0, std::ptr::null(), 0, 0).is_null());
+            assert!(create_untimed(1, cells.as_ptr(), optional.as_ptr(), -1, 1, -1, -1).is_null());
             // Null matrix.
-            assert!(engine_create(3, std::ptr::null(), optional.as_ptr(), -1, 1, -1, -1, 0, std::ptr::null(), 0, 0).is_null());
+            assert!(create_untimed(3, std::ptr::null(), optional.as_ptr(), -1, 1, -1, -1).is_null());
             // Endpoint outside the matrix.
-            assert!(engine_create(3, cells.as_ptr(), optional.as_ptr(), -1, 1, 9, -1, 0, std::ptr::null(), 0, 0).is_null());
+            assert!(create_untimed(3, cells.as_ptr(), optional.as_ptr(), -1, 1, 9, -1).is_null());
             // The same node pinned to both ends.
-            assert!(engine_create(3, cells.as_ptr(), optional.as_ptr(), -1, 1, 2, 2, 0, std::ptr::null(), 0, 0).is_null());
+            assert!(create_untimed(3, cells.as_ptr(), optional.as_ptr(), -1, 1, 2, 2).is_null());
+        }
+    }
+
+    /// A schedule crossing the boundary must actually constrain the answer.
+    ///
+    /// The instance is a straight line of five nodes whose windows are in the
+    /// REVERSE of their cheapest order: visiting them cheaply means visiting
+    /// them late. An engine that carried the windows across but ignored them
+    /// returns the cheap order and reports zero lateness, which is the failure
+    /// this test exists to catch — and exactly what the M10 baseline did on 24
+    /// of 25 TSPTW instances.
+    #[test]
+    fn a_schedule_crosses_the_boundary_and_binds() {
+        let n = 5usize;
+        // Uniform 100-second arcs, so no ordering is cheaper than another and
+        // the windows are the only thing that can decide the route.
+        let mut cells = vec![0i32; n * n];
+        for i in 0..n {
+            for j in 0..n {
+                if i != j {
+                    cells[i * n + j] = 100;
+                }
+            }
+        }
+        let optional = vec![0u8, 1, 1, 1, 0];
+        let service = vec![0i32; n];
+        // Node 3 must be first, then 2, then 1 — the reverse of index order.
+        let tw_open = vec![0i32, 400, 250, 100, 0];
+        let tw_close = vec![
+            crate::tour::NEVER as i32,
+            500,
+            350,
+            200,
+            crate::tour::NEVER as i32,
+        ];
+
+        unsafe {
+            let driver = engine_create(
+                n as u32,
+                cells.as_ptr(),
+                optional.as_ptr(),
+                -1,
+                10_000_000,
+                0,
+                (n - 1) as i32,
+                7,
+                std::ptr::null(),
+                0,
+                0,
+                cells.as_ptr(),
+                service.as_ptr(),
+                tw_open.as_ptr(),
+                tw_close.as_ptr(),
+                0,
+            );
+            assert!(!driver.is_null());
+            for _ in 0..100_000 {
+                if engine_step(driver, 64) == 1 {
+                    break;
+                }
+            }
+            let len = engine_best_len(driver) as usize;
+            let order = std::slice::from_raw_parts(engine_best_ptr(driver), len).to_vec();
+            let warp = engine_time_warp(driver);
+            engine_destroy(driver);
+
+            assert_eq!(order, vec![0, 3, 2, 1, 4], "the windows did not decide the order");
+            assert_eq!(warp, 0.0, "a feasible route was available and was not found");
+        }
+    }
+
+    /// With no schedule, lateness is not merely zero — it is unaskable, and the
+    /// export must say zero rather than something a host would have to filter.
+    #[test]
+    fn an_untimed_problem_reports_no_lateness() {
+        let n = 6usize;
+        let cells: Vec<i32> = (0..n * n).map(|k| if k % (n + 1) == 0 { 0 } else { 50 }).collect();
+        let optional = vec![1u8; n];
+        unsafe {
+            let driver = create_untimed(n as u32, cells.as_ptr(), optional.as_ptr(), -1, 1_000, -1, -1);
+            assert!(!driver.is_null());
+            engine_step(driver, 1_000);
+            assert_eq!(engine_time_warp(driver), 0.0);
+            engine_destroy(driver);
         }
     }
 
@@ -360,6 +548,7 @@ mod tests {
             assert!(engine_best_ptr(std::ptr::null()).is_null());
             assert_eq!(engine_iterations(std::ptr::null()), 0);
             assert!(engine_best_objective(std::ptr::null()).is_infinite());
+            assert_eq!(engine_time_warp(std::ptr::null()), 0.0);
             engine_destroy(std::ptr::null_mut());
         }
     }

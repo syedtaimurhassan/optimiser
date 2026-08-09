@@ -57,6 +57,24 @@ export interface BenchSolveOptions {
   twOpenSec?: number[]
   twCloseSec?: number[]
   serviceTimeSec?: number[]
+  /**
+   * Every node must be visited, whatever `k` says.
+   *
+   * TSPTW and the Solomon sub-routes are complete-tour problems: a route that
+   * skips a customer is not a cheaper answer, it is a different one. Left
+   * optional, the search will happily pay the skip penalty to escape a window it
+   * cannot make, and the harness gets a two-node route with a wonderful score.
+   */
+  allMandatory?: boolean
+  /**
+   * Seconds from midnight at which the route leaves.
+   *
+   * Both time-window libraries start their clock at zero, so they must say so:
+   * the port's default is 08:00, which is right for a delivery round and wrong
+   * by 28 800 seconds for a benchmark instance. Left unset, every window in the
+   * library is already closed before the driver leaves.
+   */
+  departAtSec?: number
 }
 
 export interface BenchSolveOutcome {
@@ -177,10 +195,13 @@ function buildRequest(
     twOpenSec,
     twCloseSec,
     serviceTimeSec,
+    allMandatory,
+    departAtSec,
   }: BenchSolveOptions,
 ): SolveRequest {
   const n = matrix.length
   const constraints = makeConstraints(n)
+  if (allMandatory) constraints.optional.fill(0)
   if (startNode !== null) constraints.optional[startNode] = 0
   if (endNode !== null) constraints.optional[endNode] = 0
   if (twOpenSec) constraints.twOpenSec.set(twOpenSec.slice(0, n))
@@ -194,6 +215,7 @@ function buildRequest(
     skipPenalty: SKIP_PENALTY,
     objective: 'duration',
     budgetMs: timeBudgetMs ?? 3000,
+    departAtSec,
     seed,
   }
 }

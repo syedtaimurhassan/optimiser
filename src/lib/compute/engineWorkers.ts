@@ -1,7 +1,10 @@
 import { engineTs } from './engineTs.ts'
 import {
+  DEFAULT_DEPART_SEC,
   abortError,
+  compareResults,
   objectiveValue,
+  scheduleFor,
   toResult,
   validateOrder,
   type SolveProgress,
@@ -86,6 +89,8 @@ interface Job {
   /** Best VALIDATED order seen so far, and what the referee scored it. */
   bestOrder: Int32Array | null
   bestObjective: number
+  /** Lateness of `bestOrder`. Beaten before cost — see `compareResults`. */
+  bestWarp: number
   outstanding: number
   failures: string[]
   onProgress?: (progress: SolveProgress) => void
@@ -180,8 +185,19 @@ export class SolverWorkerPool implements SolverEngine {
         const problems = validateOrder(job.request, order)
         if (problems.length === 0) {
           const objective = objectiveValue(job.request, order)
-          if (objective < job.bestObjective) {
+          /*
+            Lateness beats cost, and it has to.
+
+            N workers search from N seeds and the pool keeps the winner. Scored
+            on cost alone, a worker that gave up on the windows wins every time —
+            ignoring a constraint is always cheaper than honouring it — so the
+            pool would systematically select the one answer that is wrong.
+          */
+          const { timeWarpSec } = scheduleFor(job.request, order)
+          const incumbent = { timeWarpSec: job.bestWarp, objective: job.bestObjective }
+          if (compareResults({ timeWarpSec, objective }, incumbent) < 0) {
             job.bestObjective = objective
+            job.bestWarp = timeWarpSec
             job.bestOrder = order
           }
         } else {
@@ -289,6 +305,7 @@ export class SolverWorkerPool implements SolverEngine {
         request,
         bestOrder: null,
         bestObjective: Infinity,
+        bestWarp: Infinity,
         outstanding: this.workers.length,
         failures: [],
         onProgress,
@@ -356,6 +373,7 @@ function serialise(
     skipPenalty: request.skipPenalty,
     objective: request.objective,
     budgetMs: request.budgetMs,
+    departAtSec: request.departAtSec ?? DEFAULT_DEPART_SEC,
     seed,
   }
 }

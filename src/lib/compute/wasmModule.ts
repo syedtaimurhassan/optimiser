@@ -55,12 +55,18 @@ interface EngineExports {
     seedOrder: number,
     seedOrderLen: number,
     flags: number,
+    time: number,
+    service: number,
+    twOpen: number,
+    twClose: number,
+    departAt: number,
   ) => number
   engine_destroy: (driver: number) => void
   engine_step: (driver: number, budget: number) => number
   engine_best_ptr: (driver: number) => number
   engine_best_len: (driver: number) => number
   engine_best_objective: (driver: number) => number
+  engine_time_warp: (driver: number) => number
   engine_iterations: (driver: number) => number
 }
 
@@ -182,10 +188,27 @@ export class WasmEngineModule {
     seed: number
     seedOrder?: Int32Array
     flags?: number
+    /**
+     * The schedule. All four arrays or none of them — the engine treats a
+     * partial schedule as no schedule rather than applying three of the four,
+     * because a half-applied schedule is a route that looks constrained and is
+     * not.
+     */
+    time?: Int32Array
+    serviceTimeSec?: Int32Array
+    twOpenSec?: Int32Array
+    twCloseSec?: Int32Array
+    departAtSec?: number
   }): WasmDriver {
     const costPtr = this.write(input.cost)
     const optionalPtr = this.write(input.optional)
     const seedOrderPtr = input.seedOrder?.length ? this.write(input.seedOrder) : 0
+
+    const timed = Boolean(input.time && input.serviceTimeSec && input.twOpenSec && input.twCloseSec)
+    const timePtr = timed ? this.write(input.time!) : 0
+    const servicePtr = timed ? this.write(input.serviceTimeSec!) : 0
+    const twOpenPtr = timed ? this.write(input.twOpenSec!) : 0
+    const twClosePtr = timed ? this.write(input.twCloseSec!) : 0
 
     const driver = this.exports.engine_create(
       input.n,
@@ -199,11 +222,22 @@ export class WasmEngineModule {
       seedOrderPtr,
       input.seedOrder?.length ?? 0,
       input.flags ?? 0,
+      timePtr,
+      servicePtr,
+      twOpenPtr,
+      twClosePtr,
+      input.departAtSec ?? 0,
     )
 
     this.free(costPtr, input.cost.byteLength)
     this.free(optionalPtr, input.optional.byteLength)
     if (seedOrderPtr !== 0) this.free(seedOrderPtr, input.seedOrder!.byteLength)
+    if (timed) {
+      this.free(timePtr, input.time!.byteLength)
+      this.free(servicePtr, input.serviceTimeSec!.byteLength)
+      this.free(twOpenPtr, input.twOpenSec!.byteLength)
+      this.free(twClosePtr, input.twCloseSec!.byteLength)
+    }
 
     if (driver === 0) {
       throw new Error('the solver engine rejected the request as malformed')
@@ -250,6 +284,18 @@ export class WasmDriver {
 
   bestObjective(): number {
     return this.exports.engine_best_objective(this.handle)
+  }
+
+  /**
+   * Total lateness of the route `best()` returns, in seconds.
+   *
+   * Read for diagnostics only. `toResult` re-derives the schedule from the order
+   * for every engine, and that is the number anything downstream acts on — an
+   * engine never grades its own work, and "did I meet the windows" is the last
+   * question to start trusting it on.
+   */
+  timeWarp(): number {
+    return this.exports.engine_time_warp(this.handle)
   }
 
   iterations(): number {

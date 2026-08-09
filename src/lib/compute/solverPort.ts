@@ -56,6 +56,15 @@ export const SKIP_PENALTY = 10_000_000
 export const TW_ALWAYS = 0
 export const TW_NEVER = 1_000_000_000
 
+/**
+ * When a route leaves if nobody says otherwise: 08:00 local.
+ *
+ * A default rather than "now" because a plan must not change shape according to
+ * when it was asked for. Mirrored by `DEFAULT_DEPART_SEC` on the route model —
+ * see types.ts.
+ */
+export const DEFAULT_DEPART_SEC = 8 * 3600
+
 /** `order` codes, matching `OrderConstraint` in types.ts positionally. */
 export const ORDER_AUTO = 0
 export const ORDER_FIRST = 1
@@ -89,10 +98,8 @@ export interface SolveMatrix {
 /**
  * Per-node constraints, one entry per matrix index.
  *
- * All five arrays are length n and positionally aligned with the matrix. The
- * time-window fields are DECLARED AND IGNORED in M9 — M11 implements them, and
- * they are here now so that adding them is not a signature change that ripples
- * back through the pipeline.
+ * All five arrays are length n and positionally aligned with the matrix.
+ * Declared in M9, ignored until M11, honoured from M11.
  */
 export interface StopConstraints {
   /** How long the driver stands at each node. Zero for a non-stop endpoint. */
@@ -147,6 +154,15 @@ export interface SolveRequest {
   selectK?: number | null
   skipPenalty: number
   objective: Objective
+  /**
+   * When the driver leaves, in seconds from local midnight.
+   *
+   * Time windows are absolute times of day, so they mean nothing without one.
+   * Defaults to `DEFAULT_DEPART_SEC` rather than to "now", because a route
+   * solved at 08:00 and re-solved at 14:00 must produce the same plan — a route
+   * whose shape depends on when you asked is not a plan.
+   */
+  departAtSec?: number
   /** Wall-clock ceiling. An engine may finish early; it may not overrun. */
   budgetMs: number
   /** Seeds the engine's PRNG, so a run is reproducible. */
@@ -181,12 +197,21 @@ export interface SolveResult {
   costSec: number
   /** Driving metres along `order`, or 0 when no distance matrix was supplied. */
   distanceM: number
-  /** False when a time window is missed. Always true until M11. */
+  /** True when every time window along `order` is met. */
   feasible: boolean
-  /** Total lateness in seconds. Always 0 until M11. */
+  /** Total lateness in seconds, summed over every stop that misses its window. */
   timeWarpSec: number
   /** Arrival at each entry of `order`, seconds from route start. */
   arrivalSec: Int32Array
+  /**
+   * How late each entry of `order` is against its own closing time, in seconds.
+   * Zero where the window is met, and zero everywhere when there are none.
+   *
+   * Per entry rather than a single total because "this route is 38 minutes
+   * late" is not something a driver can act on, and "D7 closes at 14:00 and you
+   * arrive 14:38" is.
+   */
+  lateBySec: Int32Array
 }
 
 /**
@@ -415,23 +440,73 @@ export function capacityFor(request: SolveRequest): number {
   return Math.min(Math.max(Math.floor(k), 0), optionalCount)
 }
 
+export interface Schedule {
+  /** Arrival at each entry of `order`, seconds from route start. */
+  arrivalSec: Int32Array
+  /** Lateness against each entry's own closing time. Zero where it is met. */
+  lateBySec: Int32Array
+  /** Sum of `lateBySec`. */
+  timeWarpSec: number
+  feasible: boolean
+}
+
 /**
- * Arrival times along an order, from the DURATION matrix plus service time.
+ * Walk the order with a clock.
  *
- * Seconds from route start, so it needs no wall clock and no time zone. The
- * caller converts to a clock time if it wants one.
+ * ── The referee's schedule, not the engine's ──────────────────────────────
+ *
+ * Every engine's answer is re-scheduled here, from the order alone, for the same
+ * reason no engine's cost is believed: an engine that thinks a late route is on
+ * time is a far worse defect than one that routes badly, and the only way to
+ * catch it is to never ask.
+ *
+ * ── Waiting is free; lateness CASCADES ────────────────────────────────────
+ *
+ * Arriving early means waiting for the door to open, and the clock moves to the
+ * opening time. Arriving late does NOT reset the clock — the driver is simply
+ * late, and everything after them is late too.
+ *
+ * That is deliberately not what the SEARCH does. Inside the engine, lateness is
+ * absorbed as "time warp" so that the search can walk through infeasible routes
+ * on the way to good ones. Here there is no search to help, only a driver to be
+ * told the truth, so the clock is the real one and a missed window pushes every
+ * later arrival back. Reporting the search's warped clock to a driver would show
+ * them a day that catches itself up by teleporting.
+ *
+ * Seconds from route start, so the stored plan needs no wall clock and no time
+ * zone; windows are absolute, so `departAtSec` anchors the comparison.
+ */
+export function scheduleFor(request: SolveRequest, order: ArrayLike<number>): Schedule {
+  const { durations, n } = request.matrix
+  const { serviceTimeSec, twOpenSec, twCloseSec } = request.constraints
+  const departAt = request.departAtSec ?? DEFAULT_DEPART_SEC
+
+  const arrivalSec = new Int32Array(order.length)
+  const lateBySec = new Int32Array(order.length)
+  let timeWarpSec = 0
+
+  let clock = departAt
+  for (let i = 0; i < order.length; i++) {
+    const node = order[i]
+    if (i > 0) clock += durations[order[i - 1] * n + node]
+    if (clock < twOpenSec[node]) clock = twOpenSec[node]
+    arrivalSec[i] = clock - departAt
+    const late = clock - twCloseSec[node]
+    if (late > 0) {
+      lateBySec[i] = late
+      timeWarpSec += late
+    }
+    clock += serviceTimeSec[node]
+  }
+
+  return { arrivalSec, lateBySec, timeWarpSec, feasible: timeWarpSec === 0 }
+}
+
+/**
+ * Arrival times only. Retained because several callers want just these.
  */
 export function arrivalsFor(request: SolveRequest, order: ArrayLike<number>): Int32Array {
-  const { durations, n } = request.matrix
-  const { serviceTimeSec } = request.constraints
-  const arrivals = new Int32Array(order.length)
-  let clock = 0
-  for (let i = 0; i < order.length; i++) {
-    if (i > 0) clock += durations[order[i - 1] * n + order[i]]
-    arrivals[i] = clock
-    clock += serviceTimeSec[order[i]]
-  }
-  return arrivals
+  return scheduleFor(request, order).arrivalSec
 }
 
 /**
@@ -444,16 +519,36 @@ export function toResult(request: SolveRequest, order: Int32Array): SolveResult 
   const { matrix } = request
   const visited = new Uint8Array(matrix.n)
   for (let i = 0; i < order.length; i++) visited[order[i]] = 1
+  const schedule = scheduleFor(request, order)
 
   return {
     order,
     visited,
     costSec: arcSum(matrix.durations, matrix.n, order),
     distanceM: matrix.distances ? arcSum(matrix.distances, matrix.n, order) : 0,
-    feasible: true,
-    timeWarpSec: 0,
-    arrivalSec: arrivalsFor(request, order),
+    feasible: schedule.feasible,
+    timeWarpSec: schedule.timeWarpSec,
+    arrivalSec: schedule.arrivalSec,
+    lateBySec: schedule.lateBySec,
   }
+}
+
+/**
+ * Which of two answers to the same question is better.
+ *
+ * Lateness first, cost second — and it has to be that way round. The worker pool
+ * runs N searches from different seeds and keeps the winner; scored on cost
+ * alone, a worker that gave up on the windows would win every time, because
+ * ignoring a constraint is always cheaper than honouring it.
+ *
+ * Negative when `a` is better, positive when `b` is.
+ */
+export function compareResults(
+  a: { timeWarpSec: number; objective: number },
+  b: { timeWarpSec: number; objective: number },
+): number {
+  if (a.timeWarpSec !== b.timeWarpSec) return a.timeWarpSec - b.timeWarpSec
+  return a.objective - b.objective
 }
 
 /** Reject with the same shape the platform uses, so callers can `if (e.name === 'AbortError')`. */

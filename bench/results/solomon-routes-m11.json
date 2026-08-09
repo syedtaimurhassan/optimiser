@@ -1,0 +1,73 @@
+{
+  "generatedAt": "2026-08-09T13:27:26.717Z",
+  "budgetMs": 1000,
+  "seed": 1,
+  "rows": [
+    {
+      "instance": "c101",
+      "engine": "wasm",
+      "routes": 10,
+      "scored": 10,
+      "matchedOrBetter": 10,
+      "infeasible": 0,
+      "publishedDistance": 828.94,
+      "ourDistance": 828.94,
+      "failures": []
+    },
+    {
+      "instance": "c201",
+      "engine": "wasm",
+      "routes": 3,
+      "scored": 3,
+      "matchedOrBetter": 3,
+      "infeasible": 0,
+      "publishedDistance": 591.56,
+      "ourDistance": 591.56,
+      "failures": []
+    },
+    {
+      "instance": "r101",
+      "engine": "wasm",
+      "routes": 15,
+      "scored": 15,
+      "matchedOrBetter": 15,
+      "infeasible": 0,
+      "publishedDistance": 1393.99,
+      "ourDistance": 1393.99,
+      "failures": []
+    },
+    {
+      "instance": "r201",
+      "engine": "wasm",
+      "routes": 4,
+      "scored": 4,
+      "matchedOrBetter": 4,
+      "infeasible": 0,
+      "publishedDistance": 1252.37,
+      "ourDistance": 1252.37,
+      "failures": []
+    },
+    {
+      "instance": "rc101",
+      "engine": "wasm",
+      "routes": 14,
+      "scored": 14,
+      "matchedOrBetter": 14,
+      "infeasible": 0,
+      "publishedDistance": 1696.95,
+      "ourDistance": 1696.95,
+      "failures": []
+    },
+    {
+      "instance": "rc201",
+      "engine": "wasm",
+      "routes": 4,
+      "scored": 4,
+      "matchedOrBetter": 4,
+      "infeasible": 0,
+      "publishedDistance": 1406.94,
+      "ourDistance": 1406.94,
+      "failures": []
+    }
+  ]
+}
