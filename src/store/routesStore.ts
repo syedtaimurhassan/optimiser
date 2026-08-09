@@ -34,6 +34,7 @@ import {
   defaultsFromStop,
 } from '../lib/addressDefaults'
 import { presetFor, presetHex, retargetGroup } from '../lib/groups'
+import type { NavApp } from '../lib/googleMaps'
 import { dropChange, foldChange, splitPatch, stagedStop, stagedStops } from '../lib/staging'
 
 export const newId = (): string =>
@@ -61,6 +62,14 @@ interface RoutesState {
   favorites: Favorite[]
   /** Letter-block ("D7") or plain numeric ("37") stop labels. */
   stopIdMode: StopIdMode
+  /**
+   * Which app a Navigate tap opens, or null until the driver has been asked.
+   *
+   * A setting rather than transient UI, so it lives here and not in uiStore:
+   * being asked which map to use once per session, forty-four stops into a
+   * round, is the behaviour this field exists to prevent.
+   */
+  navApp: NavApp | null
   /**
    * Per-ADDRESS settings, remembered across routes and across days.
    *
@@ -114,6 +123,7 @@ interface RoutesState {
   updateStop: (id: string, patch: Partial<AddressedStop>) => void
   resetStopIdsForActive: () => void
   setStopIdMode: (mode: StopIdMode) => void
+  setNavApp: (app: NavApp) => void
 
   // ── Sticky per-address settings ──
   /** Remember this stop's settings for its address. Returns the key, or null. */
@@ -362,6 +372,7 @@ export const useRoutesStore = create<RoutesState>()(
       activeRouteId: null,
       favorites: [],
       stopIdMode: 'letterBlock',
+      navApp: null,
       addressDefaults: {},
 
       // ── Route CRUD ──
@@ -742,6 +753,7 @@ export const useRoutesStore = create<RoutesState>()(
         ),
 
       setStopIdMode: (mode) => set({ stopIdMode: mode }),
+      setNavApp: (navApp) => set({ navApp }),
 
       // ── Sticky per-address settings ──
 
@@ -1035,6 +1047,9 @@ export const useRoutesStore = create<RoutesState>()(
         activeRouteId: s.activeRouteId,
         favorites: s.favorites,
         stopIdMode: s.stopIdMode,
+        // Additive too, and null until the driver picks — see stopIdMode's
+        // precedent: a blob written before M13 simply has no `navApp` key.
+        navApp: s.navApp,
         // Additive, so no version bump: a blob written before M7 simply has no
         // `addressDefaults` key, and zustand's shallow merge leaves the initial
         // {} in place.

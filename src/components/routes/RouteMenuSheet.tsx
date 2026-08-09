@@ -8,6 +8,7 @@ import {
   ClipboardIcon,
   DuplicateIcon,
   FitRouteIcon,
+  NavigateIcon,
   PrinterIcon,
   RenumberIcon,
   ScanIcon,
@@ -19,6 +20,8 @@ import { CopyStopsSheet } from './CopyStopsSheet'
 import { ImportStopsSheet } from '../search/ImportStopsSheet'
 import { RemoveStopsSheet } from './RemoveStopsSheet'
 import { PrintableRoute } from '../print/PrintableRoute'
+import { NavAppSheet } from '../nav/NavAppSheet'
+import { NAV_APP_LABEL } from '../../lib/googleMaps'
 
 /**
  * The route's own menu — the sheet's overflow.
@@ -56,6 +59,7 @@ type Overlay = 'copy' | 'import' | 'remove' | null
 
 export function RouteMenuSheet({ open, route, onClose }: RouteMenuSheetProps) {
   const [overlay, setOverlay] = useState<Overlay>(null)
+  const [navPickerOpen, setNavPickerOpen] = useState(false)
   const [confirmReset, setConfirmReset] = useState(false)
   const [printing, setPrinting] = useState(false)
 
@@ -63,6 +67,7 @@ export function RouteMenuSheet({ open, route, onClose }: RouteMenuSheetProps) {
   const allRoutes = useRoutesStore((s) => s.routes)
   const resetStopIds = useRoutesStore((s) => s.resetStopIdsForActive)
   const setSetupOpen = useUiStore((s) => s.setSetupOpen)
+  const navApp = useRoutesStore((s) => s.navApp)
 
   const soon = (label: string, icon: React.ReactNode, testId: string) => ({
     label,
@@ -81,6 +86,15 @@ export function RouteMenuSheet({ open, route, onClose }: RouteMenuSheetProps) {
             sections={[
               // ── share and move ──
               [
+                {
+                  // A setting, and this is where it can be found deliberately.
+                  // The Navigate button itself must not ask — a picker on every
+                  // stop is one extra tap forty-four times a day.
+                  label: `Navigation app · ${navApp ? NAV_APP_LABEL[navApp] : 'Not set'}`,
+                  icon: <NavigateIcon className="h-5 w-5" />,
+                  onSelect: () => setNavPickerOpen(true),
+                  testId: 'menu-nav-app',
+                },
                 soon('Share route copy', <ShareIcon className="h-5 w-5" />, 'menu-share'),
                 soon('Transfer stops', <TransferIcon className="h-5 w-5" />, 'menu-transfer'),
                 {
@@ -174,6 +188,8 @@ export function RouteMenuSheet({ open, route, onClose }: RouteMenuSheetProps) {
         }}
         onCancel={() => setConfirmReset(false)}
       />
+
+      <NavAppSheet open={navPickerOpen} onClose={() => setNavPickerOpen(false)} />
 
       {/* Mounted only while printing: 300 table rows are 300 table rows. */}
       {printing && <PrintableRoute route={route} onDone={() => setPrinting(false)} />}

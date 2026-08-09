@@ -1,11 +1,11 @@
 import { useCallback, useState } from 'react'
 import { useLocation } from 'wouter'
-import type { Route } from '../../types'
+import type { LatLng, Route } from '../../types'
 import type { StopPage } from '../../lib/stopPages'
 import { formatLatLng } from '../../lib/coordinates'
 import { clockAt } from '../../lib/routeSummary'
 import { liveEta } from '../../lib/arrivals'
-import { googleMapsSearchUrl } from '../../lib/googleMaps'
+import { navPlaceUrl, type NavApp } from '../../lib/googleMaps'
 import { useRoutesStore } from '../../store/routesStore'
 import { useUiStore } from '../../store/uiStore'
 import { titleFor } from '../../lib/routeList'
@@ -14,6 +14,7 @@ import { FailureReasonSheet } from './FailureReasonSheet'
 import { EditStopSheet } from './EditStopSheet'
 import { StopDetailCard } from './StopDetailCard'
 import { EndLocationCard } from './EndLocationCard'
+import { NavAppSheet } from '../nav/NavAppSheet'
 
 /**
  * The carousel, wired to the store and to the URL.
@@ -57,6 +58,29 @@ export function StopPages({ route, pages, index, etaByStopId }: StopPagesProps) 
   const setRouteStatus = useRoutesStore((s) => s.setRouteStatus)
   const setStopEditorId = useUiStore((s) => s.setStopEditorId)
   const editStopId = useUiStore((s) => s.stopEditorId)
+  const navApp = useRoutesStore((s) => s.navApp)
+
+  /**
+   * Where a Navigate tap is headed, while we ask which app should take it.
+   *
+   * Only ever set on the first hand-off of the driver's life — after that the
+   * app is remembered and the tap opens it directly. Holding the POINT rather
+   * than a boolean is what lets the sheet's pick open the right place without
+   * the carousel having moved on underneath it.
+   */
+  const [pendingNav, setPendingNav] = useState<LatLng | null>(null)
+
+  const openNavigation = useCallback(
+    (point: LatLng) => {
+      // No preference yet: ask, and let the sheet's own tap do the opening.
+      if (!navApp) {
+        setPendingNav(point)
+        return
+      }
+      openIn(navApp, point)
+    },
+    [navApp],
+  )
 
   const close = useCallback(() => navigate(`/route/${route.id}`), [navigate, route.id])
 
@@ -131,6 +155,7 @@ export function StopPages({ route, pages, index, etaByStopId }: StopPagesProps) 
       route,
       etaByStopId,
       close,
+      openNavigation,
       setStopStatus,
       setReasonStopId,
       undoStopStatus,
@@ -172,6 +197,21 @@ export function StopPages({ route, pages, index, etaByStopId }: StopPagesProps) 
         />
       )}
 
+      {/*
+        Asked once, on the first Navigate this app has ever been given. The
+        pick opens the URL from inside its own click handler — a hand-off
+        deferred to a later tick has lost its user activation and iOS blocks
+        it as a popup.
+      */}
+      <NavAppSheet
+        open={pendingNav !== null}
+        onClose={() => setPendingNav(null)}
+        onPick={(app) => {
+          if (pendingNav) openIn(app, pendingNav)
+          setPendingNav(null)
+        }}
+      />
+
       <FailureReasonSheet
         open={reasonStop !== undefined}
         stopTitle={reasonStop ? titleFor(reasonStop) : ''}
@@ -188,13 +228,13 @@ export function StopPages({ route, pages, index, etaByStopId }: StopPagesProps) 
 }
 
 /**
- * A URL stub, and nothing more — real hand-off is M13.
+ * Hand one stop to the driver's chosen app.
  *
  * `noopener` is not decoration: without it the opened tab gets a handle on
  * this window through `opener` and can navigate it away.
  */
-function openNavigation(point: { lat: number; lng: number }): void {
-  window.open(googleMapsSearchUrl(point), '_blank', 'noopener,noreferrer')
+function openIn(app: NavApp, point: LatLng): void {
+  window.open(navPlaceUrl(app, point), '_blank', 'noopener,noreferrer')
 }
 
 /**

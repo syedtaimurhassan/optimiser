@@ -46,6 +46,36 @@ import { detectPlatform, type Platform } from './device/capabilities.ts'
 
 export type NavApp = 'google' | 'waze' | 'apple'
 
+export const NAV_APP_LABEL: Record<NavApp, string> = {
+  google: 'Google Maps',
+  waze: 'Waze',
+  apple: 'Apple Maps',
+}
+
+/**
+ * What each app costs the driver, said plainly.
+ *
+ * The picker shows this because the difference is not a preference — Waze on a
+ * 44-stop round is 44 links, and a driver deserves to know that before they
+ * choose it rather than after the sixth tap.
+ */
+export const NAV_APP_LIMIT_NOTE: Record<NavApp, string> = {
+  google: 'Up to 3 stops per link on a phone',
+  waze: 'One stop per link — Waze takes no waypoints',
+  apple: 'One stop per link — Apple Maps takes no waypoints',
+}
+
+/**
+ * Which app to offer first.
+ *
+ * Apple Maps leads on iOS only because it is the one guaranteed to be
+ * installed there; everywhere else Google leads because it is the only one of
+ * the three that can carry intermediate stops at all.
+ */
+export function navAppOrder(platform: Platform = detectPlatform()): NavApp[] {
+  return platform === 'ios' ? ['apple', 'google', 'waze'] : ['google', 'waze', 'apple']
+}
+
 const MAPS_BASE = 'https://www.google.com/maps'
 const WAZE_BASE = 'https://waze.com/ul'
 const APPLE_BASE = 'https://maps.apple.com/'

@@ -3,10 +3,12 @@ import { useShallow } from 'zustand/react/shallow'
 import type { LatLng, OptimizedRoute } from '../types'
 import { formatLatLng } from '../lib/coordinates'
 import { useRouteStore } from '../store/routeStore'
+import { useRoutesStore } from '../store/routesStore'
 import { useUiStore } from '../store/uiStore'
 import {
-  googleMapsSearchUrl,
-  googleMapsDirectionsBatches,
+  NAV_APP_LABEL,
+  navPlaceUrl,
+  navDirectionsBatches,
 } from '../lib/googleMaps'
 
 interface Props {
@@ -42,6 +44,9 @@ interface RowProps {
 /** One itinerary row. Owns its hover-sync subscription (so only this row
  *  re-renders on hover) and its own slide-out animation when delivered. */
 function ItineraryRow({ p, seq, isStop, isCurrent, isLast, num, stopId }: RowProps) {
+  // Until the driver has picked, Google — it is the only one of the three that
+  // can carry intermediate stops, so it is the least surprising default.
+  const navApp = useRoutesStore((s) => s.navApp) ?? 'google'
   const markDone = useRouteStore((s) => s.markDeliveredByCoord)
   const setHoveredStopId = useUiStore((s) => s.setHoveredStopId)
   const isHovered = useUiStore((s) => stopId != null && s.hoveredStopId === stopId)
@@ -100,7 +105,7 @@ function ItineraryRow({ p, seq, isStop, isCurrent, isLast, num, stopId }: RowPro
         </span>
       </span>
       <a
-        href={googleMapsSearchUrl(p)}
+        href={navPlaceUrl(navApp, p)}
         target="_blank"
         rel="noopener noreferrer"
         className="inline-flex min-h-[44px] shrink-0 items-center rounded-md border border-slate-300 px-3 text-xs text-slate-600 hover:border-blue-400 hover:text-blue-600"
@@ -118,6 +123,7 @@ function ItineraryRow({ p, seq, isStop, isCurrent, isLast, num, stopId }: RowPro
  * the Delivered section) brings it back — all with no recalculation.
  */
 export function Itinerary({ route }: Props) {
+  const navApp = useRoutesStore((s) => s.navApp) ?? 'google'
   const { waypoints, startLocation, endLocation } = useRouteStore(
     useShallow((s) => ({
       waypoints: s.waypoints,
@@ -157,9 +163,7 @@ export function Itinerary({ route }: Props) {
 
   const deliverableRemaining = remaining.filter((e) => e.isStop).length
   const batches =
-    remaining.length >= 2
-      ? googleMapsDirectionsBatches(remaining.map((e) => e.p))
-      : []
+    remaining.length >= 2 ? navDirectionsBatches(navApp, remaining.map((e) => e.p)) : []
 
   const linkBtn =
     'flex min-h-[44px] items-center justify-center rounded-md bg-emerald-600 px-3 py-2 text-center text-sm font-semibold text-white transition-colors hover:bg-emerald-700'
@@ -181,13 +185,13 @@ export function Itinerary({ route }: Props) {
         <div className="space-y-1.5">
           {batches.length === 1 ? (
             <a href={batches[0].url} target="_blank" rel="noopener noreferrer" className={linkBtn}>
-              Navigate Remaining Route in Google Maps
+              Navigate Remaining Route in {NAV_APP_LABEL[navApp]}
             </a>
           ) : (
             <>
               <p className="text-xs text-amber-600">
-                {remaining.length} stops exceed Google Maps’ limit — split into{' '}
-                {batches.length} legs (in order):
+                {remaining.length} stops exceed {NAV_APP_LABEL[navApp]}’ per-link
+                limit — split into {batches.length} legs (in order):
               </p>
               {batches.map((b, i) => (
                 <a key={i} href={b.url} target="_blank" rel="noopener noreferrer" className={linkBtn}>
