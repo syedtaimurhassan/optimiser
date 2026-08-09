@@ -35,6 +35,31 @@ export interface SyncCapabilities {
   vibrate: boolean
   webShare: boolean
   webgpu: boolean
+
+  // ── M13: the capabilities the driver's phone is asked for by name ──
+  /** getUserMedia — a live camera, as opposed to a file picker. */
+  mediaDevices: boolean
+  /**
+   * ImageCapture (`grabFrame`/`takePhoto`). Absent in every WebKit browser,
+   * which is why the scanner draws the video into a canvas by hand rather
+   * than grabbing frames the short way.
+   */
+  imageCapture: boolean
+  deviceOrientation: boolean
+  /**
+   * iOS 13+ requires `DeviceOrientationEvent.requestPermission()` from inside
+   * a user gesture. Separate from `deviceOrientation` because "the event
+   * exists" and "you may listen to it" are different questions, and only the
+   * second one needs a button.
+   */
+  orientationNeedsPermission: boolean
+  networkInformation: boolean
+  serviceWorker: boolean
+  /** Push needs a service worker; on iOS it additionally needs to be installed. */
+  push: boolean
+  badging: boolean
+  backgroundSync: boolean
+  periodicSync: boolean
   /** Running as an installed PWA rather than in a browser tab. */
   standalone: boolean
   platform: Platform
@@ -53,6 +78,27 @@ export interface AsyncCapabilities {
   storagePersisted: boolean
   /** Bytes used / available, when the browser will say. */
   storageEstimate: { usage: number | null; quota: number | null } | null
+  /**
+   * What the NATIVE BarcodeDetector will actually decode on this device, or
+   * null when there is no native one.
+   *
+   * Asked rather than assumed, and this is the whole reason it is an async
+   * probe: on Android the implementation is backed by a Play Services module
+   * that can be missing, so `'BarcodeDetector' in window` is true on devices
+   * where detection returns nothing. An empty list here means "there is a
+   * constructor but it cannot read anything", which is the case the scanner
+   * has to treat as no native support at all.
+   */
+  barcodeFormats: string[] | null
+  /**
+   * Whether speech can be recognised without sending audio anywhere.
+   *
+   * Chrome 139+ only, and it needs a downloaded language pack. One of
+   * 'available' | 'downloadable' | 'downloading' | 'unavailable', or null
+   * where the API does not exist — which is everywhere else, and where
+   * recognition therefore means "streamed to the vendor's servers".
+   */
+  speechOnDevice: string | null
 }
 
 export type Capabilities = SyncCapabilities &
@@ -208,6 +254,22 @@ export function detectSync(): SyncCapabilities {
     vibrate: has(nav, 'vibrate'),
     webShare: has(nav, 'share'),
     webgpu: has(nav, 'gpu'),
+
+    mediaDevices: has(nav?.mediaDevices, 'getUserMedia'),
+    imageCapture: 'ImageCapture' in globalThis,
+    deviceOrientation: 'DeviceOrientationEvent' in globalThis,
+    orientationNeedsPermission:
+      typeof (globalThis as { DeviceOrientationEvent?: { requestPermission?: unknown } })
+        .DeviceOrientationEvent?.requestPermission === 'function',
+    networkInformation: has(nav, 'connection'),
+    serviceWorker: has(nav, 'serviceWorker'),
+    push: 'PushManager' in globalThis,
+    badging: has(nav, 'setAppBadge'),
+    // Both are reached through a service worker registration, but their
+    // manager interfaces are exposed globally, which is enough to answer
+    // "would this browser ever let us" without registering anything.
+    backgroundSync: 'SyncManager' in globalThis,
+    periodicSync: 'PeriodicSyncManager' in globalThis,
     standalone: detectStandalone(),
     platform: detectPlatform(),
     devicePixelRatio: typeof window !== 'undefined' ? window.devicePixelRatio : 1,
@@ -245,17 +307,68 @@ async function estimateStorage(): Promise<AsyncCapabilities['storageEstimate']> 
   }
 }
 
+/**
+ * Ask the native detector what it can read.
+ *
+ * Deliberately tolerant of a throw: Android's implementation downloads its
+ * barcode module on first use, and a device that cannot reach it rejects here
+ * rather than returning an empty list.
+ */
+async function nativeBarcodeFormats(): Promise<string[] | null> {
+  try {
+    const ctor = (globalThis as { BarcodeDetector?: { getSupportedFormats?: () => Promise<string[]> } })
+      .BarcodeDetector
+    if (typeof ctor?.getSupportedFormats !== 'function') return null
+    return await ctor.getSupportedFormats()
+  } catch {
+    return null
+  }
+}
+
+async function onDeviceSpeech(): Promise<string | null> {
+  try {
+    const ctor = (globalThis as {
+      SpeechRecognition?: { available?: (o: unknown) => Promise<string> }
+      webkitSpeechRecognition?: { available?: (o: unknown) => Promise<string> }
+    })
+    const available = ctor.SpeechRecognition?.available ?? ctor.webkitSpeechRecognition?.available
+    if (typeof available !== 'function') return null
+    return await available({ langs: ['en-US'], processLocally: true })
+  } catch {
+    return null
+  }
+}
+
 export async function detectAsync(): Promise<AsyncCapabilities> {
-  const [storagePersisted, storageEstimate] = await Promise.all([
+  const [storagePersisted, storageEstimate, barcodeFormats, speechOnDevice] = await Promise.all([
     requestPersistentStorage(),
     estimateStorage(),
+    nativeBarcodeFormats(),
+    onDeviceSpeech(),
   ])
   return {
     wasmSimd: wasmSimd(),
     wasmThreads: wasmThreads(),
     storagePersisted,
     storageEstimate,
+    barcodeFormats,
+    speechOnDevice,
   }
+}
+
+/**
+ * Speech recognition is present AND allowed to run here.
+ *
+ * The distinction exists because of one platform: iOS supports
+ * `webkitSpeechRecognition` in a Safari tab and fails immediately in an
+ * installed Home Screen web app — it errors without even prompting for the
+ * microphone. Feature detection cannot see that, because the constructor is
+ * there either way, so this is one of the few places where the vendor and the
+ * display mode are genuinely the question being asked.
+ */
+export function speechUsable(caps: SyncCapabilities): boolean {
+  if (!caps.speechRecognition) return false
+  return !(caps.platform === 'ios' && caps.standalone)
 }
 
 /** Everything, for the diagnostics panel. Async parts included. */
@@ -297,12 +410,36 @@ export function formatReport(caps: Capabilities): string {
   }
   lines.push('')
   row('geolocation', caps.geolocation)
-  row('speechRecognition', caps.speechRecognition)
+  row('geolocation (background)', 'impossible in a PWA')
+  row('mediaDevices', caps.mediaDevices)
+  row('imageCapture', caps.imageCapture)
   row('barcodeDetector', caps.barcodeDetector)
+  row(
+    'barcode formats',
+    caps.asyncResolved
+      ? (!caps.barcodeFormats
+          ? 'none — WASM fallback'
+          : caps.barcodeFormats.length === 0
+            ? 'EMPTY — WASM fallback'
+            : caps.barcodeFormats.join(' '))
+      : 'pending',
+  )
+  row('speechRecognition', caps.speechRecognition)
+  row('speech usable here', speechUsable(caps))
+  row('speech on-device', caps.asyncResolved ? (caps.speechOnDevice ?? 'no — sent to vendor') : 'pending')
   row('webShare', caps.webShare)
   row('wakeLock', caps.wakeLock)
   row('vibrate', caps.vibrate)
+  row('deviceOrientation', caps.deviceOrientation)
+  row('orientation needs tap', caps.orientationNeedsPermission)
+  row('networkInformation', caps.networkInformation)
   row('webgpu', caps.webgpu)
+  lines.push('')
+  row('serviceWorker', caps.serviceWorker)
+  row('push', caps.push)
+  row('badging', caps.badging)
+  row('backgroundSync', caps.backgroundSync)
+  row('periodicSync', caps.periodicSync)
 
   const test = selfTest()
   if (!test.ok) {
