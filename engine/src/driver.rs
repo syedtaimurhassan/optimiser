@@ -24,7 +24,7 @@
 //! stops, and a double bridge cannot answer that — it only ever permutes what is
 //! already in the route.
 
-use crate::construct::{construct, greedy_refill, restart};
+use crate::construct::{construct_with, greedy_refill, restart, Construction};
 use crate::localsearch::{LocalSearch, Progress};
 use crate::problem::Problem;
 use crate::rng::Rng;
@@ -80,6 +80,24 @@ const TW_PENALTY_DOWN: (i64, i64) = (4, 5);
 /// stopped conveying information anyway.
 const MAX_TW_PENALTY: i64 = 1_000_000_000;
 
+/// Starting temperature, as a fraction of the average arc cost, per thousand.
+///
+/// At T = one average arc, a move that costs one extra average arc is accepted
+/// with probability 1/e ≈ 0.37 — warm enough to leave a basin, cool enough that
+/// the walk is not random. Scaled to the instance for the same reason the
+/// time-window penalty is: these matrices are seconds on one route and metres on
+/// another, and a fixed temperature is meaningless on one of them.
+const SA_START_TEMP_PERMILLE: i64 = 1_000;
+
+/// Geometric cooling, per accepted-or-rejected iteration, in parts per million
+/// subtracted from 1. 460 ppm halves the temperature every ~1500 iterations and
+/// reaches a hundredth of it in ten thousand, which is the right order for the
+/// one-to-five-second budgets this engine actually runs under.
+const SA_COOLING_PPM: i64 = 460;
+
+/// Below this the walk is a strict descent and the schedule has done its work.
+const SA_MIN_TEMP: i64 = 1;
+
 /// GLS has no natural stopping point, so it needs one.
 ///
 /// Deliberately huge. A GLS iteration is a two-node wake and a short descent,
@@ -98,6 +116,21 @@ pub enum Strategy {
     /// Perturb the LANDSCAPE: raise the price of arcs the search keeps choosing,
     /// so the same local optimum stops being one.
     Gls,
+    /// Metropolis acceptance: take a worse route with probability
+    /// `exp(-delta / T)`, cooling geometrically.
+    ///
+    /// ── What it is for, beyond being on OR-Tools' list ────────────────────
+    ///
+    /// ILS accepts a worse route only inside a fixed 2% drift band, and only
+    /// when the K cap binds. That is a blunt instrument: early in a search a
+    /// much larger uphill step is often the only way out of the basin the
+    /// construction landed in, and late in a search even 2% is too much noise
+    /// to converge through. Annealing is the same idea with the width of the
+    /// band on a schedule.
+    ///
+    /// It is also the acceptance criterion SISR needs, so building it here is
+    /// most of the groundwork for the batch tier that M11 deferred.
+    SimulatedAnnealing,
     /// ILS until it gives up, then GLS with whatever budget is left.
     ///
     /// Neither is better than the other everywhere, and the measurements say so
@@ -177,6 +210,10 @@ pub struct Driver {
     current_objective: i64,
     /// What a second of lateness currently costs, in arc units. See `adapt`.
     tw_penalty: i64,
+    /// How the first route is built. See `Construction`.
+    construction: Construction,
+    /// Simulated annealing temperature. Zero until the first route is scored.
+    temperature: i64,
 
     phase: Phase,
     strategy: Strategy,
@@ -200,6 +237,23 @@ impl Driver {
         seed_order: Option<Vec<i32>>,
         strategy: Strategy,
     ) -> Self {
+        Driver::configured(
+            problem,
+            seed,
+            seed_order,
+            strategy,
+            Construction::CheapestInsertion,
+        )
+    }
+
+    /// Everything: which search, and which first route to give it.
+    pub fn configured(
+        problem: Problem,
+        seed: u32,
+        seed_order: Option<Vec<i32>>,
+        strategy: Strategy,
+        construction: Construction,
+    ) -> Self {
         let n = problem.n();
         Driver {
             tour: Tour::new(n),
@@ -213,6 +267,7 @@ impl Driver {
             best_feasible_objective: i64::MAX,
             current_objective: i64::MAX,
             tw_penalty: 0,
+            temperature: 0,
             phase: Phase::Construct,
             strategy,
             // The penalty array is n² u16 — 2 MB at n = 1000 — so it is only
@@ -221,8 +276,9 @@ impl Driver {
             // which for IlsThenGls may be never.
             gls: match strategy {
                 Strategy::Gls => Some(Gls::new(n)),
-                Strategy::Ils | Strategy::IlsThenGls => None,
+                Strategy::Ils | Strategy::IlsThenGls | Strategy::SimulatedAnnealing => None,
             },
+            construction,
             iterations: 0,
             since_improvement: 0,
             barren_restarts: 0,
@@ -257,16 +313,23 @@ impl Driver {
                       late that the descent spends its whole budget climbing out.
                     */
                     if self.problem.windows_bind() && self.tw_penalty == 0 {
-                        construct(&self.problem, &mut self.tour, self.seed_order.as_deref(), 0);
+                        construct_with(
+                            &self.problem,
+                            &mut self.tour,
+                            self.seed_order.as_deref(),
+                            0,
+                            self.construction,
+                        );
                         let arcs = (self.tour.len.saturating_sub(1)).max(1) as i64;
                         self.tw_penalty = (self.tour.cost() / arcs).max(1);
                         self.search.set_tw_penalty(self.tw_penalty);
                     }
-                    construct(
+                    construct_with(
                         &self.problem,
                         &mut self.tour,
                         self.seed_order.as_deref(),
                         self.tw_penalty,
+                        self.construction,
                     );
 
                     // Adopt the constructed route as `best` IMMEDIATELY, before
@@ -304,6 +367,14 @@ impl Driver {
                         Progress::Budget => return false,
                         Progress::Converged => {
                             match self.strategy {
+                                Strategy::SimulatedAnnealing => {
+                                    self.settle_annealing();
+                                    if self.phase == Phase::Done {
+                                        return true;
+                                    }
+                                    self.perturb();
+                                    self.search.reset(&self.problem, &self.tour);
+                                }
                                 Strategy::Ils | Strategy::IlsThenGls => {
                                     self.settle_ils();
                                     if self.phase == Phase::Done {
@@ -523,6 +594,72 @@ impl Driver {
         self.tour.refresh(&self.problem);
     }
 
+    /// A descent has converged under simulated annealing.
+    ///
+    /// ── Metropolis, on an integer clock ───────────────────────────────────
+    ///
+    /// A worse route is accepted with probability `exp(-delta / T)`. The engine
+    /// has no `std::time` and wants no floating-point in the hot path, but this
+    /// runs once per local optimum rather than once per move, so an `exp` here
+    /// costs nothing measurable.
+    ///
+    /// The temperature is seeded from the instance — one average arc — for the
+    /// same reason the time-window penalty is: a fixed constant is meaningless
+    /// on a matrix that might hold seconds or metres.
+    fn settle_annealing(&mut self) {
+        let objective = self.penalised();
+        let warp = self.warp();
+        self.iterations += 1;
+
+        if self.temperature == 0 {
+            let arcs = (self.tour.len.saturating_sub(1)).max(1) as i64;
+            self.temperature =
+                ((self.tour.cost() / arcs) * SA_START_TEMP_PERMILLE / 1000).max(SA_MIN_TEMP);
+        }
+
+        if self.record_best() {
+            self.since_improvement = 0;
+            self.barren_restarts = 0;
+        } else {
+            self.since_improvement += 1;
+        }
+
+        let delta = objective - self.current_objective;
+        let accept = if delta <= 0 {
+            true
+        } else if self.temperature <= SA_MIN_TEMP {
+            false
+        } else {
+            // `exp` underflows to 0.0 rather than trapping, so a hopeless move
+            // is simply never accepted — no guard needed on the exponent.
+            let probability = (-(delta as f64) / self.temperature as f64).exp();
+            self.rng.next_f64() < probability
+        };
+
+        if accept {
+            self.current_objective = objective;
+        } else {
+            let best = std::mem::take(&mut self.best);
+            self.tour.restore(&self.problem, &best);
+            self.best = best;
+            self.current_objective = self.penalised();
+        }
+
+        // Geometric cooling. Integer arithmetic, so it stops at SA_MIN_TEMP
+        // rather than crawling towards zero forever.
+        self.temperature =
+            (self.temperature - (self.temperature * SA_COOLING_PPM / 1_000_000) - 1)
+                .max(SA_MIN_TEMP);
+
+        self.adapt(warp);
+
+        // Frozen and out of ideas: the same end condition ILS uses, so a small
+        // route does not sit out a five-second clock.
+        if self.barren_restarts >= BARREN_RESTARTS {
+            self.phase = Phase::Done;
+        }
+    }
+
     /// A descent has converged. Judge it, and decide whether to carry on.
     fn settle_ils(&mut self) {
         // The PENALISED objective, so a route that is cheap only because it is
@@ -734,6 +871,7 @@ impl Driver {
 mod tests {
     use super::*;
     use crate::matrix::Matrix;
+    use crate::construct::Construction;
     use crate::problem::{PIN_AUTO, PIN_FIRST, PIN_LAST};
 
     fn problem_with(
@@ -1141,6 +1279,108 @@ mod tests {
         let (order, _) = solve(problem, 3);
         assert_eq!(order[0], 5, "the first-pinned stop is missing or misplaced");
         assert_eq!(*order.last().unwrap(), 6, "the last-pinned stop is missing or misplaced");
+    }
+
+    /// Annealing must find the optimum on instances small enough to enumerate.
+    ///
+    /// The same absolute standard ILS and GLS are held to. A metaheuristic that
+    /// wanders is easy to write and impossible to distinguish from one that
+    /// works by looking at relative numbers.
+    #[test]
+    fn annealing_finds_the_optimum_on_small_instances() {
+        for n in 6..=8usize {
+            for seed in 1..=10u32 {
+                let problem = problem_with(n, seed, None, Some(0), Some(n - 1));
+                let matrix_n = problem.n();
+                let score = scorer(&problem);
+
+                let interior: Vec<i32> = (1..n as i32 - 1).collect();
+                let mut best = i64::MAX;
+                permute(&interior, &mut |perm: &[i32]| {
+                    let mut order = vec![0i32];
+                    order.extend_from_slice(perm);
+                    order.push(matrix_n as i32 - 1);
+                    best = best.min(score(&order));
+                });
+
+                let (_, objective) =
+                    solve_with(problem, seed, Strategy::SimulatedAnnealing);
+                assert_eq!(objective, best, "n={n} seed={seed}: annealing missed the optimum");
+            }
+        }
+    }
+
+    /// It must cool and stop, or a three-stop route sits out the whole budget.
+    #[test]
+    fn annealing_terminates_on_a_tiny_instance() {
+        let problem = problem_with(6, 3, None, Some(0), Some(5));
+        let mut driver =
+            Driver::with_strategy(problem, 3, None, Strategy::SimulatedAnnealing);
+        let mut steps = 0;
+        while !driver.step(64) {
+            steps += 1;
+            assert!(steps < 200_000, "annealing never declared itself finished");
+        }
+    }
+
+    /// Never returns a route worse than the best it saw, however far uphill the
+    /// walk went. `best` is kept separately precisely so an accepted worse route
+    /// cannot lose anything.
+    #[test]
+    fn annealing_never_returns_worse_than_its_best() {
+        for seed in 1..8u32 {
+            let n = 30;
+            let problem = problem_with(n, seed, None, Some(0), Some(n - 1));
+            let score = scorer(&problem);
+            let mut driver =
+                Driver::with_strategy(problem, seed, None, Strategy::SimulatedAnnealing);
+
+            let mut last = i64::MAX;
+            for _ in 0..20_000 {
+                let finished = driver.step(64);
+                let objective = driver.best_objective();
+                assert!(objective <= last, "best went up: {last} -> {objective}");
+                last = objective;
+                if finished {
+                    break;
+                }
+            }
+            let order = driver.best().to_vec();
+            assert_eq!(driver.best_objective(), score(&order), "seed {seed}: reported cost is fiction");
+        }
+    }
+
+    /// Every construction must survive a whole search, not merely produce a
+    /// valid first route — the descent and the perturbations have to cope with
+    /// whatever shape it handed them.
+    #[test]
+    fn every_construction_solves() {
+        for how in [
+            Construction::CheapestInsertion,
+            Construction::NearestNeighbour,
+            Construction::Savings,
+        ] {
+            for seed in 1..6u32 {
+                let n = 24;
+                let problem = problem_with(n, seed, Some(10), Some(0), Some(n - 1));
+                let cap = problem.cap;
+                let mut driver =
+                    Driver::configured(problem, seed, None, Strategy::Ils, how);
+                for _ in 0..50_000 {
+                    if driver.step(64) {
+                        break;
+                    }
+                }
+                let order = driver.best().to_vec();
+                assert_eq!(order[0], 0, "{how:?} seed {seed}");
+                assert_eq!(*order.last().unwrap(), (n - 1) as i32, "{how:?} seed {seed}");
+                assert!(order.len() <= cap + 2, "{how:?} seed {seed}: cap exceeded");
+                let mut seen = order.clone();
+                seen.sort();
+                seen.dedup();
+                assert_eq!(seen.len(), order.len(), "{how:?} seed {seed}: repeated node");
+            }
+        }
     }
 
     #[test]

@@ -34,6 +34,7 @@
 
 use std::alloc::{alloc, dealloc, Layout};
 
+use crate::construct::Construction;
 use crate::driver::{Driver, Strategy};
 use crate::matrix::Matrix;
 use crate::problem::{Problem, TimeData};
@@ -41,13 +42,28 @@ use crate::problem::{Problem, TimeData};
 /// i32 and u8 buffers both satisfy this, and it is what `Vec<i32>` would use.
 const ALIGN: usize = 4;
 
-/// `flags` bit 0: search the landscape with guided local search instead of
-/// perturbing the route with iterated local search.
-pub const FLAG_GLS: u32 = 1;
+/// `flags`, as two small fields rather than a bag of bits.
+///
+/// ```text
+/// bits 0-2   which search        0 ILS · 1 GLS · 2 ILS-then-GLS · 3 annealing
+/// bits 3-5   which construction  0 cheapest insertion · 1 nearest neighbour
+///                                2 Clarke-Wright savings
+/// ```
+///
+/// The strategy values are M10's `FLAG_GLS = 1` and `FLAG_HYBRID = 2` read as a
+/// field rather than as independent bits, which they never really were —
+/// `FLAG_HYBRID` already "took precedence", i.e. they were mutually exclusive.
+/// Reading them as a field preserves every value a caller could previously have
+/// sent and leaves room for the next one.
+const STRATEGY_MASK: u32 = 0b111;
+const CONSTRUCTION_SHIFT: u32 = 3;
+const CONSTRUCTION_MASK: u32 = 0b111;
 
-/// `flags` bit 1: iterated local search, then guided local search once ILS has
-/// run out of ideas. Takes precedence over `FLAG_GLS`.
+pub const FLAG_GLS: u32 = 1;
 pub const FLAG_HYBRID: u32 = 2;
+pub const FLAG_ANNEALING: u32 = 3;
+pub const FLAG_NEAREST_NEIGHBOUR: u32 = 1 << CONSTRUCTION_SHIFT;
+pub const FLAG_SAVINGS: u32 = 2 << CONSTRUCTION_SHIFT;
 
 /// Reserve `bytes` of linear memory and return a pointer to it.
 ///
@@ -212,16 +228,27 @@ pub unsafe extern "C" fn engine_create(
         pins,
     );
 
-    let strategy = if flags & FLAG_HYBRID != 0 {
-        Strategy::IlsThenGls
-    } else if flags & FLAG_GLS != 0 {
-        Strategy::Gls
-    } else {
-        Strategy::Ils
+    // An unknown value degrades to the default rather than rejecting the
+    // request: a caller from a newer bundle than the artefact should get a
+    // slightly different search, not a failed solve.
+    let strategy = match flags & STRATEGY_MASK {
+        1 => Strategy::Gls,
+        2 => Strategy::IlsThenGls,
+        3 => Strategy::SimulatedAnnealing,
+        _ => Strategy::Ils,
+    };
+    let construction = match (flags >> CONSTRUCTION_SHIFT) & CONSTRUCTION_MASK {
+        1 => Construction::NearestNeighbour,
+        2 => Construction::Savings,
+        _ => Construction::CheapestInsertion,
     };
 
-    Box::into_raw(Box::new(Driver::with_strategy(
-        problem, seed, seed_order, strategy,
+    Box::into_raw(Box::new(Driver::configured(
+        problem,
+        seed,
+        seed_order,
+        strategy,
+        construction,
     )))
 }
 

@@ -161,6 +161,18 @@ const ENGINES: Record<string, () => Promise<SolverEngine>> = {
   wasm: async () => wasmSingle,
   'wasm-gls': async () => wasmGls,
   'wasm-hybrid': async () => wasmHybrid,
+  /*
+    M11's additions, exposed so the harness can settle whether they earn their
+    place rather than the question being decided by whoever wrote them.
+
+    `wasm-anneal` is the SIMULATED_ANNEALING metaheuristic OR-Tools lists and
+    M10 did not have; `wasm-nn` and `wasm-savings` are PATH_CHEAPEST_ARC and
+    Clarke-Wright SAVINGS, the two first-solution strategies whose absence was
+    the real gap once the local search existed.
+  */
+  'wasm-anneal': async () => wasmAnneal,
+  'wasm-nn': async () => wasmNearest,
+  'wasm-savings': async () => wasmSavings,
   'wasm-workers': async () => {
     if (!wasmPool) wasmPool = new SolverWorkerPool(workerCount(navigator.hardwareConcurrency ?? null), 'wasm')
     return wasmPool
@@ -183,6 +195,9 @@ let wasmPool: SolverWorkerPool | null = null
 const wasmSingle = new WasmEngine('wasm')
 const wasmGls = new WasmEngine('wasm-gls', { strategy: 'gls' })
 const wasmHybrid = new WasmEngine('wasm-hybrid', { strategy: 'hybrid' })
+const wasmAnneal = new WasmEngine('wasm-anneal', { strategy: 'annealing' })
+const wasmNearest = new WasmEngine('wasm-nn', { construction: 'nearest' })
+const wasmSavings = new WasmEngine('wasm-savings', { construction: 'savings' })
 
 function buildRequest(
   matrix: number[][],

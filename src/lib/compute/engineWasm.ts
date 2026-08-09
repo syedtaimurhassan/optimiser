@@ -76,16 +76,28 @@ const yieldToEventLoop: () => Promise<void> =
     : () => new Promise((resolve) => setTimeout(resolve, 0))
 
 /**
- * `flags` bit 0 in `engine_create` — guided local search instead of iterated
- * local search. Kept next to the option that sets it so the two cannot drift.
+ * `flags` in `engine_create`, as two small fields. Mirrors `ffi.rs` exactly —
+ * kept next to the options that set them so the two cannot drift.
+ *
+ *   bits 0-2   which search
+ *   bits 3-5   which first route
  */
-const FLAG_GLS = 1
-const FLAG_HYBRID = 2
+const CONSTRUCTION_SHIFT = 3
 
-const STRATEGY_FLAGS: Record<'ils' | 'gls' | 'hybrid', number> = {
+export type SearchStrategy = 'ils' | 'gls' | 'hybrid' | 'annealing'
+export type Construction = 'insertion' | 'nearest' | 'savings'
+
+const STRATEGY_FLAGS: Record<SearchStrategy, number> = {
   ils: 0,
-  gls: FLAG_GLS,
-  hybrid: FLAG_HYBRID,
+  gls: 1,
+  hybrid: 2,
+  annealing: 3,
+}
+
+const CONSTRUCTION_FLAGS: Record<Construction, number> = {
+  insertion: 0 << CONSTRUCTION_SHIFT,
+  nearest: 1 << CONSTRUCTION_SHIFT,
+  savings: 2 << CONSTRUCTION_SHIFT,
 }
 
 export interface WasmEngineOptions {
@@ -100,7 +112,17 @@ export interface WasmEngineOptions {
    * the benchmark can settle which is better rather than the question being
    * decided by whichever was written first.
    */
-  strategy?: 'ils' | 'gls' | 'hybrid'
+  strategy?: SearchStrategy
+  /**
+   * Which first route the search starts from.
+   *
+   * `insertion` is M10's and the default. `nearest` is OR-Tools'
+   * PATH_CHEAPEST_ARC and `savings` is Clarke-Wright — both are here because
+   * different constructions fail in different SHAPES, and a descent cannot
+   * always walk out of the shape it started in. Spread across a worker pool
+   * they cover each other for nothing.
+   */
+  construction?: Construction
   /**
    * Supply the artefact directly instead of fetching it.
    *
@@ -200,7 +222,9 @@ export class WasmEngine implements SolverEngine {
       end: end ?? -1,
       seed: (request.seed ?? 0x9e3779b9) >>> 0,
       seedOrder: request.seedOrder,
-      flags: STRATEGY_FLAGS[this.options.strategy ?? 'ils'],
+      flags:
+        STRATEGY_FLAGS[this.options.strategy ?? 'ils'] |
+        CONSTRUCTION_FLAGS[this.options.construction ?? 'insertion'],
       // Seconds, always, even when the objective is measured in metres — and a
       // separate buffer even when it holds the same numbers as `cost`, because
       // guided local search writes its arc penalties into `cost` in place.
