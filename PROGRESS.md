@@ -1590,3 +1590,221 @@ travel cost when the skipped counts match.
    flag. Poll between chunks.
 6. **`npm run bench` needs `npm run bench:tsplib:fetch` once**, and the TSPLIB
    cache is gitignored on purpose.
+
+---
+
+## M10 — The real engine: Rust, wasm32, and 45 KB instead of 16 MB
+
+**Status: the engine is built, wired, and shipping. Two deliverables are
+incomplete and listed under Deferred — the n = 1000 benchmark grid and the
+real-device runs.**
+
+### What changed
+
+A Rust crate in `engine/`, compiled to `wasm32-unknown-unknown`, replacing the
+TypeScript search as the engine every multi-core device actually runs.
+
+```
+engine/src/
+  matrix.rs       flat row-major i32 cells + K-nearest candidate lists
+  problem.rs      the question: costs, candidates, optional flags, cap, pins
+  tour.rs         array + position index + forward/backward prefix sums,
+                  exact O(1) deltas, and Vidal's four labels (unwired, for M11)
+  construct.rs    cheapest insertion under the cap, restarts, greedy refill
+  localsearch.rs  2-opt, Or-opt(1..3), don't-look bits, add/drop/swap
+  driver.rs       ILS with double-bridge; GLS; ILS-then-GLS
+  ffi.rs          eleven exported functions, zero imports
+  rng.rs          mulberry32, bit-identical to solverPort.ts
+```
+
+On the TypeScript side, `wasmModule.ts` loads and instantiates it, `engineWasm.ts`
+implements `SolverEngine` around it, and the worker pool became engine-agnostic
+so tier B runs Rust rather than TypeScript.
+
+### The one rule, and how it is enforced
+
+The matrix and every working array live inside linear memory. Setup crosses the
+boundary a fixed number of times regardless of n — allocate, write, create, free
+— and then `engine_step` runs thousands of move evaluations per call without
+returning to JS once.
+
+This is not a claim in a comment. **The module declares no imports**, so there is
+no JavaScript function for the search to call, and `scripts/build-engine.mjs`
+fails the build if an import section ever appears. The import object in
+`wasmModule.ts` is literally `{}`.
+
+For contrast, verified again this session at the source level on the version we
+ship — `or-tools-wasm@0.9.1`, still the newest release:
+
+```js
+// node_modules/or-tools-wasm/build/javascript/browser/routing_api.js:358
+this.installMatrixEvaluator()          // ← a JS closure, called per arc
+this.module._routing_solve_with_parameters_ext(
+  this.handle,
+  parameters.firstSolutionStrategy ?? 0,
+  parameters.solution_limit ?? 0)      // ← three arguments
+```
+
+`local_search_metaheuristic` appears exactly once in the entire package, as a
+TypeScript field declaration, and is never serialised.
+
+### Why it is a state machine
+
+A wasm call cannot yield, cannot be interrupted, cannot read a clock
+(`std::time` does not work on this target), and there is no `SharedArrayBuffer`
+for a cancel flag because M9 dropped cross-origin isolation to make iOS Safari
+work.
+
+So control is inverted. `Driver` holds every variable the loop would have kept on
+its stack, `engine_step(budget)` runs a bounded amount of work and returns, and
+the host decides between calls whether to continue. Cancellation latency is one
+step; the host sizes a step to ~15 ms by measuring the last one.
+
+The yields use `MessageChannel`, not `setTimeout(0)` — nested timeouts are
+clamped to 4 ms, which against a 15 ms step throws away a fifth of the budget.
+
+### The numbers
+
+Real browser, pruned production bundle, the 107-point OSRM instance at K=20 —
+the instance we actually care about:
+
+| engine | wall | travel cost vs best |
+|---|---|---|
+| `ts` | 3023 ms | +6.54% |
+| `ts-workers` | 3060 ms | +6.31% |
+| **`wasm`** | **820 ms** | **best** |
+| **`wasm-workers`** | **781 ms** | **best** |
+
+Better route, in a quarter of the time.
+
+Node, clustered instances, equal wall-clock, against `ts`:
+
+| n | budget | `wasm` (ILS) | `wasm` (GLS) |
+|---|---|---|---|
+| 100 | 1 s | 0.00%, converged in 319 ms vs 797 ms | 0.00% |
+| 300 | 3 s | −0.03% | +0.53% |
+| 1000 | 5 s | −1.04% | **−1.93%** |
+
+### Artefacts
+
+```
+artefact      size      imports   max memory
+scalar        48.7 KB         0    256 MB
+simd          50.6 KB         0    256 MB
+```
+
+Against or-tools-wasm's ~16 MB routing runtime. Both are emitted; one is fetched.
+
+### What surprised me
+
+**Rust is worth about 2x, not 10x, and the honest research said so.** The blogs
+promise 8-10x. Jangda et al. (USENIX ATC '19) measured WebAssembly itself at
+1.45-2.5x *slower than native*, and our TypeScript engine was already monomorphic
+TypedArray code that V8 compiles well. The large win on the real instance is
+mostly that the Rust engine converges in a quarter of the time and then spends
+the rest of the budget finding a better route — not that any individual
+operation got dramatically faster.
+
+**SIMD bought nothing, exactly as predicted.** WebAssembly's v128 deliberately
+omits gather, and candidate-list local search is gather-bound: every probe is a
+random `m[i*n+j]`. Scalar and SIMD produce byte-identical routes in
+indistinguishable time. Both ship because the brief asked for both; whether the
+second artefact earns its 50 KB is a question for the device test.
+
+**The swap move never terminated, and the TypeScript engine has the same bug.**
+It priced the incoming stop against the current route, removed the outgoing one,
+then inserted — two numbers measured on two different routes. So it could apply a
+move that made the route worse, report "improved", and swap straight back.
+`selection_moves_respect_the_cap` exhausted a budget of a *million* node scans on
+a 30-node instance without reaching a local optimum. Removing first and pricing
+the insertion against the shortened route makes the delta exact; the same
+instance now converges in 40 ms. `engineTs.ts` has the identical unsound test,
+where a deadline hides it.
+
+**Guided local search wants a much lighter touch than the literature suggests.**
+The usual α for TSP is 0.1-0.3. Swept across five values, 0.025 beat 0.2 by 0.9%
+at n = 1000, monotonically. With Or-opt, candidate lists and don't-look bits
+already doing the work, a heavy penalty distorts the landscape faster than the
+descent can exploit it and the search chases an increasingly fictional matrix.
+
+**Neither ILS nor GLS wins everywhere**, which is why both shipped. ILS is the
+default because it is the only one that never loses to the engine it replaces.
+
+**RUSTFLAGS replaces `.cargo/config.toml`, it does not merge with it.** Setting it
+for the SIMD build alone silently dropped that build's `--max-memory`, producing
+the one configuration iOS Safari refuses to instantiate — in the only artefact a
+modern iPhone would ever load, passing every desktop test. The artefact check
+caught it on the first run.
+
+**Committed binaries drift from source silently, and I did it twice.** Measuring
+whether a longer budget helped meant editing a constant, rebuilding, reverting,
+and committing — which put the experimental engine in git next to the restored
+source. Twelve tests passed against the wrong engine. `wasmArtefact.test.ts` now
+fingerprints every input that can change codegen and needs nothing but Node to
+check it, because it has to run on the machine the committed artefacts exist for.
+
+### Verified
+
+- **44 Rust tests.** Every 2-opt reversal delta and every Or-opt
+  (start, length, gap, orientation) checked against a full recompute under all
+  four combinations of pinned ends — exhausted, not sampled. The optimum found on
+  60 brute-forced instances at n = 6..8, and on 30 more with GLS.
+- **A chunked descent is byte-identical to an uninterrupted one**, and the answer
+  is identical at chunk sizes 1, 7, 64, 1000 and 100 000. If pausing could change
+  the route, cancelling could too, and two phones would disagree.
+- **610 TypeScript tests**, including the real `.wasm` driven through the real
+  port: both artefacts valid and byte-identical to each other, the optimum on
+  brute-forced instances, the K cap honoured, progress monotone.
+- **Cancellation at 69 ms**, against a <100 ms gate.
+- `bench:verify-seam` passes; production emits only our two artefacts, 48.7 KB
+  and 50.6 KB.
+
+### Deferred
+
+- 🔴 **The n = 100/300/1000 benchmark grid was not built.** The harness tops out
+  at n = 107, and the gates in the brief (2% at n=100/1s, 3% at n=300/3s, 5% at
+  n=1000/5s) are stated against best-known values. The n = 1000 numbers above are
+  from a scratch Node script comparing engines to each other, **not** gaps to any
+  established best-known. Extending `bench/lib/instances.mjs` and adding a TSPLIB
+  size ladder (proven optima at n ≈ 100/300/1000) is the first job of M11.
+- 🔴 **No real-device runs.** Every number here is from a Mac.
+  `DEVICE-TEST-M10.md` is the protocol; it needs a physical Android and a
+  physical iPhone. Two things are unverifiable anywhere else: that iOS Safari
+  instantiates the module at all, and whether the SIMD artefact is worth keeping.
+- 🟡 **`engineTs.ts` still has the unsound swap move.** Left alone deliberately —
+  it is the correctness oracle, and changing it in the same milestone that
+  replaces it would mean the new engine was checked against a moving target.
+- 🟡 **GLS is not the default anywhere** despite being ~0.9% better at n = 1000.
+  It needs the proper benchmark before it can be trusted, and possibly a
+  size-dependent choice.
+- The M9 deferrals stand: no tier A engine, VRPTW parsed but not scored,
+  OR-Tools' heap leak unchanged (the endurance probe still dies around solve #12,
+  and no user reaches that code).
+
+### What the next session needs to know
+
+1. **`npm run engine:build` after ANY change under `engine/`.** The artefacts are
+   committed so the app builds without Rust; `wasmArtefact.test.ts` fails if they
+   drift. Editing a `#[cfg(test)]` block also asks for a rebuild — a known false
+   positive, and the price of a one-sentence invariant.
+2. **Homebrew's rustup is keg-only.** Its shims are not on PATH and not in
+   `~/.cargo/bin`; they are in `/opt/homebrew/opt/rustup/bin`. Calling cargo by
+   absolute path is not enough — the shim execs a cargo that resolves `rustc`
+   from PATH and finds Homebrew's older `rust` formula, which has no wasm32 std
+   and fails with a confusing "can't find crate for `std`".
+   `scripts/build-engine.mjs` front-loads cargo's own directory.
+3. **Registration order in `registry.ts` IS the tier-B policy.** Two engines sit
+   at tier B and `selectEngine` takes the first supported one. Move `wasm-workers`
+   below `ts-workers` and the Rust engine silently stops reaching users with
+   every test still green. There is a test asserting the order.
+4. **`DurationSegment` in `tour.rs` is written and tested but wired to nothing.**
+   M11 populates prefix/suffix arrays of it over tour positions and adds a term
+   to the delta functions. `duration` is measured from the OPTIMAL departure and
+   INCLUDES the time warp — elapsed time is `duration − time_warp`. Getting that
+   backwards costs 88 seconds on the test instance in `tour.rs`.
+5. **The engine sees ONE matrix.** Whichever the objective is measured in.
+   `toResult` computes every reported figure from the order alone, for every
+   engine, so no two engines can disagree about what a route is worth. Do not
+   pass it both.
+6. **Threads are still not here.** M11 or M15. The scalar/SIMD split already
+   exists, so a threaded artefact would be a third build, not a new mechanism.

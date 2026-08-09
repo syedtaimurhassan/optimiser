@@ -1,0 +1,283 @@
+{
+  "meta": {
+    "engine": "ts,ts-workers,wasm,wasm-workers",
+    "recordedAt": "2026-08-09T11:53:33.552Z",
+    "node": "v24.7.0",
+    "platform": "darwin/arm64",
+    "playwright": "1.61.1",
+    "chromium": "149.0.7827.55",
+    "reps": 1,
+    "quick": true,
+    "dist": "dist-bench",
+    "noCoiMode": false,
+    "crossOriginIsolated": true,
+    "matrixSource": "osrm",
+    "coldWarmUpMs": 29,
+    "skipPenalty": 10000000,
+    "note": "peakJsHeapBytes samples the JS heap only and EXCLUDES WASM linear memory; uaMemoryAfterBytes (when present) includes it."
+  },
+  "coiProbe": {
+    "blockedRequests": [
+      "/optimiser/coi-serviceworker.js"
+    ],
+    "crossOriginIsolated": false,
+    "sharedArrayBufferDefined": false,
+    "sharedMemoryConstructible": {
+      "ok": true,
+      "bufferCtor": "SharedArrayBuffer",
+      "growable": true,
+      "atomicsUsable": true,
+      "postMessageToWorker": false,
+      "postMessageError": "Failed to execute 'postMessage' on 'Worker': SharedArrayBuffer transfer requires self.crossOriginIsolated."
+    },
+    "unguardedInit": {
+      "ok": false,
+      "hung": true,
+      "error": "no settle within 30000ms",
+      "ms": 30003
+    },
+    "solve": {
+      "stage": "solve",
+      "ok": false,
+      "hung": true,
+      "error": "no settle within 30000ms"
+    },
+    "consoleErrors": [
+      "Failed to load resource: the server responded with a status of 404 (Not Found)",
+      "[unhandledrejection] DataCloneError: Failed to execute 'postMessage' on 'Worker': SharedArrayBuffer transfer requires self.crossOriginIsolated.\n    at http://127.0.0.1:51089/optimiser/assets/routing_runtime_asyncify-WhvUlcLF.js:1:22233\n    at new Promise (<anonymous>)\n    at loadWasmModuleToWorker (http://127.0.0.1:51089/optimiser/assets/routing_runtime_asyncify-WhvUlcLF.js:1:20849)\n    at Array.map (<anonymous>)\n    at Object.loadWasmModuleToAllWorkers (http://127.0.0.1:51089/optimiser/assets/routing_runtime_asyncify-WhvUlcLF.js:1:22441)\n    at http://127.0.0.1:51089/optimiser/assets/routing_runtime_asyncify-WhvUlcLF.js:1:20004\n    at callRuntimeCallbacks (http://127.0.0.1:51089/optimiser/assets/routing_runtime_asyncify-WhvUlcLF.js:1:16038)\n    at preRun (http://127.0.0.1:51089/optimiser/assets/routing_runtime_asyncify-WhvUlcLF.js:1:11125)\n    at run (http://127.0.0.1:51089/optimiser/assets/routing_runtime_asyncify-WhvUlcLF.js:1:190327)\n    at cpSatModule (http://127.0.0.1:51089/optimiser/assets/routing_runtime_asyncify-WhvUlcLF.js:1:191510)",
+      "Failed to execute 'postMessage' on 'Worker': SharedArrayBuffer transfer requires self.crossOriginIsolated.",
+      "still waiting on run dependencies:",
+      "dependency: loading-workers",
+      "(end of list)",
+      "still waiting on run dependencies:",
+      "dependency: loading-workers",
+      "(end of list)",
+      "still waiting on run dependencies:",
+      "dependency: loading-workers",
+      "(end of list)",
+      "still waiting on run dependencies:",
+      "dependency: loading-workers",
+      "(end of list)",
+      "still waiting on run dependencies:",
+      "dependency: loading-workers",
+      "(end of list)"
+    ]
+  },
+  "endurance": {
+    "note": "Consecutive solves on ONE page (no reload), 3s budget, uniform n=25 k=23. Small instances are the harsh case: cheap attempts mean more model allocations per second. Failure is std::bad_alloc from unfreed native RoutingModels — or-tools-wasm skips _routing_delete_model in browser runtimes (canDeleteNativeRoutingModel() excludes them).",
+    "instance": "uniform-n25-k23-s7",
+    "budgetMs": 3000,
+    "solvesSurvived": 11,
+    "failedOn": {
+      "solve": 12,
+      "ok": false,
+      "error": "std::bad_alloc",
+      "ms": 98
+    },
+    "detail": [
+      {
+        "solve": 1,
+        "ok": true,
+        "ms": 2239
+      },
+      {
+        "solve": 2,
+        "ok": true,
+        "ms": 1362
+      },
+      {
+        "solve": 3,
+        "ok": true,
+        "ms": 1347
+      },
+      {
+        "solve": 4,
+        "ok": true,
+        "ms": 1345
+      },
+      {
+        "solve": 5,
+        "ok": true,
+        "ms": 1343
+      },
+      {
+        "solve": 6,
+        "ok": true,
+        "ms": 1350
+      },
+      {
+        "solve": 7,
+        "ok": true,
+        "ms": 1344
+      },
+      {
+        "solve": 8,
+        "ok": true,
+        "ms": 1340
+      },
+      {
+        "solve": 9,
+        "ok": true,
+        "ms": 1344
+      },
+      {
+        "solve": 10,
+        "ok": true,
+        "ms": 1348
+      },
+      {
+        "solve": 11,
+        "ok": true,
+        "ms": 1345
+      },
+      {
+        "solve": 12,
+        "ok": false,
+        "error": "std::bad_alloc",
+        "ms": 98
+      }
+    ]
+  },
+  "runs": [
+    {
+      "id": "sample-n107-k20-s1",
+      "engine": "ts",
+      "family": "sample",
+      "n": 107,
+      "k": 20,
+      "tier": "deep",
+      "budgetMs": 3000,
+      "reps": 1,
+      "medianWallMs": 3022.9,
+      "medianObjective": 850001401,
+      "medianArcs": 1401,
+      "medianSkipped": 85,
+      "bestObjective": 850001401,
+      "worstObjective": 850001401,
+      "medianVisited": 22,
+      "allValid": true,
+      "peakJsHeapBytes": 15200000,
+      "errors": [],
+      "detail": [
+        {
+          "rep": 0,
+          "wallMs": 3022.9,
+          "objective": 850001401,
+          "arcs": 1401,
+          "visitedCount": 22,
+          "skipped": 85,
+          "valid": true,
+          "problems": [],
+          "peakJsHeapBytes": 15200000,
+          "uaMemoryAfterBytes": null,
+          "progressReports": 3
+        }
+      ]
+    },
+    {
+      "id": "sample-n107-k20-s1",
+      "engine": "ts-workers",
+      "family": "sample",
+      "n": 107,
+      "k": 20,
+      "tier": "deep",
+      "budgetMs": 3000,
+      "reps": 1,
+      "medianWallMs": 3060.4,
+      "medianObjective": 850001398,
+      "medianArcs": 1398,
+      "medianSkipped": 85,
+      "bestObjective": 850001398,
+      "worstObjective": 850001398,
+      "medianVisited": 22,
+      "allValid": true,
+      "peakJsHeapBytes": 15200000,
+      "errors": [],
+      "detail": [
+        {
+          "rep": 0,
+          "wallMs": 3060.4,
+          "objective": 850001398,
+          "arcs": 1398,
+          "visitedCount": 22,
+          "skipped": 85,
+          "valid": true,
+          "problems": [],
+          "peakJsHeapBytes": 15200000,
+          "uaMemoryAfterBytes": null,
+          "progressReports": 2
+        }
+      ]
+    },
+    {
+      "id": "sample-n107-k20-s1",
+      "engine": "wasm",
+      "family": "sample",
+      "n": 107,
+      "k": 20,
+      "tier": "deep",
+      "budgetMs": 3000,
+      "reps": 1,
+      "medianWallMs": 819.9,
+      "medianObjective": 850001315,
+      "medianArcs": 1315,
+      "medianSkipped": 85,
+      "bestObjective": 850001315,
+      "worstObjective": 850001315,
+      "medianVisited": 22,
+      "allValid": true,
+      "peakJsHeapBytes": 15200000,
+      "errors": [],
+      "detail": [
+        {
+          "rep": 0,
+          "wallMs": 819.9,
+          "objective": 850001315,
+          "arcs": 1315,
+          "visitedCount": 22,
+          "skipped": 85,
+          "valid": true,
+          "problems": [],
+          "peakJsHeapBytes": 15200000,
+          "uaMemoryAfterBytes": null,
+          "progressReports": 6
+        }
+      ]
+    },
+    {
+      "id": "sample-n107-k20-s1",
+      "engine": "wasm-workers",
+      "family": "sample",
+      "n": 107,
+      "k": 20,
+      "tier": "deep",
+      "budgetMs": 3000,
+      "reps": 1,
+      "medianWallMs": 780.7,
+      "medianObjective": 850001315,
+      "medianArcs": 1315,
+      "medianSkipped": 85,
+      "bestObjective": 850001315,
+      "worstObjective": 850001315,
+      "medianVisited": 22,
+      "allValid": true,
+      "peakJsHeapBytes": 15200000,
+      "errors": [],
+      "detail": [
+        {
+          "rep": 0,
+          "wallMs": 780.7,
+          "objective": 850001315,
+          "arcs": 1315,
+          "visitedCount": 22,
+          "skipped": 85,
+          "valid": true,
+          "problems": [],
+          "peakJsHeapBytes": 15200000,
+          "uaMemoryAfterBytes": null,
+          "progressReports": 2
+        }
+      ]
+    }
+  ]
+}
