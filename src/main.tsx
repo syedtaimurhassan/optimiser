@@ -2,6 +2,7 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import './index.css'
 import App from './App.tsx'
+import { startSyncWatchers } from './store/syncStore.ts'
 
 // Benchmark seam, bench builds only. VITE_BENCH_SEAM is statically replaced at
 // build time, so a production build leaves a dead branch that is tree-shaken
@@ -22,6 +23,15 @@ window.addEventListener('error', (e) => {
 window.addEventListener('unhandledrejection', (e) => {
   console.error('[unhandledrejection]', e.reason)
 })
+
+/**
+ * Reachability and save outcomes, attached before first paint.
+ *
+ * Not inside a component: both signals are module-level and long-lived, and a
+ * subscription owned by a screen would forget the app is offline the moment
+ * that screen unmounted.
+ */
+startSyncWatchers()
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

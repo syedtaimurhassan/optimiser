@@ -15,6 +15,7 @@ import { DEFAULT_DEPART_SEC } from '../lib/compute/solverPort'
 import { addedStops, removedStopIds, stagedStops } from '../lib/staging'
 import { useRoutesStore } from '../store/routesStore'
 import { useSolverStore } from '../store/solverStore'
+import { useSyncStore } from '../store/syncStore'
 
 /**
  * The commit: a choice between two models.
@@ -185,8 +186,8 @@ export function useApplyChanges(route: Route | null) {
         matrix,
         matrixN,
         matrixKnown,
+        estimatedArcs,
         matrixWaypointIndex: _index,
-        estimatedArcs: _estimated,
         matrixRequests: _requests,
         ...planned
       } = result
@@ -212,6 +213,12 @@ export function useApplyChanges(route: Route | null) {
         cacheKey,
         toCachedMatrixFlat(matrix, matrixN, matrixKeys, route.optimizeBy, matrixKnown),
       ).catch((e: unknown) => console.warn('[routes] could not cache the cost matrix', e))
+
+      // Same note as the Calculate path: a plan built on straight lines looks
+      // identical on a map, and only one of the two is a promise.
+      useSyncStore
+        .getState()
+        .markEstimated(route.id, estimatedArcs > 0 || planned.estimated === true)
 
       applyStagedChanges({ stops, optimized })
       setMatrixCacheKey(cacheKey)

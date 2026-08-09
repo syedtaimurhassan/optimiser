@@ -6,6 +6,7 @@ import { RouteSetupSheet } from '../components/sheet/RouteSetupSheet'
 import { MapComponent } from '../components/MapComponent'
 import { CalculatingOverlay } from '../components/CalculatingOverlay'
 import { InfeasibilityBanner } from '../components/route/InfeasibilityBanner'
+import { SyncPill } from '../components/SyncPill'
 import { CalculateFab } from '../components/CalculateFab'
 import { ErrorBoundary } from '../components/ErrorBoundary'
 import { CreateRouteModal } from '../components/routes/CreateRouteModal'
@@ -130,6 +131,13 @@ export function RouteWorkScreen() {
         */}
         <div className="pointer-events-none absolute inset-x-0 top-[max(0.75rem,env(safe-area-inset-top))] z-[400]">
           <InfeasibilityBanner />
+          {/*
+            Below the infeasibility banner on purpose. "One of your windows is
+            going to be missed" is about today's work; "saved on this device"
+            is about the app. If both are up, the driver should read them in
+            that order.
+          */}
+          <SyncPill />
         </div>
       </main>
 

@@ -44,6 +44,11 @@ export interface CostGrid {
   requests: number
   /** Cells actually fetched, for the record. */
   fetchedCells: number
+  /**
+   * At least one band could not be fetched, so more of this grid is guessed
+   * than was intended. In practice: no network.
+   */
+  degraded: boolean
 }
 
 export interface BuildGridOptions {
@@ -104,6 +109,7 @@ export async function buildCostGrid(options: BuildGridOptions): Promise<CostGrid
 
   let requests = 0
   let fetchedCells = 0
+  let degraded = false
 
   const anyMissing = missing.some((row) => row.length > 0)
   if (anyMissing) {
@@ -113,12 +119,33 @@ export async function buildCostGrid(options: BuildGridOptions): Promise<CostGrid
       // A band is one request unless the provider's limits force the service to
       // split it, and only the service knows whether they did.
       let pieces = 0
-      const rows = await service.table(
-        { points, sources: band.sources, destinations: band.destinations, objective, signal },
-        (_done, total) => {
-          pieces = total
-        },
-      )
+      let rows: (number | null)[][]
+      try {
+        rows = await service.table(
+          { points, sources: band.sources, destinations: band.destinations, objective, signal },
+          (_done, total) => {
+            pieces = total
+          },
+        )
+      } catch (e) {
+        /*
+          A band we cannot fetch is a band we estimate.
+
+          This is the whole of the app's offline story for planning. Before M12
+          an unreachable matrix service failed the solve outright, so a driver
+          in a dead zone who wanted to reorder four stops got an error message
+          and nothing else. Now the arcs stay guesses, the route is marked
+          estimated, and the day carries on.
+
+          A cancelled solve is NOT that, and must not be swallowed into a worse
+          answer: the driver asked for it to stop.
+        */
+        if ((e as Error).name === 'AbortError' || (e as { kind?: string }).kind === 'aborted') throw e
+        degraded = true
+        onProgress?.(index + 1, plan.bands.length)
+        continue
+      }
+
       requests += Math.max(1, pieces)
       band.sources.forEach((source, r) => {
         band.destinations.forEach((destination, c) => {
@@ -135,7 +162,7 @@ export async function buildCostGrid(options: BuildGridOptions): Promise<CostGrid
   }
 
   const { ratio, estimatedCells } = estimateGaps(matrix, known, points, objective)
-  return { matrix, known, n, estimatedCells, ratio, requests, fetchedCells }
+  return { matrix, known, n, estimatedCells, ratio, requests, fetchedCells, degraded }
 }
 
 /**

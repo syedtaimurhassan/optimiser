@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import type { LatLng } from '../../types.ts'
 import { buildCostGrid, patchTourArcs, tourHasEstimates } from './grid.ts'
 import { getBit, makeBitset, setBit } from './sparse.ts'
-import type { MatrixBand, ProviderLimits } from './types.ts'
+import { RoutingError, type MatrixBand, type ProviderLimits } from './types.ts'
 import type { RoutingService } from './service.ts'
 
 const points = (n: number): LatLng[] =>
@@ -137,6 +137,51 @@ describe('buildCostGrid', () => {
       }
     }
     assert.equal(guesses, grid.estimatedCells)
+  })
+
+  /*
+    The whole of the app's offline story for planning. Before M12 an
+    unreachable matrix service failed the solve outright, so a driver in a dead
+    zone who wanted to reorder four stops got an error message and nothing else.
+  */
+  test('a dead network degrades the grid instead of failing the solve', async () => {
+    const service = fakeService()
+    service.table = async () => {
+      throw new RoutingError('network', 'fake', 'no route to host')
+    }
+
+    const grid = await buildCostGrid({ points: points(40), objective: 'duration', service })
+
+    assert.equal(grid.degraded, true)
+    assert.equal(grid.requests, 0)
+    assert.ok(grid.estimatedCells > 0)
+    assert.ok(grid.matrix[1 * 40 + 2] > 0, 'a plannable cost, not a hole')
+  })
+
+  test('a cancelled solve is not quietly turned into a worse answer', async () => {
+    const service = fakeService()
+    service.table = async () => {
+      throw new RoutingError('aborted', 'fake', 'Cancelled.')
+    }
+    await assert.rejects(
+      () => buildCostGrid({ points: points(40), objective: 'duration', service }),
+      /Cancelled/,
+    )
+  })
+
+  test('one dead band does not throw away the bands that worked', async () => {
+    const service = fakeService()
+    const real = service.table.bind(service)
+    let call = 0
+    service.table = async (band, onProgress) => {
+      if (call++ === 0) throw new RoutingError('network', 'fake', 'flaky')
+      return real(band, onProgress)
+    }
+
+    const grid = await buildCostGrid({ points: points(60), objective: 'duration', service })
+
+    assert.equal(grid.degraded, true)
+    assert.ok(grid.fetchedCells > 0, 'the surviving bands should still have been written')
   })
 
   test('the pinned endpoints are fetched whole', async () => {

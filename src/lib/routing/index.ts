@@ -8,6 +8,7 @@
  * Lazy, so importing a type from here does not open a connection to anything.
  */
 
+import { getReachability } from '../net/reachability.ts'
 import { createOsrmProvider } from './osrm.ts'
 import { createValhallaProvider } from './valhalla.ts'
 import { createRoutingService, type RoutingService } from './service.ts'
@@ -32,6 +33,10 @@ export function getRoutingService(): RoutingService {
     singleton = createRoutingService({
       primary: createOsrmProvider(),
       fallback: createValhallaProvider(),
+      // Every request that leaves the app comes through here, so this is the
+      // one place that can tell the difference between "the OS says there is a
+      // network" and "something answered".
+      onOutcome: (reached) => getReachability().report(reached),
     })
   }
   return singleton

@@ -1,5 +1,6 @@
 import { useRoutesStore, hydrateRoutesStore, SEARCH_TIERS_SEC } from './routesStore'
 import { useSolverStore } from './solverStore'
+import { useSyncStore } from './syncStore'
 import { useUiStore } from './uiStore'
 import type { AddressedStop, LatLng, Objective, OptimizedRoute, Favorite } from '../types'
 import { joinOrderedStopIds, matrixLayout, planSelectiveRoute } from '../lib/planRoute'
@@ -246,8 +247,8 @@ const ACTIONS = {
         matrix,
         matrixN,
         matrixKnown,
+        estimatedArcs,
         matrixWaypointIndex: _index,
-        estimatedArcs: _estimated,
         matrixRequests: _requests,
         ...planned
       } = result
@@ -278,6 +279,18 @@ const ACTIONS = {
         cacheKey,
         toCachedMatrixFlat(matrix, matrixN, matrixKeys, route.optimizeBy, matrixKnown),
       ).catch((e: unknown) => console.warn('[routes] could not cache the cost matrix', e))
+
+      /*
+        Whether this plan was built on real road costs or on straight lines.
+
+        Worth saying out loud, because the two look identical on a map and only
+        one of them is a promise. A route solved in a dead zone is still a good
+        route — the geometry is right and the order is sensible — but its times
+        are arithmetic, not measurements.
+      */
+      useSyncStore
+        .getState()
+        .markEstimated(route.id, estimatedArcs > 0 || planned.estimated === true)
 
       state.setOptimized(optimized)
       state.setMatrixCacheKey(cacheKey)

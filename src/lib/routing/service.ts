@@ -64,6 +64,15 @@ export interface RoutingServiceOptions {
   now?: () => number
   /** Test seam: pacing is real time, and a test should not spend it. */
   sleep?: (ms: number) => Promise<void>
+  /**
+   * Called with the outcome of every real request: did we reach anything.
+   *
+   * This is where the app's offline signal actually comes from. `navigator.onLine`
+   * reports whether an interface is up, which a van in a tunnel and a laptop
+   * behind a captive portal both answer yes to. Requests that time out are the
+   * truth, and this is the only layer that sees them all.
+   */
+  onOutcome?: (reached: boolean) => void
 }
 
 const DEFAULT_COOLDOWN_MS = 60_000
@@ -214,7 +223,15 @@ export function createRoutingService(options: RoutingServiceOptions): RoutingSer
       const wait = last === undefined ? 0 : provider.limits.minRequestGapMs - (now() - last)
       if (wait > 0) await sleep(wait)
       try {
-        return await work()
+        const result = await work()
+        options.onOutcome?.(true)
+        return result
+      } catch (e) {
+        // Only a NETWORK failure says anything about reachability. A 429 or a
+        // malformed response means we got there and were turned away, which is
+        // the opposite of being offline.
+        if (e instanceof RoutingError && e.kind === 'network') options.onOutcome?.(false)
+        throw e
       } finally {
         lastRequestAt.set(provider.id, now())
       }
