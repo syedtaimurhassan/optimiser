@@ -26,14 +26,40 @@ import type { Objective } from './routing/types.ts'
 /**
  * The most points one plan may cover.
  *
- * 300 was a guess against URL length. M12 measured the real ceiling — 450
- * coordinates at 5 dp is 8,179 URL characters and succeeds; 454 is 8,251 and
- * returns nginx's 414 — but a DENSE fetch cannot reach even that, because
- * every tiled request has to name all 450 coordinates plus its own source
- * list. This constant stays where it was until the sparse path, which names
- * only the coordinates a band references, is the one carrying large routes.
+ * ── What used to bind, and does not any more ──────────────────────────────
+ *
+ * 300 was a guess against URL length, and the guess was in the right place:
+ * 450 coordinates at 5 dp is 8,179 URL characters and succeeds, 454 is 8,251
+ * and returns nginx's 414. A dense fetch could not even reach 450, because
+ * every tiled request has to name all of the coordinates plus its own source
+ * list.
+ *
+ * Three things removed that ceiling. Bands name only the coordinates they
+ * reference, so a request is sized by the band and not by the route. The
+ * covering makes the number of requests linear in n rather than quadratic —
+ * 18 requests at a thousand stops against a dense fetch's 100. And route
+ * drawing chunks, so the last step of the pipeline no longer 414s either.
+ *
+ * ── What binds now: memory, not the API ───────────────────────────────────
+ *
+ * The engine takes a dense grid and every worker gets its own copy of it (see
+ * `transferables` in engineWorkers.ts — transferring neuters the buffer, so N
+ * workers need N copies). On a distance objective there are two grids. So the
+ * peak is roughly `n² × 4 bytes × 2 × workers`:
+ *
+ *     600 stops    2.9 MB × 4 workers ≈  12 MB
+ *   1,000 stops    8.0 MB × 4 workers ≈  32 MB
+ *   1,500 stops   18.0 MB × 4 workers ≈  72 MB
+ *
+ * A thousand is where that is still defensible on a phone, and it happens to
+ * be about where the network cost lands too: ~18 matrix requests at 1.1 s of
+ * pacing plus three route chunks, so half a minute for a cold thousand-stop
+ * route and nothing at all for a warm one.
+ *
+ * Above this the honest answer is not a bigger number — it is a sparse grid in
+ * the engine, which is a milestone of its own.
  */
-export const MAX_TABLE_POINTS = 300
+export const MAX_TABLE_POINTS = 1_000
 
 const indices = (n: number) => Array.from({ length: n }, (_, i) => i)
 

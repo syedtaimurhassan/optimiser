@@ -31,12 +31,12 @@ describe('toCachedMatrix', () => {
     const cached = toCachedMatrix(grid, [START_KEY, 'a', END_KEY], 'duration')
     assert.equal(cached.n, 3)
     assert.deepEqual(cached.keys, [START_KEY, 'a', END_KEY])
-    assert.deepEqual(cached.costs, [0, 1, 2, 10, 0, 12, 20, 21, 0])
+    assert.deepEqual(Array.from(cached.costs), [0, 1, 2, 10, 0, 12, 20, 21, 0])
   })
 
   test('a short row is padded rather than left undefined', () => {
     const cached = toCachedMatrix([[0, 1], [2]], ['a', 'b'], 'distance')
-    assert.deepEqual(cached.costs, [0, 1, 2, 0])
+    assert.deepEqual(Array.from(cached.costs), [0, 1, 2, 0])
   })
 })
 
@@ -112,7 +112,7 @@ describe('toCachedMatrixFlat', () => {
   test('takes the flat grid the compute path produces', () => {
     const flat = Int32Array.from([0, 1, 2, 10, 0, 12, 20, 21, 0])
     const cached = toCachedMatrixFlat(flat, 3, ['a', 'b', 'c'], 'duration')
-    assert.deepEqual(cached.costs, [0, 1, 2, 10, 0, 12, 20, 21, 0])
+    assert.deepEqual(Array.from(cached.costs), [0, 1, 2, 10, 0, 12, 20, 21, 0])
     assert.equal(cached.n, 3)
     assert.deepEqual(cached.keys, ['a', 'b', 'c'])
   })
@@ -120,8 +120,8 @@ describe('toCachedMatrixFlat', () => {
   test('agrees cell for cell with the jagged builder', () => {
     const flat = Int32Array.from(grid.flat())
     assert.deepEqual(
-      toCachedMatrixFlat(flat, 3, ['a', 'b', 'c'], 'duration').costs,
-      toCachedMatrix(grid, ['a', 'b', 'c'], 'duration').costs,
+      Array.from(toCachedMatrixFlat(flat, 3, ['a', 'b', 'c'], 'duration').costs),
+      Array.from(toCachedMatrix(grid, ['a', 'b', 'c'], 'duration').costs),
     )
   })
 
@@ -133,8 +133,19 @@ describe('toCachedMatrixFlat', () => {
     assert.throws(() => toCachedMatrixFlat(flat, 4, ['a', 'b', 'c', 'd'], 'duration'), /holds 9 cells/)
   })
 
-  test('stores plain numbers, so a row written before M9 is the same shape', () => {
-    const cached = toCachedMatrixFlat(new Int32Array(4), 2, ['a', 'b'], 'distance')
-    assert.ok(Array.isArray(cached.costs))
+  /*
+    M9 stored plain numbers so every row in the store had one shape. M12 stores
+    the typed array instead, because at the raised stop cap a million doubles is
+    8 MB to hold and 8 MB again to clone in and out of IndexedDB. `loadMatrix`
+    reads both shapes — it always had to, since the plain-array rows are still
+    out there.
+  */
+  test('stores the typed array, and copies it rather than aliasing the caller', () => {
+    const source = new Int32Array([1, 2, 3, 4])
+    const cached = toCachedMatrixFlat(source, 2, ['a', 'b'], 'distance')
+    assert.ok(cached.costs instanceof Int32Array)
+
+    source[0] = 999
+    assert.equal(cached.costs[0], 1, 'the cache entry followed the caller’s grid')
   })
 })

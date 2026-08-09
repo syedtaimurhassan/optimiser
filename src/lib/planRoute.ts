@@ -1,6 +1,6 @@
 import type { LineString } from 'geojson'
-import type { LatLng, OptimizedRoute, OrderConstraint } from '../types'
-import { fetchRouteGeometry, type Objective } from './routingService'
+import type { LatLng, OptimizedRoute, OrderConstraint } from '../types.ts'
+import { MAX_TABLE_POINTS, fetchRouteGeometry, type Objective } from './routingService.ts'
 import {
   buildCostGrid,
   patchTourArcs,
@@ -20,7 +20,7 @@ import {
   type SolverEngine,
 } from './compute/solverPort.ts'
 import { DEFAULT_SERVICE_SEC } from './stopSettings.ts'
-import { haversine } from './optimize'
+import { haversine } from './optimize.ts'
 
 /** Human-readable status of the current pipeline stage, for UI feedback. */
 export type PlanStatus = (message: string) => void
@@ -335,6 +335,18 @@ export async function planSelectiveRoute(input: PlanInput): Promise<PlannedRoute
   // the caller can name the matrix's rows without this module seeing an id.
   const { points, matrixWaypointIndex, candidateIndices } = matrixLayout(input)
   const candidates = candidateIndices.map((i) => waypoints[i])
+  /*
+    The cap now lives here rather than in the network adapter, because the
+    network is no longer what it protects: a cached route makes no requests at
+    all and would sail past a limit expressed in requests. What it protects is
+    memory — see MAX_TABLE_POINTS — so it belongs where the grid is sized.
+  */
+  if (points.length > MAX_TABLE_POINTS) {
+    throw new Error(
+      `That is ${points.length} stops. This app plans up to ${MAX_TABLE_POINTS} in one route — ` +
+        'split it into two and plan them separately.',
+    )
+  }
   if (points.length < 2) {
     throw new Error('Add at least two points (upload a file, or set start/end).')
   }
