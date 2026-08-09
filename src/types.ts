@@ -247,6 +247,19 @@ export interface Route {
   breaks: RouteBreak[]
 
   optimizeBy: Objective
+  /**
+   * When the driver leaves, seconds from local midnight.
+   *
+   * Time windows are absolute times of day, so they mean nothing without one.
+   * Undefined on every route created before M11 and read through
+   * `DEFAULT_DEPART_SEC` (08:00), which is why there is no migration: the
+   * default IS the old behaviour, since the old behaviour had no windows.
+   *
+   * Deliberately not "whenever you tapped Calculate". A route solved at 08:00
+   * and re-solved at 14:00 must produce the same plan — one whose shape depends
+   * on when you asked is not a plan.
+   */
+  startSec?: number
   /** Search-effort ceiling in SECONDS (1 / 3 / 5). Stored in seconds, not ms, per the model. */
   searchTierSec: number
   /** Max stops to visit, or null for "all". */
@@ -311,6 +324,27 @@ export interface OptimizedRoute {
   candidatesTotal: number
   /** True when distance/duration are straight-line estimates (no road router). */
   estimated?: boolean
+
+  /**
+   * False when the plan misses at least one time window.
+   *
+   * Undefined on any route solved before M11, which is why every reader treats
+   * undefined as "nothing to report" rather than as false — an old route did not
+   * fail its windows, it was never asked about them.
+   */
+  feasible?: boolean
+  /** Total lateness in seconds across the whole route. */
+  timeWarpSec?: number
+  /**
+   * How late each entry of `orderedStopIds` is against its own closing time.
+   *
+   * Per stop rather than a single total, because "this route is 38 minutes late"
+   * is not something a driver can act on and "D7 closes at 14:00, you arrive
+   * 14:38" is.
+   */
+  lateBySec?: number[]
+  /** Rest breaks, and where they landed. Seconds from route start. */
+  breaks?: { afterIndex: number; durationSec: number; startSec: number }[]
 }
 
 // ──────────────────────────────────────────────────────────── favorites

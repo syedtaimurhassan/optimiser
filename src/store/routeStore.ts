@@ -3,6 +3,7 @@ import { useSolverStore } from './solverStore'
 import { useUiStore } from './uiStore'
 import type { AddressedStop, LatLng, Objective, OptimizedRoute, Favorite } from '../types'
 import { joinOrderedStopIds, planSelectiveRoute } from '../lib/planRoute'
+import { DEFAULT_DEPART_SEC } from '../lib/compute/solverPort'
 import { warmUpSolver } from '../lib/solver'
 import { activeSelection } from '../lib/compute/active'
 import { describeSelection } from '../lib/compute/registry'
@@ -160,6 +161,23 @@ const ACTIONS = {
         targetK: route.targetK,
         objective: route.optimizeBy,
         timeBudgetMs: route.searchTierSec * 1000,
+        // Everything the edit form can express, as a parallel array. The planner
+        // never learns what a stop is; it is handed positions.
+        stopConstraints: pending.map((stop) => ({
+          serviceTimeSec: serviceSecFor(stop),
+          twOpenSec: stop.twOpenSec,
+          twCloseSec: stop.twCloseSec,
+          order: stop.order,
+        })),
+        // A break already taken is not one to plan for.
+        breaks: route.breaks
+          .filter((rest) => !rest.taken)
+          .map((rest) => ({
+            earliestSec: rest.earliestSec,
+            latestSec: rest.latestSec,
+            durationSec: rest.durationSec,
+          })),
+        departAtSec: route.startSec ?? DEFAULT_DEPART_SEC,
         onStatus: (msg) => solver.setStatus(msg),
         signal: controller.signal,
         // The search reports its own progress now, so "Optimizing route…" can
@@ -194,7 +212,11 @@ const ACTIONS = {
       const optimized: OptimizedRoute = {
         ...planned,
         orderedStopIds,
-        arrivalSec: cumulativeArrivals({ legSeconds: result.legSeconds, serviceSeconds }),
+        arrivalSec: cumulativeArrivals({
+          legSeconds: result.legSeconds,
+          serviceSeconds,
+          breaks: result.breaks,
+        }),
       }
 
       /*

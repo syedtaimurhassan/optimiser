@@ -1,5 +1,5 @@
 import type { LineString } from 'geojson'
-import type { LatLng, OptimizedRoute } from '../types'
+import type { LatLng, OptimizedRoute, OrderConstraint } from '../types'
 import {
   fetchCostMatrix,
   fetchRouteGeometry,
@@ -8,6 +8,8 @@ import {
 import { activeSelection } from './compute/active.ts'
 import { hilbertOrder } from './compute/hilbert.ts'
 import {
+  DEFAULT_DEPART_SEC,
+  ORDER_NAMES,
   SKIP_PENALTY,
   makeConstraints,
   toSolveMatrix,
@@ -15,6 +17,7 @@ import {
   type SolveProgress,
   type SolverEngine,
 } from './compute/solverPort.ts'
+import { DEFAULT_SERVICE_SEC } from './stopSettings.ts'
 import { haversine } from './optimize'
 
 /** Human-readable status of the current pipeline stage, for UI feedback. */
@@ -47,6 +50,48 @@ export interface PlanInput {
   onProgress?: (progress: SolveProgress) => void
   /** Cancels the solve. The returned promise rejects with an `AbortError`. */
   signal?: AbortSignal
+  /**
+   * Per-waypoint constraints, positionally aligned with `waypoints`.
+   *
+   * A PARALLEL ARRAY rather than fields on the waypoints, because this module's
+   * contract is that it never learns what a stop is — it is handed coordinates
+   * and hands back an order. Only the caller knows that entry 7 is a delivery to
+   * a shop that closes at two.
+   */
+  stopConstraints?: PlanStopConstraint[]
+  /** Rest breaks to fit into the day. See `augmentWithBreaks`. */
+  breaks?: PlanBreak[]
+  /** When the driver leaves, seconds from local midnight. */
+  departAtSec?: number
+}
+
+/** What the caller knows about one waypoint that the geometry does not. */
+export interface PlanStopConstraint {
+  serviceTimeSec?: number
+  twOpenSec?: number
+  twCloseSec?: number
+  order?: OrderConstraint
+}
+
+/**
+ * A rest break: a duration to be taken somewhere inside a window.
+ *
+ * Deliberately not a fixed time. A break is "45 minutes between 11:30 and
+ * 14:00"; pinning it to a clock time would make it a stop.
+ */
+export interface PlanBreak {
+  earliestSec: number
+  latestSec: number
+  durationSec: number
+}
+
+/** Where a break landed in the solved sequence. */
+export interface PlannedBreak {
+  /** Index in `orderedWaypoints` the break follows. -1 means before the first. */
+  afterIndex: number
+  durationSec: number
+  /** When it starts, seconds from route start. */
+  startSec: number
 }
 
 const sameCoord = (a: LatLng, b: LatLng) => a.lat === b.lat && a.lng === b.lng
@@ -116,6 +161,57 @@ export type PlannedRoute = Omit<OptimizedRoute, 'orderedStopIds' | 'arrivalSec'>
   matrixN: number
   /** Per matrix index: which `waypoints` entry it is, or null for an endpoint. */
   matrixWaypointIndex: (number | null)[]
+  /** True when every time window along the solved order is met. */
+  feasible: boolean
+  /** Total lateness in seconds. Zero when `feasible`. */
+  timeWarpSec: number
+  /**
+   * How late each entry of `orderedWaypoints` is against its own closing time.
+   * Zero where the window is met, and zero everywhere when there are none.
+   */
+  lateBySec: number[]
+  /** Where the breaks landed. Empty when none were asked for. */
+  breaks: PlannedBreak[]
+}
+
+/**
+ * A break, as a node the solver already knows how to handle.
+ *
+ * ── Why this is a matrix transformation and not an engine feature ─────────
+ *
+ * A rest break is a thing that takes 45 minutes, must happen inside a window,
+ * and can be taken anywhere. That is EXACTLY a mandatory stop with a service
+ * time, a time window, and zero travel cost to and from everywhere else. So the
+ * matrix grows one row and one column of zeros per break and the engine never
+ * learns what a break is — no new move, no special case in the local search, no
+ * second way for the schedule to be wrong.
+ *
+ * Three consequences worth stating:
+ *
+ *   - The arc objective is indifferent to where a break goes, because all its
+ *     arcs are free. Only the windows position it, which is correct: a break
+ *     costs time, not distance.
+ *   - Skipping a break is not a solver decision. The caller either includes the
+ *     node or does not, and every downstream arrival shifts accordingly because
+ *     arrivals are recomputed from the order.
+ *   - A break is every node's nearest neighbour, since it is zero away from all
+ *     of them, so it occupies one of the ten candidate-list slots for every
+ *     stop. Measurable in principle; with one or two breaks against ten slots
+ *     it has not been measurable in practice.
+ */
+export function augmentWithBreaks(
+  matrix: Int32Array,
+  n: number,
+  breaks: readonly PlanBreak[],
+): { matrix: Int32Array; n: number } {
+  if (breaks.length === 0) return { matrix, n }
+  const size = n + breaks.length
+  const grown = new Int32Array(size * size)
+  for (let i = 0; i < n; i++) {
+    grown.set(matrix.subarray(i * n, i * n + n), i * size)
+  }
+  // Every other cell is already zero, which is the whole trick.
+  return { matrix: grown, n: size }
 }
 
 /**
@@ -129,18 +225,19 @@ export type PlannedRoute = Omit<OptimizedRoute, 'orderedStopIds' | 'arrivalSec'>
  * a list-selected endpoint is de-duplicated out of the candidate set so it isn't
  * visited twice.
  */
-export async function planSelectiveRoute({
-  startLocation,
-  endLocation,
-  waypoints,
-  targetK,
-  objective,
-  timeBudgetMs,
-  onStatus,
-  engine,
-  onProgress,
-  signal,
-}: PlanInput): Promise<PlannedRoute> {
+export async function planSelectiveRoute(input: PlanInput): Promise<PlannedRoute> {
+  const {
+    startLocation,
+    endLocation,
+    waypoints,
+    targetK,
+    objective,
+    timeBudgetMs,
+    onStatus,
+    engine,
+    onProgress,
+    signal,
+  } = input
   // Candidates = uploaded stops, minus any that coincide with a chosen
   // endpoint. Their positions in the caller's array are carried alongside, so
   // the caller can name the matrix's rows without this module seeing an id.
@@ -205,15 +302,65 @@ export async function planSelectiveRoute({
     alternative is passing metres in a field named `durations`, which would be
     a lie that M11's time windows would then act on.
   */
-  const solveMatrix: SolveMatrix =
-    objective === 'distance'
-      ? { n, durations: Int32Array.from(matrix, (metres) => Math.round(metres / 8)), distances: matrix }
-      : { n, durations: matrix }
+  /*
+    Breaks become extra nodes, so everything below works in the AUGMENTED index
+    space while `matrix`/`matrixWaypointIndex` — which are handed back for
+    caching — stay in the original one. Mixing the two is the obvious way to
+    cache a grid whose last two columns are fiction.
+  */
+  const breaks = input.breaks ?? []
+  const augmented = augmentWithBreaks(matrix, n, breaks)
+  const total = augmented.n
+  const breakNodeAt = (b: number) => n + b
 
-  const constraints = makeConstraints(n)
+  const solveMatrixAugmented: SolveMatrix =
+    objective === 'distance'
+      ? {
+          n: total,
+          durations: Int32Array.from(augmented.matrix, (metres) => Math.round(metres / 8)),
+          distances: augmented.matrix,
+        }
+      : { n: total, durations: augmented.matrix }
+
+  const constraints = makeConstraints(total)
   // A pinned endpoint is not a stop the optimiser may decline to visit.
   if (startNode !== null) constraints.optional[startNode] = 0
   if (endNode !== null) constraints.optional[endNode] = 0
+
+  /*
+    The caller's per-stop constraints, mapped from ITS waypoint indices onto the
+    matrix's. `candidateIndices[c]` is which of the caller's waypoints matrix row
+    `c + (start?1:0)` came from, which is the only join this module is allowed to
+    make — it never sees a stop, only a position.
+  */
+  const perStop = input.stopConstraints
+  if (perStop) {
+    for (let c = 0; c < candidateIndices.length; c++) {
+      const constraint = perStop[candidateIndices[c]]
+      if (!constraint) continue
+      const node = (startNode !== null ? 1 : 0) + c
+      constraints.serviceTimeSec[node] = constraint.serviceTimeSec ?? DEFAULT_SERVICE_SEC
+      if (constraint.twOpenSec !== undefined) constraints.twOpenSec[node] = constraint.twOpenSec
+      if (constraint.twCloseSec !== undefined) constraints.twCloseSec[node] = constraint.twCloseSec
+      const pin = ORDER_NAMES.indexOf(constraint.order ?? 'auto')
+      if (pin > 0) constraints.order[node] = pin
+    }
+  }
+
+  // Each break: mandatory, unpinned, its own window, its own duration.
+  breaks.forEach((rest, b) => {
+    const node = breakNodeAt(b)
+    constraints.optional[node] = 0
+    constraints.serviceTimeSec[node] = rest.durationSec
+    constraints.twOpenSec[node] = rest.earliestSec
+    /*
+      The window closes at the LATEST START, not the latest finish, and the
+      engine schedules against arrival — so a break that may begin no later than
+      14:00 has `twCloseSec = 14:00`. Using the finish would let a 45-minute
+      break start at 14:00 and still be called on time.
+    */
+    constraints.twCloseSec[node] = rest.latestSec
+  })
 
   // 2) Optimize (order, and which candidates to visit) — in-browser, on the
   //    engine the registry picked for this device.
@@ -221,22 +368,48 @@ export async function planSelectiveRoute({
   onStatus?.('Optimizing route…')
   const solved = await solver.solve(
     {
-      matrix: solveMatrix,
+      matrix: solveMatrixAugmented,
       constraints,
       endpoints: { start: startNode, end: endNode },
       selectK: targetK == null ? null : k,
       skipPenalty: SKIP_PENALTY,
       objective,
       budgetMs: timeBudgetMs ?? 3000,
+      departAtSec: input.departAtSec ?? DEFAULT_DEPART_SEC,
       // A space-filling-curve sort is the only thing in this pipeline that
-      // knows where the stops physically are; the matrix does not.
+      // knows where the stops physically are; the matrix does not. Breaks have
+      // no position, so they are not in it — the hint is a hint.
       seedOrder: hilbertOrder(points),
     },
     onProgress,
     signal,
   )
 
-  const visited = Array.from(solved.order)
+  /*
+    Split the solved order back into real points and breaks.
+
+    A break has no coordinate, so it cannot appear in `orderedWaypoints` — but it
+    does occupy time, and dropping it silently would make every arrival after it
+    optimistic by its whole duration. So it comes back as a `PlannedBreak`
+    carrying where it sits and when it starts.
+  */
+  const solvedOrder = Array.from(solved.order)
+  const visited: number[] = []
+  const lateBySec: number[] = []
+  const plannedBreaks: PlannedBreak[] = []
+  for (let i = 0; i < solvedOrder.length; i++) {
+    const node = solvedOrder[i]
+    if (node >= n) {
+      plannedBreaks.push({
+        afterIndex: visited.length - 1,
+        durationSec: breaks[node - n].durationSec,
+        startSec: solved.arrivalSec[i],
+      })
+      continue
+    }
+    visited.push(node)
+    lateBySec.push(solved.lateBySec[i])
+  }
   const orderedWaypoints = visited.map((i) => points[i])
 
   // Real cost along the chosen route (sum of matrix cells), and the per-leg
@@ -267,6 +440,10 @@ export async function planSelectiveRoute({
       candidatesVisited: orderedWaypoints.length - fixedCount,
       candidatesTotal: candidates.length,
       estimated: false,
+      feasible: solved.feasible,
+      timeWarpSec: solved.timeWarpSec,
+      lateBySec,
+      breaks: plannedBreaks,
     }
   } catch {
     // Fallback: straight-line geometry + haversine distance. Duration is the
@@ -301,6 +478,10 @@ export async function planSelectiveRoute({
       candidatesVisited: orderedWaypoints.length - fixedCount,
       candidatesTotal: candidates.length,
       estimated: true,
+      feasible: solved.feasible,
+      timeWarpSec: solved.timeWarpSec,
+      lateBySec,
+      breaks: plannedBreaks,
     }
   }
 }

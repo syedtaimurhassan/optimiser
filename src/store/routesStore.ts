@@ -87,6 +87,8 @@ interface RoutesState {
   setEndpointMode: (mode: EndpointMode) => void
   setObjective: (objective: Objective) => void
   setSearchTierSec: (seconds: number) => void
+  /** When the driver leaves, seconds from local midnight. Anchors every window. */
+  setStartSec: (seconds: number) => void
   setTargetK: (k: number | null) => void
   setOptimized: (optimized: OptimizedRoute | null) => void
   /** Where the solve's cost matrix was cached. See lib/costMatrix.ts. */
@@ -517,6 +519,7 @@ export const useRoutesStore = create<RoutesState>()(
 
       setObjective: (objective) => set((s) => withActiveRoute(s, (r) => ({ ...r, optimizeBy: objective }))),
       setSearchTierSec: (seconds) => set((s) => withActiveRoute(s, (r) => ({ ...r, searchTierSec: seconds }))),
+      setStartSec: (seconds) => set((s) => withActiveRoute(s, (r) => ({ ...r, startSec: seconds }))),
       setTargetK: (k) => set((s) => withActiveRoute(s, (r) => ({ ...r, targetK: k }))),
       setOptimized: (optimized) =>
         set((s) => withActiveRoute(s, (r) => ({ ...r, optimized: optimized ?? undefined }))),

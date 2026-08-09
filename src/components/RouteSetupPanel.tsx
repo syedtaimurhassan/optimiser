@@ -1,6 +1,7 @@
 import { useRouteStore } from '../store/routeStore'
 import { CollapsibleSection } from './CollapsibleSection'
 import { CoordinateForm } from './CoordinateForm'
+import { DepartureTimeInput } from './DepartureTimeInput'
 import { TargetKInput } from './TargetKInput'
 import { ObjectiveToggle } from './ObjectiveToggle'
 import { RouteModeToggle } from './RouteModeToggle'
@@ -31,6 +32,7 @@ export function RouteSetupPanel() {
         </p>
       )}
 
+      <DepartureTimeInput />
       <TargetKInput />
       <ObjectiveToggle />
       <SearchQualityToggle />

@@ -43,19 +43,40 @@ export interface ArrivalsInput {
   legSeconds: readonly number[]
   /** Seconds spent AT each ordered point. Length = points. Endpoints are 0. */
   serviceSeconds: readonly number[]
+  /**
+   * Rest breaks, and which ordered point each one follows.
+   *
+   * A break has no coordinate, so it is not one of the points — but it does
+   * occupy the day, and every arrival after it is later by its whole duration.
+   * Leaving it out is the kind of error that shows up as a driver being
+   * consistently 45 minutes behind an ETA nobody can explain.
+   */
+  breaks?: readonly { afterIndex: number; durationSec: number }[]
 }
 
 /**
  * The plan, as seconds from the route's start.
  *
  * `arrival[0]` is 0 — the moment the driver leaves the start. Each subsequent
- * arrival adds the time spent at the previous point and the drive from it.
+ * arrival adds the time spent at the previous point, any break taken after it,
+ * and the drive from it.
  */
-export function cumulativeArrivals({ legSeconds, serviceSeconds }: ArrivalsInput): number[] {
+export function cumulativeArrivals({
+  legSeconds,
+  serviceSeconds,
+  breaks = [],
+}: ArrivalsInput): number[] {
   const count = legSeconds.length + 1
+  // Several breaks can follow the same point, so this accumulates rather than
+  // assigns — two half-hours after stop 4 is an hour after stop 4.
+  const restAfter = new Map<number, number>()
+  for (const rest of breaks) {
+    restAfter.set(rest.afterIndex, (restAfter.get(rest.afterIndex) ?? 0) + rest.durationSec)
+  }
   const out: number[] = Array.from({ length: count }, () => 0)
   for (let i = 1; i < count; i++) {
-    out[i] = out[i - 1] + (serviceSeconds[i - 1] ?? 0) + (legSeconds[i - 1] ?? 0)
+    out[i] =
+      out[i - 1] + (serviceSeconds[i - 1] ?? 0) + (restAfter.get(i - 1) ?? 0) + (legSeconds[i - 1] ?? 0)
   }
   return out
 }

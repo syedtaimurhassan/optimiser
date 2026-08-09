@@ -4,6 +4,7 @@ import { cumulativeArrivals, serviceSecFor } from '../lib/arrivals'
 import { END_KEY, START_KEY, matrixCacheKey, saveMatrix, toCachedMatrixFlat } from '../lib/costMatrix'
 import { fetchRouteGeometry } from '../lib/routingService'
 import { joinOrderedStopIds, planSelectiveRoute } from '../lib/planRoute'
+import { DEFAULT_DEPART_SEC } from '../lib/compute/solverPort'
 import { addedStops, removedStopIds, stagedStops } from '../lib/staging'
 import { useRoutesStore } from '../store/routesStore'
 import { useSolverStore } from '../store/solverStore'
@@ -134,6 +135,23 @@ export function useApplyChanges(route: Route | null) {
         targetK: route.targetK,
         objective: route.optimizeBy,
         timeBudgetMs: route.searchTierSec * 1000,
+        // Everything the edit form can express, as a parallel array. The planner
+        // never learns what a stop is; it is handed positions.
+        stopConstraints: pending.map((stop) => ({
+          serviceTimeSec: serviceSecFor(stop),
+          twOpenSec: stop.twOpenSec,
+          twCloseSec: stop.twCloseSec,
+          order: stop.order,
+        })),
+        // A break already taken is not one to plan for.
+        breaks: route.breaks
+          .filter((rest) => !rest.taken)
+          .map((rest) => ({
+            earliestSec: rest.earliestSec,
+            latestSec: rest.latestSec,
+            durationSec: rest.durationSec,
+          })),
+        departAtSec: route.startSec ?? DEFAULT_DEPART_SEC,
         onStatus: (message) => solver.setStatus(message),
         signal: controller.signal,
       })
@@ -160,7 +178,11 @@ export function useApplyChanges(route: Route | null) {
       const optimized: OptimizedRoute = {
         ...planned,
         orderedStopIds,
-        arrivalSec: cumulativeArrivals({ legSeconds: result.legSeconds, serviceSeconds }),
+        arrivalSec: cumulativeArrivals({
+          legSeconds: result.legSeconds,
+          serviceSeconds,
+          breaks: result.breaks,
+        }),
       }
 
       const cacheKey = matrixCacheKey(route.id, route.optimizeBy)

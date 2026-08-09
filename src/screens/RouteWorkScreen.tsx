@@ -5,6 +5,7 @@ import { RouteSheet } from '../components/sheet/RouteSheet'
 import { RouteSetupSheet } from '../components/sheet/RouteSetupSheet'
 import { MapComponent } from '../components/MapComponent'
 import { CalculatingOverlay } from '../components/CalculatingOverlay'
+import { InfeasibilityBanner } from '../components/route/InfeasibilityBanner'
 import { CalculateFab } from '../components/CalculateFab'
 import { ErrorBoundary } from '../components/ErrorBoundary'
 import { CreateRouteModal } from '../components/routes/CreateRouteModal'
@@ -122,6 +123,14 @@ export function RouteWorkScreen() {
           <MapComponent />
         </ErrorBoundary>
         <CalculatingOverlay />
+        {/*
+          Floated over the map rather than placed in the sheet, because the
+          sheet can be collapsed to a peek and this is the one thing a driver
+          must not be able to miss by dragging a handle down.
+        */}
+        <div className="pointer-events-none absolute inset-x-0 top-[max(0.75rem,env(safe-area-inset-top))] z-[400]">
+          <InfeasibilityBanner />
+        </div>
       </main>
 
       {/*
