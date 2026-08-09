@@ -1849,3 +1849,226 @@ check it, because it has to run on the machine the committed artefacts exist for
    pass it both.
 6. **Threads are still not here.** M11 or M15. The scalar/SIMD split already
    exists, so a threaded artefact would be a third build, not a new mechanism.
+
+---
+
+## M11 — Time windows, and the difference between "cheap" and "on time"
+
+**Status: Tasks 1, 2, 3, 4 and 6 are done and shipping. Task 5 — the SISR
+batch engine — is NOT built and is listed under Deferred.**
+
+### What changed
+
+The solver understands everything the M7 edit form can express. Until this
+milestone a driver could set an arrival window, a time at stop, First or Last,
+and a break, and none of it reached the search: `planSelectiveRoute` built
+default constraints and threw the real ones away.
+
+```
+engine/src/
+  segtree.rs      NEW — interior subsequence labels, both directions, O(log n)
+  problem.rs      + TimeData (travel seconds, service, windows, departure)
+                  + pin blocks and their counts
+  tour.rs         + prefix/suffix labels, Chain, warp_after_{reverse,or_opt,
+                    insert,remove}, zone(), gap_range(), Insertion
+  localsearch.rs  + penalised deltas, zone-confined move generation
+  driver.rs       + adaptive time-window penalty, best-feasible vs best-overall
+  ffi.rs          + schedule and pins across the boundary, engine_time_warp
+
+src/lib/
+  infeasibility.ts  NEW — which stop cannot be made, and by how much
+  compute/          + departAtSec, scheduleFor, compareResults, resolvePins
+  planRoute.ts      + per-waypoint constraints, breaks as virtual nodes
+  arrivals.ts       + break durations folded into the plan
+
+bench/
+  lib/tsptw.mjs        NEW — the TSPTW library, and the referee
+  fetch-tsptw.mjs      NEW — caches it, and self-checks against 370 solutions
+  tsptw.mjs            NEW — feasibility first, then gap to proven optimum
+  solomon-routes.mjs   NEW — Solomon best-known routes, re-sequenced
+  strip-coi.mjs        NEW — the no-isolation build
+```
+
+### The benchmark had to change before the engine could
+
+The brief said to verify against Solomon and Gehring-Homberger. Those score
+vehicles first and then distance, with capacity; a single-vehicle engine cannot
+compete on the first term at all, and a gap with the fleet term relaxed answers
+a different question. M9 deferred them for exactly that reason and was right to.
+
+So: the **TSPTW instance library** (López-Ibáñez) is the same problem we solve —
+one vehicle, one sequence, windows, minimise travel — with 370 cached instances,
+most of them proven optimal. And Solomon is kept by changing the question: each
+ROUTE of SINTEF's published best-known solution has its customer set fixed, which
+satisfies the fleet term and capacity by construction, and is re-solved as a
+TSPTW sub-instance.
+
+Three conventions in that library produce plausible wrong numbers if misread:
+service time is baked into the distance matrix, waiting for a window to open is
+free, and the return leg to the depot is scored. So both harnesses verify
+themselves first — `bench:tsptw:fetch` re-scores all 370 published permutations
+and requires our cost AND violation count to equal theirs, and `bench:solomon`
+reproduces SINTEF's published vehicle count and distance before running anything.
+
+### The numbers
+
+TSPTW, 25 instances across five sets, every one **proven optimal**, 3 s budget:
+
+| engine | feasible | mean gap | worst | exact optimum |
+|---|---|---|---|---|
+| M10 baseline | **1/25** | — | — | — |
+| `ts-workers` (tier B fallback) | 25/25 | 0.62% | 5.35% | 17/25 |
+| `wasm` (tier C) | 25/25 | 0.47% | 4.63% | 19/25 |
+| **`wasm-workers`** (tier B, the default) | **25/25** | **0.27%** | **2.44%** | **20/25** |
+
+Tier D (`ts`, single-threaded) measured separately on the 15-instance subset:
+25/25 feasible, 0.82% mean, 6.93% worst.
+
+The M10 baseline is committed as `bench/results/tsptw-baseline-m10.json` and is
+worth keeping: 1/25 feasible, up to 36% "cheaper" than a proven optimum, and
+claiming `feasible: true` on every late route.
+
+Solomon best-known routes, re-sequenced (50 routes across the six classes):
+**50/50 matched or beaten, zero windows missed, total distance identical to
+SINTEF's.**
+
+And the definition-of-done item, measured rather than argued —
+`npm run bench:tsptw:nocoi` strips coi-serviceworker from the build and refuses
+to report unless `crossOriginIsolated` is actually false on the page:
+
+```
+wasm-workers   feasible 15/15   mean gap 0.27%   crossOriginIsolated: false
+```
+
+### What surprised me
+
+**The brief's O(1) claim is not achievable, and the reason is worth keeping.**
+"Precompute labels for forward and reverse subsequences so 2-opt stays O(1)"
+cannot be done with prefix arrays. `F[j] − F[i]` recovers an interior range of
+arc costs because subtraction inverts addition; `DurationSegment::merge`
+contains `max` and `min` and has no inverse, so no arrangement of prefix and
+suffix arrays yields an arbitrary interior range in either direction. What merge
+*is*, is associative — which is what a segment tree needs. Interior ranges are
+therefore O(log n), about ten merges instead of one at n = 1000, and everything
+else in the brief genuinely is O(1).
+
+**The engine emptied 21 of 25 instances before anyone noticed it was allowed
+to.** Pricing time-warp relief into the DROP move makes abandoning a delivery
+rational: the penalty is adaptive and climbs whenever the route is late, so on a
+day that cannot be done on time it eventually exceeds the skip penalty and
+dropping a stop becomes the cheapest move available. The rule that fixes it is
+worth stating as a rule — **lateness decides where a stop goes, never whether it
+goes** — and it is why `Insertion` carries two costs. Swap keeps both, because it
+preserves the number of stops and so cannot buy punctuality by abandoning
+anybody.
+
+**A 28 800-second error looked like a result.** The port defaults to an 08:00
+departure; both benchmark libraries start their clock at zero. With every window
+already closed before the driver left, the engine still returned 22/25 feasible
+at a 3.98% mean gap — because the error is very nearly a constant offset, so the
+search was still ranking orders sensibly. It looked like a solver that mostly
+worked. It was a solver being asked the wrong question.
+
+**"First" was never a pin on the route's start.** `resolveEndpoints` promoted a
+stop marked First into the route's start and threw when the route already had
+one, so a driver who set a start location and then marked a parcel First got
+"Two different stops are pinned to the start". The two are different things: the
+start is where the van sets off from, First is the earliest delivery. They no
+longer interact.
+
+**A break needed no engine support at all.** It is a mandatory stop with a
+service time, a window, and zero travel cost to and from everywhere else — so the
+matrix grows one row and column of zeros and the search never learns what a
+break is. Its window closes at the latest START, not the latest finish, because
+the engine schedules against arrival.
+
+**Diversifying the workers made this benchmark slightly worse, and I shipped it
+anyway.** Before strategy rotation, `wasm-workers` scored 0.16% mean / 2.24%
+worst on the same 25 instances; with it, 0.27% / 2.44% — but 20/25 exact optima
+rather than 18. Three ILS workers from three seeds beat one ILS, one GLS and one
+hybrid, on THIS ladder. The justification for rotating anyway is that ILS and GLS
+were measured in M10 winning at different instance sizes, so a pool of one search
+is a pool that loses wherever that search is the wrong one; TSPTW instances top
+out at n = 232 and are all one family. That justification is an argument, not a
+measurement, and the measurement I have points the other way by 0.11%. If the
+device test does not support it, rotate back — `strategyFor` is four lines.
+
+**iOS Safari reports four cores on every iPhone ever made.** It is a
+fingerprinting defence, not a core count (mdn/browser-compat-data #30063), so
+`cores − 1` gives exactly three workers on an iPhone 11 and on an iPhone 17. That
+plus thermal throttling under sustained load is why extra workers are now
+*diversification* — different search strategies, not different seeds — rather
+than a speedup we do not get.
+
+### Verified
+
+- **57 Rust tests.** Every interior range against a direct fold, in both
+  directions, exhausted not sampled; every legal 2-opt reversal and every Or-opt
+  (start, length, gap, orientation, both pin configurations) against a
+  clock-walking simulation, on instances tight enough that most orderings are
+  late; both pin blocks surviving a complete search across seven seeds; a
+  pinned-but-optional stop kept under a binding K cap.
+- **619 TypeScript tests**, including the infeasibility report and the rule that
+  a route solved before M11 reports nothing — it did not fail its windows, it was
+  never asked about them.
+- **370 published best-known TSPTW solutions** re-scored by our referee, cost and
+  violation count matching exactly, before any engine was measured against them.
+- **SINTEF's c101** reproduced at 10 vehicles / 828.94 / zero violations by our
+  own Solomon scorer, before any engine was measured against it.
+- `bench:verify-seam` passes, and now also fails the build if production output
+  ever loads coi-serviceworker again.
+- Artefacts 71.0 KB scalar / 73.1 KB SIMD, no imports, bounded memory.
+
+### Deferred
+
+- 🔴 **Task 5, the SISR batch engine, is not built.** No `sisr.rs`, no
+  `Strategy::Sisr`, no fourth "Thorough" budget tier. The research is done and
+  recorded below so the next session starts from the paper rather than from a
+  search engine. Nothing else depends on it — it was specified as an extra tier,
+  not the default — and the four existing tiers are unaffected.
+- 🔴 **No real-device runs, still.** Every number here is from a Mac.
+  `DEVICE-TEST-M11.md` is the protocol. The parallel-speedup claim in particular
+  is unverified on hardware that thermally throttles.
+- 🟡 **Worker strategy rotation is unproven and costs 0.11% on TSPTW.** See
+  "what surprised me". It should be settled by the device test or by a benchmark
+  with more instance families, not left as an argument.
+- 🟡 **A break is every node's nearest neighbour.** Its arcs are all zero, so it
+  occupies one of the ten candidate-list slots for every stop. Measurable in
+  principle; with one or two breaks against ten slots it has not been measurable
+  in practice, and no fix is proposed until it is.
+- 🟡 **`public/coi-serviceworker.js` is dead in production** and still copied into
+  the bundle for the bench build's OR-Tools oracle. Left alone deliberately.
+- The M10 deferrals that remain: GLS is still not the default anywhere, and the
+  OR-Tools heap leak is unchanged (no user reaches that code).
+
+### What the next session needs to know
+
+1. **`npm run engine:build` after ANY change under `engine/`**, still. The
+   artefacts are committed so the app builds without Rust, and
+   `wasmArtefact.test.ts` fails if they drift.
+2. **Time windows are gated on a CLOSING time, nowhere else.**
+   `Problem::windows_bind()` is false unless some `tw_close < NEVER`, and when it
+   is false no labels are built, no segment tree is allocated, and the search is
+   byte-for-byte M10's. An opening time only makes the driver wait and a service
+   time is constant over a fixed set of stops, so neither can change which order
+   is best. Do not widen that test.
+3. **The travel-time matrix is separate from the cost matrix on purpose**, even
+   when both hold seconds. Guided local search writes its arc penalties into the
+   cost matrix in place; a schedule read from it would drift with every penalty,
+   silently.
+4. **The departure time is part of the question, not a display concern.** It is
+   pinned into every label composition by `Chain::new`, and the benchmark
+   harnesses pass `departAtSec: 0` because their clocks start at zero.
+5. **SISR, for whoever picks up Task 5.** Christiaens & Vanden Berghe,
+   *Transportation Science* 54(2), 2020: c̄ = 10 average removed customers,
+   Lᵐᵃˣ = 10 maximum string length, α = 10⁻³, blink rate β = 10⁻², simulated
+   annealing from T₀ = 100 to T_f = 1. The reference implementation covering the
+   prize-collecting (team orienteering) variants is
+   `hankarudova/open-source-sisr-routing`, Apache-2.0, CPAIOR 2026 — read it for
+   the orienteering adaptation. Do NOT wire in the `vrp` crate: M10 never
+   recommended it (I checked), it is a multi-crate native solver, and it would
+   replace a 71 KB artefact with something orders of magnitude larger.
+6. **Extra cores are diversification.** `strategyFor(index)` in engineWorkers.ts
+   assigns ILS to worker 0 and rotates the rest through GLS and the hybrid.
+   Worker 0 is pinned so a one-core device cannot silently get a different answer
+   from a two-core one.

@@ -291,6 +291,11 @@ the itinerary and delivery state consistent while the user edits the list.
 
 > ### ⚠️ This section is out of date, and has been since M9.
 >
+> **M11 added a whole dimension it does not mention at all:** the solver now
+> honours arrival windows, time at stop, First/Last ordering and rest breaks, and
+> reports by name which stop cannot be reached in time. Nothing below describes
+> any of that.
+>
 > It describes `src/lib/solver.ts` driving `or-tools-wasm` on the main thread.
 > That has not been the app's solver since M9, and since M10 the arithmetic is
 > not even JavaScript.
@@ -307,7 +312,7 @@ the itinerary and delivery state consistent while the user edits the list.
 >   `npm run bench:verify-seam` fails the build if it ever leaks.
 > - Cross-origin isolation is no longer required, so iOS Safari and Firefox work.
 >
-> Read the **M9** and **M10** entries in [PROGRESS.md](PROGRESS.md) for the
+> Read the **M9**, **M10** and **M11** entries in [PROGRESS.md](PROGRESS.md) for the
 > current design and the measurements behind it. The rest of this section is
 > retained as an accurate record of what the engine used to be, and of why the
 > OR-Tools binding was abandoned — §7 on `firstSolutionStrategy` being the only
