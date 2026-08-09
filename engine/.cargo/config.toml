@@ -1,0 +1,13 @@
+# Cap the DECLARED maximum of the wasm memory.
+#
+# This is the one iOS-specific thing this crate has to get right. iOS Safari
+# fails to even construct a `WebAssembly.Memory` whose declared maximum is the
+# usual 2 GB — the allocation is refused up front, before a single byte is used.
+# (emscripten-core/emscripten#19144, godotengine/godot#70621.)
+#
+# 256 MB is ~25x the engine's own high-water mark: at n = 1000 the cost matrix is
+# n² × 4 B = 4 MB, and everything else together is under 100 KB. We are nowhere
+# near this ceiling; the number exists so that the ceiling is one WE chose rather
+# than one the linker picked.
+[target.wasm32-unknown-unknown]
+rustflags = ["-C", "link-arg=--max-memory=268435456"]

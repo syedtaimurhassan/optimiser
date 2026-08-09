@@ -1,0 +1,29 @@
+[package]
+name = "optimiser-engine"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+publish = false
+description = "Selective-TSP search engine for the route optimiser, compiled to wasm32."
+
+# cdylib is the wasm artefact; rlib is what `cargo test` links against so the
+# whole algorithm can be tested natively, at native speed, with no browser and
+# no wasm runtime in the loop. Every module below is pure computation, so the
+# host tests exercise the same code the browser runs.
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+
+[profile.release]
+opt-level = 3
+# One codegen unit and fat LTO because this is a single hot loop that must be
+# inlined across module boundaries — `Matrix::at` is called a few million times
+# per solve from `localsearch`, and a cross-crate-unit call there would dominate.
+lto = "fat"
+codegen-units = 1
+# No unwinding tables in the artefact. A panic in the engine is a bug we want to
+# see as a trap, not something JS is expected to catch and recover from — and
+# `panic = "abort"` is worth roughly a third of the binary size.
+panic = "abort"
+strip = true

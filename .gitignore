@@ -28,3 +28,8 @@ dist-seamcheck
 # TSPLIB instances are fetched on demand (npm run bench:tsplib), never committed —
 # the library publishes no licence, and downloading is not redistributing.
 bench/fixtures/tsplib/
+
+# Rust build output. The BUILT .wasm artefacts are committed (see
+# src/lib/compute/wasm/) so that `npm run build` works on a machine with no Rust
+# toolchain; only the intermediates are ignored.
+engine/target/
