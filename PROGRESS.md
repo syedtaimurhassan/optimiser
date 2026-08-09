@@ -2072,3 +2072,55 @@ than a speedup we do not get.
    assigns ILS to worker 0 and rotates the rest through GLS and the hybrid.
    Worker 0 is pinned so a one-core device cannot silently get a different answer
    from a two-core one.
+
+### Addendum — the OR-Tools algorithm surface, closed where it was worth closing
+
+Asked after the milestone: how much of OR-Tools do we actually have? Read from
+the vendored protos rather than the documentation —
+`ortools/constraint_solver/routing_enums.proto` (14 first-solution strategies,
+5 metaheuristics) and `routing_parameters.proto:90-386` (~25 local-search
+operators).
+
+**The binding never exposed most of it.** `javascript/routing_api.cc:84-92` is
+the whole of parameter handling and sets only `first_solution_strategy` and
+`solution_limit`. GUIDED_LOCAL_SEARCH, TABU_SEARCH, SIMULATED_ANNEALING and the
+entire local-search layer were unreachable — there was never an algorithm there
+to copy. This confirms M9's claim at the C++ level rather than from the
+TypeScript types.
+
+**Added this round:**
+
+| | | measured |
+|---|---|---|
+| `use_exchange` | swap two visited stops | 0.47% → **0.28%** on `wasm` |
+| `PATH_CHEAPEST_ARC` | `nearest_neighbour` | 0.30%, **24/25 feasible** |
+| `SAVINGS` | Clarke-Wright | 0.33%, **24/25 feasible** |
+| `SIMULATED_ANNEALING` | Metropolis acceptance | 0.38%, 25/25 |
+
+Exchange is the clear win and is now in the default descent. It cannot be
+composed from 2-opt and Or-opt — trading two stops far apart in the route needs
+several individually-worse moves any other way — and it recovered exactly the
+0.11% the worker strategy rotation had cost.
+
+**The other three ship as available, not as default.** Both new constructions
+lose feasibility on rbg233 (n=232, the largest and tightest asymmetric
+instance). Savings is much worse there — 134 violations against nearest
+neighbour's 36 — because its criterion is arc savings computed up front with no
+clock in it. Nearest neighbour improved from 0.35% to 0.30% once it was told
+about the clock (it had been handed a `tw_penalty` and was ignoring it), but
+still cannot save that instance. Annealing is worse than ILS here and is kept
+because it is the acceptance rule SISR needs.
+
+**Deliberately not built.** CHRISTOFIDES: needs minimum-weight perfect matching,
+and its 1.5-approximation only holds for a symmetric metric — ours is a road
+matrix where 98.3% of pairs disagree with their reverse. LIN_KERNIGHAN:
+variable-depth search built on symmetric reversal; Helsgaun's own k-opt report
+notes asymmetric instances forbid reversal submoves, so it is a large build on a
+premise we do not satisfy. Multi-route operators (cross, cross_exchange,
+relocate_pair, exchange_subtrip): meaningless with one vehicle, and the obvious
+first work if multi-vehicle ever lands.
+
+**Still missing, in rough value order:** a TW-aware savings variant (filter
+merges that create warp), TABU_SEARCH, `make_chain_inactive` and
+`swap_active_chain` for prize-collecting with clusters, `relocate_expensive_chain`,
+and Or-3-opt.
