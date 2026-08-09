@@ -289,6 +289,30 @@ the itinerary and delivery state consistent while the user edits the list.
 
 ## 7. The Optimization Engine (deep dive)
 
+> ### ⚠️ This section is out of date, and has been since M9.
+>
+> It describes `src/lib/solver.ts` driving `or-tools-wasm` on the main thread.
+> That has not been the app's solver since M9, and since M10 the arithmetic is
+> not even JavaScript.
+>
+> **What is true now:**
+>
+> - Every engine sits behind `SolveRequest`/`SolveResult` in
+>   [`src/lib/compute/solverPort.ts`](src/lib/compute/solverPort.ts). The matrix
+>   is a flat `Int32Array`, not `number[][]`.
+> - The shipping engine is **Rust compiled to wasm32** (`engine/`, ~49 KB),
+>   running in a pool of workers. `src/lib/compute/registry.ts` picks it.
+> - **OR-Tools is not in the production bundle at all.** It survives as a
+>   dev-only oracle behind a dynamic import from `src/benchSeam.ts`, and
+>   `npm run bench:verify-seam` fails the build if it ever leaks.
+> - Cross-origin isolation is no longer required, so iOS Safari and Firefox work.
+>
+> Read the **M9** and **M10** entries in [PROGRESS.md](PROGRESS.md) for the
+> current design and the measurements behind it. The rest of this section is
+> retained as an accurate record of what the engine used to be, and of why the
+> OR-Tools binding was abandoned — §7 on `firstSolutionStrategy` being the only
+> forwarded parameter is still exactly right, and is still the reason.
+
 The engine is `src/lib/solver.ts`. It solves a **Selective TSP**: choose a subset
 of stops *and* order them, with fixed or open endpoints.
 

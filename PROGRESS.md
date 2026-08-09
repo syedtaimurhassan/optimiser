@@ -1665,17 +1665,55 @@ clamped to 4 ms, which against a 15 ms step throws away a fifth of the budget.
 
 ### The numbers
 
-Real browser, pruned production bundle, the 107-point OSRM instance at K=20 —
-the instance we actually care about:
+Real browser, headless Chromium, the pruned production bundle served without
+COOP/COEP headers — the closest local reproduction of GitHub Pages. Gap on
+travel cost against the best any engine found for that instance.
 
-| engine | wall | travel cost vs best |
+| instance | `ts` | `ts-workers` | `wasm` | `wasm-workers` |
+|---|---|---|---|---|
+| sample n107 k20 | +6.54% | +6.31% | **best** | **best** |
+| sample n107 k50 | +7.09% | +0.21% | +0.03% | **best** |
+| sample n107 k105 | +2.29% | **best** | +2.29% | **best** |
+| uniform n25 k23 | best | best | best | best |
+| uniform n25 k11 | +12.92% | **best** | **best** | **best** |
+| clustered n25 k23 | best | best | best | best |
+| clustered n25 k11 | best | best | best | best |
+| decoy n25 k9 | +9.03% | +9.03% | **best** | **best** |
+| uniform n50 k48 | best | best | best | best |
+| uniform n50 k24 | best | best | best | best |
+| clustered n50 k48 | best | best | best | best |
+| clustered n50 k24 | +2.63% | **best** | **best** | **best** |
+| decoy n50 k19 | +10.83% | +10.83% | **best** | **best** |
+| uniform n107 k105 | +0.06% | **best** | +0.06% | **best** |
+| uniform n107 k52 | +8.65% | +1.08% | **best** | **best** |
+| clustered n107 k105 | best | best | best | best |
+| clustered n107 k52 | **+30.04%** | +3.92% | **best** | **best** |
+| decoy n107 k42 | +10.45% | +0.18% | **best** | **best** |
+| **instances won** | 7 | 11 | 15 | **18 of 18** |
+
+`wasm-workers` — what a multi-core device now runs — is best or tied on **every
+instance in the grid**. Single-threaded `wasm` wins 15 and loses three by at most
+2.29%.
+
+The decoy family is the one M9 built specifically to break greedy selection, and
+the one M9 deferred as a known tier-D weakness. The Rust engine takes all three,
+by 9-11% of travel cost.
+
+And it is not spending longer to do it. On the 107-point OSRM instance at K=20:
+
+| engine | wall | travel cost |
 |---|---|---|
 | `ts` | 3023 ms | +6.54% |
 | `ts-workers` | 3060 ms | +6.31% |
 | **`wasm`** | **820 ms** | **best** |
 | **`wasm-workers`** | **781 ms** | **best** |
 
-Better route, in a quarter of the time.
+Better route, in a quarter of the time. The pattern repeats wherever the K cap
+binds: the TypeScript engine spends its entire 3 s budget, and the Rust engine
+converges in a few hundred milliseconds to something better.
+
+Against OR-Tools: M9 measured `ts-workers` beating it by 15.7% of travel cost on
+this instance, and `wasm-workers` now beats `ts-workers`.
 
 Node, clustered instances, equal wall-clock, against `ts`:
 
@@ -1752,6 +1790,9 @@ check it, because it has to run on the machine the committed artefacts exist for
 - **A chunked descent is byte-identical to an uninterrupted one**, and the answer
   is identical at chunk sizes 1, 7, 64, 1000 and 100 000. If pausing could change
   the route, cancelling could too, and two phones would disagree.
+- **The full benchmark grid, in a real browser, against the real bundle**:
+  `wasm-workers` best or tied on 18 of 18 instances, including all three decoy
+  instances M9 deferred as a known weakness.
 - **610 TypeScript tests**, including the real `.wasm` driven through the real
   port: both artefacts valid and byte-identical to each other, the optimum on
   brute-forced instances, the K cap honoured, progress monotone.
