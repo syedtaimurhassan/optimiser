@@ -1,6 +1,6 @@
 import { test, describe } from 'node:test'
 import assert from 'node:assert/strict'
-import { createRoutingService, splitBand } from './service.ts'
+import { createRoutingService, splitBand, splitRoute } from './service.ts'
 import { RoutingError, type MatrixBand, type MatrixProvider, type ProviderLimits } from './types.ts'
 
 const points = Array.from({ length: 12 }, (_, i) => ({ lat: 52 + i / 100, lng: 13 + i / 100 }))
@@ -93,6 +93,31 @@ describe('splitBand', () => {
 
   test('an empty band is no requests at all', () => {
     assert.deepEqual(splitBand(band([], indices(3)), LIMITS), [])
+  })
+})
+
+describe('splitRoute', () => {
+  const limits: ProviderLimits = { ...LIMITS, maxPoints: 54 }
+  const seq = (n: number) => Array.from({ length: n }, (_, i) => i)
+
+  test('leaves a drawable sequence alone', () => {
+    assert.deepEqual(splitRoute(seq(4), limits), [[0, 1, 2, 3]])
+  })
+
+  test('overlaps chunks by one point, so no leg goes missing', () => {
+    const chunks = splitRoute(seq(10), limits)
+    assert.ok(chunks.length > 1)
+    for (let i = 1; i < chunks.length; i++) {
+      assert.equal(chunks[i][0], chunks[i - 1].at(-1), 'chunks must share their seam point')
+    }
+    const legs = chunks.reduce((total, chunk) => total + chunk.length - 1, 0)
+    assert.equal(legs, 9, 'a 10-point route has 9 legs however it is split')
+  })
+
+  test('visits every point, in order, exactly once', () => {
+    const chunks = splitRoute(seq(11), limits)
+    const flat = chunks.flatMap((chunk, i) => (i === 0 ? chunk : chunk.slice(1)))
+    assert.deepEqual(flat, seq(11))
   })
 })
 
@@ -197,6 +222,53 @@ describe('createRoutingService', () => {
     clock = 1500
     await service.table(band([0], [3]))
     assert.equal(primaryCalls, 2, 'cooldown expired, worth another try')
+  })
+
+  test('draws a route too long for one request in overlapping pieces', async () => {
+    const provider = fakeProvider('p', { maxPoints: 54 })
+    // Each chunk answers with its own leg per gap and a coordinate per point.
+    provider.route = async (chunk) => ({
+      geometry: {
+        type: 'LineString',
+        coordinates: chunk.map((p) => [p.lng, p.lat]),
+      },
+      distanceMeters: 100 * (chunk.length - 1),
+      durationSeconds: 10 * (chunk.length - 1),
+      legSeconds: chunk.slice(1).map(() => 10),
+      legMeters: chunk.slice(1).map(() => 100),
+    })
+    const service = createRoutingService({ primary: provider, sleep: async () => {} })
+
+    const many = Array.from({ length: 12 }, (_, i) => ({ lat: 52 + i / 100, lng: 13 }))
+    const road = await service.route(many)
+
+    assert.equal(road.legSeconds.length, 11, 'one leg per gap, across the seams')
+    assert.equal(road.legMeters.length, 11)
+    assert.equal(road.durationSeconds, 110)
+    assert.equal(
+      (road.geometry.coordinates as number[][]).length,
+      12,
+      'the seam point must be drawn once, not twice',
+    )
+  })
+
+  test('drops the leg list entirely when one piece could not supply one', async () => {
+    const provider = fakeProvider('p', { maxPoints: 54 })
+    let call = 0
+    provider.route = async (chunk) => ({
+      geometry: { type: 'LineString', coordinates: chunk.map((p) => [p.lng, p.lat]) },
+      distanceMeters: 1,
+      durationSeconds: 1,
+      // The second piece comes back without legs — a short array would shift
+      // every arrival after the seam by one stop.
+      legSeconds: call++ === 0 ? chunk.slice(1).map(() => 10) : [],
+      legMeters: [],
+    })
+    const service = createRoutingService({ primary: provider, sleep: async () => {} })
+
+    const many = Array.from({ length: 12 }, (_, i) => ({ lat: 52 + i / 100, lng: 13 }))
+    const road = await service.route(many)
+    assert.deepEqual(road.legSeconds, [])
   })
 
   test('paces consecutive requests to one provider', async () => {

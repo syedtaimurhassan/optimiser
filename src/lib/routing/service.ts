@@ -132,6 +132,61 @@ function stitch(
   return out
 }
 
+/**
+ * Split a long sequence into chunks the provider will draw.
+ *
+ * Consecutive chunks OVERLAP by one point: the last stop of one is the first
+ * stop of the next, so the road between them is drawn exactly once and no leg
+ * goes missing. Without the overlap a 500-stop route would come back with a
+ * gap in the polyline and 498 legs for 499 gaps, which shifts every arrival
+ * after the seam by one stop.
+ *
+ * The margin below the point cap is deliberate: 450 coordinates is 8,179 URL
+ * characters against nginx's 8,192, and a route request that came in three
+ * characters under the ceiling would be a bug waiting for a longitude with an
+ * extra digit.
+ */
+export function splitRoute<T>(points: readonly T[], limits: ProviderLimits): T[][] {
+  const perChunk = Math.max(2, limits.maxPoints - 50)
+  if (points.length <= perChunk) return [[...points]]
+
+  const chunks: T[][] = []
+  for (let start = 0; start < points.length - 1; start += perChunk - 1) {
+    chunks.push(points.slice(start, start + perChunk))
+  }
+  return chunks
+}
+
+/** Stitch drawn chunks back into one route. */
+function joinRoutes(parts: RouteGeometry[]): RouteGeometry {
+  const coordinates: number[][] = []
+  const legSeconds: number[] = []
+  const legMeters: number[] = []
+  let distanceMeters = 0
+  let durationSeconds = 0
+
+  for (const [index, part] of parts.entries()) {
+    // The shared waypoint is the last coordinate of one chunk and the first of
+    // the next; drawing it twice would put a zero-length leg in the polyline.
+    const shape = part.geometry.coordinates as number[][]
+    coordinates.push(...(index === 0 ? shape : shape.slice(1)))
+    legSeconds.push(...part.legSeconds)
+    legMeters.push(...part.legMeters)
+    distanceMeters += part.distanceMeters
+    durationSeconds += part.durationSeconds
+  }
+
+  return {
+    geometry: { type: 'LineString', coordinates },
+    distanceMeters,
+    durationSeconds,
+    // One chunk with a leg-count mismatch poisons the whole list, because a
+    // short array shifts every arrival after it. All or nothing.
+    legSeconds: parts.every((p) => p.legSeconds.length > 0) ? legSeconds : [],
+    legMeters: parts.every((p) => p.legMeters.length > 0) ? legMeters : [],
+  }
+}
+
 export function createRoutingService(options: RoutingServiceOptions): RoutingService {
   const { primary, fallback } = options
   const now = options.now ?? (() => Date.now())
@@ -239,7 +294,17 @@ export function createRoutingService(options: RoutingServiceOptions): RoutingSer
 
     async route(points, signal) {
       return withFailover(
-        (provider) => paced(provider, () => provider.route!(points, signal)),
+        async (provider) => {
+          const chunks = splitRoute(points, provider.limits)
+          if (chunks.length === 1) {
+            return paced(provider, () => provider.route!(chunks[0], signal))
+          }
+          const drawn = []
+          for (const chunk of chunks) {
+            drawn.push(await paced(provider, () => provider.route!(chunk, signal)))
+          }
+          return joinRoutes(drawn)
+        },
         (provider) => typeof provider.route === 'function',
       )
     },

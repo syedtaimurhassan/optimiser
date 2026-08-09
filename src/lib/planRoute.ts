@@ -1,7 +1,12 @@
 import type { LineString } from 'geojson'
 import type { LatLng, OptimizedRoute, OrderConstraint } from '../types'
 import { fetchRouteGeometry, type Objective } from './routingService'
-import { buildCostGrid, type GridSeed } from './routing/grid.ts'
+import {
+  buildCostGrid,
+  patchTourArcs,
+  tourHasEstimates,
+  type GridSeed,
+} from './routing/grid.ts'
 import { getBit } from './routing/sparse.ts'
 import { activeSelection } from './compute/active.ts'
 import { hilbertOrder } from './compute/hilbert.ts'
@@ -142,6 +147,34 @@ export interface PlannedBreak {
 }
 
 const sameCoord = (a: LatLng, b: LatLng) => a.lat === b.lat && a.lng === b.lng
+
+/**
+ * How much the road router's real leg times must move the tour's cost before
+ * the search is asked to look again.
+ *
+ * Two per cent. Below that the correction is noise against a search that only
+ * ever claimed to be within a fraction of a per cent of best-known anyway, and
+ * re-running it would spend seconds of a driver's morning to reshuffle nothing.
+ */
+const REFINE_DRIFT = 0.02
+
+/**
+ * Ceiling on the refinement search, in ms.
+ *
+ * It is warm-started from the order the first search produced, so it is a
+ * polish pass rather than a fresh attempt. A driver asked for a five-second
+ * search once, not twice.
+ */
+const REFINE_BUDGET_MS = 2_000
+
+const tourCost = (matrix: Int32Array, n: number, tour: readonly number[]): number => {
+  let total = 0
+  for (let i = 0; i < tour.length - 1; i++) total += matrix[tour[i] * n + tour[i + 1]]
+  return total
+}
+
+const sameOrder = (a: Int32Array, b: Int32Array): boolean =>
+  a.length === b.length && a.every((value, i) => value === b[i])
 
 /**
  * Join a solved point order back to the stops it came from.
@@ -357,18 +390,27 @@ export async function planSelectiveRoute(input: PlanInput): Promise<PlannedRoute
     cache a grid whose last two columns are fiction.
   */
   const breaks = input.breaks ?? []
-  const augmented = augmentWithBreaks(matrix, n, breaks)
-  const total = augmented.n
+  const total = n + breaks.length
   const breakNodeAt = (b: number) => n + b
 
-  const solveMatrixAugmented: SolveMatrix =
-    objective === 'distance'
+  /**
+   * The grid the engine sees, built fresh on every solve.
+   *
+   * It used to be a constant. It cannot be any more: the refinement pass writes
+   * the road router's real leg times into `matrix` between solves, and a
+   * pre-built augmented copy would hand the second solve the first solve's
+   * guesses back.
+   */
+  const solveMatrix = (): SolveMatrix => {
+    const augmented = augmentWithBreaks(matrix, n, breaks)
+    return objective === 'distance'
       ? {
-          n: total,
+          n: augmented.n,
           durations: Int32Array.from(augmented.matrix, (metres) => Math.round(metres / 8)),
           distances: augmented.matrix,
         }
-      : { n: total, durations: augmented.matrix }
+      : { n: augmented.n, durations: augmented.matrix }
+  }
 
   const constraints = makeConstraints(total)
   // A pinned endpoint is not a stop the optimiser may decline to visit.
@@ -413,25 +455,30 @@ export async function planSelectiveRoute(input: PlanInput): Promise<PlannedRoute
   // 2) Optimize (order, and which candidates to visit) — in-browser, on the
   //    engine the registry picked for this device.
   const solver = engine ?? activeSelection().engine
+  const runSolve = (seedOrder: Int32Array, budgetMs: number) =>
+    solver.solve(
+      {
+        // Rebuilt each time, because the refinement pass writes real costs into
+        // `matrix` and the augmented copy has to see them.
+        matrix: solveMatrix(),
+        constraints,
+        endpoints: { start: startNode, end: endNode },
+        selectK: targetK == null ? null : k,
+        skipPenalty: SKIP_PENALTY,
+        objective,
+        budgetMs,
+        departAtSec: input.departAtSec ?? DEFAULT_DEPART_SEC,
+        seedOrder,
+      },
+      onProgress,
+      signal,
+    )
+
   onStatus?.('Optimizing route…')
-  const solved = await solver.solve(
-    {
-      matrix: solveMatrixAugmented,
-      constraints,
-      endpoints: { start: startNode, end: endNode },
-      selectK: targetK == null ? null : k,
-      skipPenalty: SKIP_PENALTY,
-      objective,
-      budgetMs: timeBudgetMs ?? 3000,
-      departAtSec: input.departAtSec ?? DEFAULT_DEPART_SEC,
-      // A space-filling-curve sort is the only thing in this pipeline that
-      // knows where the stops physically are; the matrix does not. Breaks have
-      // no position, so they are not in it — the hint is a hint.
-      seedOrder: hilbertOrder(points),
-    },
-    onProgress,
-    signal,
-  )
+  // A space-filling-curve sort is the only thing in this pipeline that knows
+  // where the stops physically are; the matrix does not. Breaks have no
+  // position, so they are not in it — the hint is a hint.
+  let solved = await runSolve(hilbertOrder(points), timeBudgetMs ?? 3000)
 
   /*
     Split the solved order back into real points and breaks.
@@ -441,24 +488,82 @@ export async function planSelectiveRoute(input: PlanInput): Promise<PlannedRoute
     optimistic by its whole duration. So it comes back as a `PlannedBreak`
     carrying where it sits and when it starts.
   */
-  const solvedOrder = Array.from(solved.order)
-  const visited: number[] = []
-  const lateBySec: number[] = []
-  const plannedBreaks: PlannedBreak[] = []
-  for (let i = 0; i < solvedOrder.length; i++) {
-    const node = solvedOrder[i]
-    if (node >= n) {
-      plannedBreaks.push({
-        afterIndex: visited.length - 1,
-        durationSec: breaks[node - n].durationSec,
-        startSec: solved.arrivalSec[i],
-      })
-      continue
+  const readSolution = (result: typeof solved) => {
+    const visited: number[] = []
+    const lateBySec: number[] = []
+    const plannedBreaks: PlannedBreak[] = []
+    for (const [i, node] of Array.from(result.order).entries()) {
+      if (node >= n) {
+        plannedBreaks.push({
+          afterIndex: visited.length - 1,
+          durationSec: breaks[node - n].durationSec,
+          startSec: result.arrivalSec[i],
+        })
+        continue
+      }
+      visited.push(node)
+      lateBySec.push(result.lateBySec[i])
     }
-    visited.push(node)
-    lateBySec.push(solved.lateBySec[i])
+    return { visited, lateBySec, plannedBreaks, orderedWaypoints: visited.map((i) => points[i]) }
   }
-  const orderedWaypoints = visited.map((i) => points[i])
+
+  let plan = readSolution(solved)
+
+  // 3) Best-effort real road geometry for the chosen sequence.
+  onStatus?.('Building road route…')
+  let road: Awaited<ReturnType<typeof fetchRouteGeometry>> | null = null
+  try {
+    road = await fetchRouteGeometry(plan.orderedWaypoints)
+  } catch {
+    road = null
+  }
+
+  /*
+    4) The refinement, which costs nothing.
+
+    The road router just told us the true duration and distance of every leg it
+    drew, and those legs ARE the arcs the solver committed to. So the most
+    important cells in the whole grid — the ones actually being driven — become
+    facts for no request we were not already making, and the corrected grid is
+    what gets cached.
+
+    That is what makes solving on estimates safe. But a corrected arc can also
+    change the answer, so if the correction moved the tour cost more than a
+    little, the search gets a second, short look at it — warm-started from the
+    order it just produced, because this is a polish pass and not a fresh
+    search. Capped, because a driver asked for a five-second search once, not
+    twice.
+  */
+  const legCosts = objective === 'distance' ? road?.legMeters : road?.legSeconds
+  if (road && legCosts?.length && tourHasEstimates(grid, plan.visited)) {
+    const before = tourCost(matrix, n, plan.visited)
+    patchTourArcs(grid, plan.visited, legCosts)
+    const after = tourCost(matrix, n, plan.visited)
+    const drift = before > 0 ? Math.abs(after - before) / before : 0
+
+    if (drift >= REFINE_DRIFT) {
+      onStatus?.('Refining with real road times…')
+      const refined = await runSolve(
+        Int32Array.from(solved.order),
+        Math.min(timeBudgetMs ?? 3000, REFINE_BUDGET_MS),
+      )
+      const changed = !sameOrder(refined.order, solved.order)
+      solved = refined
+      plan = readSolution(refined)
+      if (changed) {
+        // A different order needs a different polyline. Best-effort again: the
+        // order is right either way, and the old geometry would draw a route
+        // nobody is going to drive.
+        try {
+          road = await fetchRouteGeometry(plan.orderedWaypoints)
+        } catch {
+          road = null
+        }
+      }
+    }
+  }
+
+  const { visited, lateBySec, plannedBreaks, orderedWaypoints } = plan
 
   // Real cost along the chosen route (sum of matrix cells), and the per-leg
   // costs it is made of — which are the fallback for arrival times when the
@@ -483,10 +588,7 @@ export async function planSelectiveRoute(input: PlanInput): Promise<PlannedRoute
     matrixRequests: grid.requests,
   }
 
-  // 3) Best-effort real road geometry for the chosen sequence.
-  onStatus?.('Building road route…')
-  try {
-    const road = await fetchRouteGeometry(orderedWaypoints)
+  if (road) {
     return {
       orderedWaypoints,
       geometry: road.geometry,
@@ -503,7 +605,9 @@ export async function planSelectiveRoute(input: PlanInput): Promise<PlannedRoute
       lateBySec,
       breaks: plannedBreaks,
     }
-  } catch {
+  }
+
+  {
     // Fallback: straight-line geometry + haversine distance. Duration is the
     // real matrix sum only when we optimized on duration; otherwise estimate.
     const straightLegs: number[] = []
