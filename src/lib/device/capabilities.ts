@@ -147,7 +147,7 @@ export function selfTest(): { ok: boolean; problems: string[] } {
  *
  * iPadOS reports itself as a Mac, so the touch check disambiguates.
  */
-function detectPlatform(): Platform {
+export function detectPlatform(): Platform {
   if (typeof navigator === 'undefined') return 'unknown'
   const ua = navigator.userAgent
   const isIpadOs = /Macintosh/.test(ua) && navigator.maxTouchPoints > 1
