@@ -45,7 +45,8 @@
 //! end is modelled as a virtual neighbour whose arcs all cost zero. `arc_in` and
 //! `arc_out` are the only two places that know this.
 
-use crate::problem::Problem;
+use crate::problem::{Problem, TimeData};
+use crate::segtree::RangeLabels;
 
 /// Vidal's four-label subsequence summary — **declared for M11, unused in M10.**
 ///
@@ -80,12 +81,37 @@ pub struct DurationSegment {
 pub const NEVER: i64 = 1_000_000_000;
 
 impl DurationSegment {
+    /// The identity of `merge`: no time spent, no warp, startable whenever.
+    ///
+    /// A `const` as well as a function because `RangeLabels` fills its whole
+    /// backing array with it, and `vec![expr; n]` wants a value rather than a
+    /// call per element.
+    pub const EMPTY: Self = DurationSegment {
+        duration: 0,
+        time_warp: 0,
+        start_early: 0,
+        start_late: NEVER,
+    };
+
     pub fn empty() -> Self {
+        Self::EMPTY
+    }
+
+    /// A departure pinned to one instant: the route leaves at `at`, not before
+    /// and not after.
+    ///
+    /// Merged in front of a route's label, this is what turns "the best possible
+    /// departure time" — which is what Vidal's recurrence computes on its own —
+    /// into "the departure time the driver actually has". Without it a route
+    /// whose first window opens at 10:00 would report zero waiting and zero
+    /// warp by silently assuming a 10:00 start, and the arrival times shown to a
+    /// driver who left at 08:00 would all be two hours optimistic.
+    pub fn departure(at: i64) -> Self {
         DurationSegment {
             duration: 0,
             time_warp: 0,
-            start_early: 0,
-            start_late: NEVER,
+            start_early: at,
+            start_late: at,
         }
     }
 
@@ -118,6 +144,64 @@ impl DurationSegment {
     }
 }
 
+/// Builds a whole route's label out of pieces, supplying the arc between them.
+///
+/// ── Why a builder rather than a chain of `merge` calls ────────────────────
+///
+/// Every move evaluation reassembles the route from two to five pieces, and the
+/// arc joining two pieces depends on which node each of them ends and begins
+/// with. Written inline that is four or five nearly-identical expressions per
+/// move, each with its own chance of using the wrong node — and using the wrong
+/// node produces a schedule that is plausible, slightly wrong, and never
+/// detected. Here the rule is written once.
+///
+/// The departure time is seeded in `new`, so a caller cannot forget it.
+pub struct Chain<'a> {
+    time: &'a TimeData,
+    label: DurationSegment,
+    /// Last node pushed, or None while the chain is still only a departure.
+    last: Option<usize>,
+}
+
+impl<'a> Chain<'a> {
+    pub fn new(problem: &'a Problem) -> Self {
+        let time = problem.time.as_ref().expect("Chain needs time data");
+        Chain {
+            time,
+            label: time.depart,
+            last: None,
+        }
+    }
+
+    /// Append a piece spanning `first ..= last` in visiting order.
+    #[inline]
+    pub fn push(&mut self, piece: &DurationSegment, first: usize, last: usize) {
+        let edge = match self.last {
+            Some(previous) => self.time.travel(previous, first),
+            None => 0,
+        };
+        self.label = DurationSegment::merge(edge, &self.label, piece);
+        self.last = Some(last);
+    }
+
+    /// Append a single node.
+    #[inline]
+    pub fn push_node(&mut self, node: usize) {
+        let leaf = self.time.leaf(node);
+        self.push(&leaf, node, node);
+    }
+
+    #[inline]
+    pub fn time_warp(&self) -> i64 {
+        self.label.time_warp
+    }
+
+    #[inline]
+    pub fn label(&self) -> &DurationSegment {
+        &self.label
+    }
+}
+
 pub struct Tour {
     /// Matrix indices in visiting order. Only `len` entries are live.
     pub order: Vec<i32>,
@@ -131,6 +215,27 @@ pub struct Tour {
 
     /// Scratch for segment moves, so nothing allocates during the search.
     scratch: Vec<i32>,
+
+    /*
+      ── The schedule ──────────────────────────────────────────────────────
+
+      `pre[t]` is the label of `order[0..=t]`, `suf[t]` of `order[t..=len-1]`.
+      Both are O(1) lookups and both are used in every single move evaluation,
+      which is why they are arrays rather than two more segment-tree queries.
+
+      `ranges` answers the interior ones — the reversed stretch a 2-opt turns
+      round, and the forward stretch an Or-opt slides past — in O(log n). See
+      segtree.rs for why no arrangement of prefix arrays can do that.
+
+      All three are built ONLY when `problem.windows_bind()`. When they are not,
+      `labelled` is false and every accessor below refuses to answer, so a
+      caller that forgets to check gets a panic in tests rather than a
+      confidently wrong schedule in production.
+    */
+    pre: Vec<DurationSegment>,
+    suf: Vec<DurationSegment>,
+    ranges: RangeLabels,
+    labelled: bool,
 }
 
 impl Tour {
@@ -142,6 +247,13 @@ impl Tour {
             fwd: vec![0; n + 1],
             bwd: vec![0; n + 1],
             scratch: vec![0; n],
+            // Allocated lazily by `refresh`: a problem with no windows never
+            // pays for 2n labels plus a 4n tree, which at n = 1000 is a
+            // quarter of a megabyte of pure overhead.
+            pre: Vec::new(),
+            suf: Vec::new(),
+            ranges: RangeLabels::new(0),
+            labelled: false,
         }
     }
 
@@ -166,6 +278,215 @@ impl Tour {
         for t in 0..self.len {
             self.pos[self.order[t] as usize] = t as i32;
         }
+        if problem.windows_bind() {
+            self.refresh_labels(problem);
+        }
+    }
+
+    // ────────────────────────────────────────────────────────── schedule
+
+    /// Rebuild the prefix, suffix and interior labels. O(n), on accept only.
+    fn refresh_labels(&mut self, problem: &Problem) {
+        let time = problem.time.as_ref().expect("windows_bind implies time data");
+        let len = self.len;
+
+        if self.pre.len() < len {
+            self.pre.resize(len, DurationSegment::EMPTY);
+            self.suf.resize(len, DurationSegment::EMPTY);
+        }
+        self.labelled = true;
+        if len == 0 {
+            return;
+        }
+
+        self.pre[0] = time.leaf(self.order[0] as usize);
+        for t in 1..len {
+            let from = self.order[t - 1] as usize;
+            let to = self.order[t] as usize;
+            self.pre[t] = DurationSegment::merge(time.travel(from, to), &self.pre[t - 1], &time.leaf(to));
+        }
+
+        self.suf[len - 1] = time.leaf(self.order[len - 1] as usize);
+        for t in (0..len - 1).rev() {
+            let from = self.order[t] as usize;
+            let to = self.order[t + 1] as usize;
+            self.suf[t] = DurationSegment::merge(time.travel(from, to), &time.leaf(from), &self.suf[t + 1]);
+        }
+
+        let order = &self.order;
+        self.ranges.build(
+            len,
+            |position| time.leaf(order[position] as usize),
+            |from, to| time.travel(order[from] as usize, order[to] as usize),
+        );
+    }
+
+    /// Everything strictly before position `t`, departure time included.
+    ///
+    /// The departure is folded in here rather than left to each caller, because
+    /// forgetting it is invisible: the recurrence would silently answer for the
+    /// BEST possible departure time instead of the one the driver has, and every
+    /// route whose first window opens late would report no waiting and no
+    /// lateness at all.
+    #[inline]
+    pub fn head(&self, problem: &Problem, t: usize) -> DurationSegment {
+        let time = problem.time.as_ref().expect("head() needs time data");
+        debug_assert!(self.labelled, "labels were never built");
+        if t == 0 {
+            time.depart
+        } else {
+            DurationSegment::merge(0, &time.depart, &self.pre[t - 1])
+        }
+    }
+
+    /// Everything from position `t` to the end, or `None` when `t` is past it.
+    #[inline]
+    pub fn tail(&self, t: usize) -> Option<&DurationSegment> {
+        debug_assert!(self.labelled, "labels were never built");
+        if t < self.len {
+            Some(&self.suf[t])
+        } else {
+            None
+        }
+    }
+
+    /// Label of `order[i..=j]`, travelled in either direction. O(log n).
+    #[inline]
+    pub fn segment_label(
+        &self,
+        problem: &Problem,
+        i: usize,
+        j: usize,
+        reversed: bool,
+    ) -> DurationSegment {
+        let time = problem.time.as_ref().expect("segment_label() needs time data");
+        let order = &self.order;
+        let edge = |from: usize, to: usize| time.travel(order[from] as usize, order[to] as usize);
+        if reversed {
+            self.ranges.reversed(i, j, edge)
+        } else {
+            self.ranges.forward(i, j, edge)
+        }
+    }
+
+    /// Append one node's label to a running one, travelling `edge` to reach it.
+    #[inline]
+    pub fn extend(problem: &Problem, running: &DurationSegment, edge: i64, node: usize) -> DurationSegment {
+        let time = problem.time.as_ref().expect("extend() needs time data");
+        DurationSegment::merge(edge, running, &time.leaf(node))
+    }
+
+    /// Total lateness along the route as it stands, in seconds.
+    ///
+    /// Zero means every window is met. This is the number the adaptive penalty
+    /// is applied to and the one reported to the user, so it is deliberately the
+    /// whole route's warp rather than a per-node count: two stops five minutes
+    /// late is a better route than one stop an hour late, and a count cannot say
+    /// so.
+    pub fn time_warp(&self, problem: &Problem) -> i64 {
+        if !problem.windows_bind() || self.len == 0 {
+            return 0;
+        }
+        debug_assert!(self.labelled, "labels were never built");
+        let time = problem.time.as_ref().expect("windows_bind implies time data");
+        DurationSegment::merge(0, &time.depart, &self.pre[self.len - 1]).time_warp
+    }
+
+    /// Total lateness the route WOULD have if `order[i..=j]` were reversed.
+    ///
+    /// Three pieces: everything before `i`, the reversed stretch, everything
+    /// after `j`. The reversed stretch is the O(log n) query; the other two are
+    /// array lookups.
+    pub fn warp_after_reverse(&self, problem: &Problem, i: usize, j: usize) -> i64 {
+        debug_assert!(i <= j && j < self.len);
+        let mut chain = Chain::new(problem);
+        if i > 0 {
+            chain.push(&self.pre[i - 1], self.order[0] as usize, self.order[i - 1] as usize);
+        }
+        chain.push(
+            &self.segment_label(problem, i, j, true),
+            self.order[j] as usize,
+            self.order[i] as usize,
+        );
+        if let Some(tail) = self.tail(j + 1) {
+            chain.push(tail, self.order[j + 1] as usize, self.order[self.len - 1] as usize);
+        }
+        chain.time_warp()
+    }
+
+    /// Total lateness the route WOULD have after an Or-opt move.
+    ///
+    /// `order[p .. p+seg]` is lifted out and dropped into gap `u` of the
+    /// SHORTENED tour, optionally turned round — the same coordinates
+    /// `or_opt_delta` works in, and for the same reason: computing against the
+    /// original positions is the classic Or-opt bug, and it is no less wrong for
+    /// a schedule than it is for a cost.
+    ///
+    /// The stretch between the hole and the gap is the interior FORWARD range,
+    /// which is the other half of why `RangeLabels` carries both directions.
+    pub fn warp_after_or_opt(
+        &self,
+        problem: &Problem,
+        p: usize,
+        seg: usize,
+        u: usize,
+        reversed: bool,
+    ) -> i64 {
+        debug_assert!(p + seg <= self.len);
+        let shortened = self.len - seg;
+        let mut chain = Chain::new(problem);
+
+        // Everything the shortened tour holds before gap `u`.
+        if u <= p {
+            if u > 0 {
+                chain.push(&self.pre[u - 1], self.order[0] as usize, self.order[u - 1] as usize);
+            }
+        } else {
+            if p > 0 {
+                chain.push(&self.pre[p - 1], self.order[0] as usize, self.order[p - 1] as usize);
+            }
+            // Shortened positions p..u map to original positions p+seg..u+seg-1.
+            let from = p + seg;
+            let to = u + seg - 1;
+            chain.push(
+                &self.segment_label(problem, from, to, false),
+                self.order[from] as usize,
+                self.order[to] as usize,
+            );
+        }
+
+        // The segment itself, in whichever orientation.
+        let (first, last) = if reversed {
+            (self.order[p + seg - 1] as usize, self.order[p] as usize)
+        } else {
+            (self.order[p] as usize, self.order[p + seg - 1] as usize)
+        };
+        chain.push(&self.segment_label(problem, p, p + seg - 1, reversed), first, last);
+
+        // And everything after the gap.
+        if u < shortened {
+            if u <= p {
+                // Original positions u..p-1, then everything from p+seg on.
+                if u < p {
+                    chain.push(
+                        &self.segment_label(problem, u, p - 1, false),
+                        self.order[u] as usize,
+                        self.order[p - 1] as usize,
+                    );
+                }
+                if let Some(tail) = self.tail(p + seg) {
+                    chain.push(
+                        tail,
+                        self.order[p + seg] as usize,
+                        self.order[self.len - 1] as usize,
+                    );
+                }
+            } else if let Some(tail) = self.tail(u + seg) {
+                chain.push(tail, self.order[u + seg] as usize, self.order[self.len - 1] as usize);
+            }
+        }
+
+        chain.time_warp()
     }
 
     /// Total arc cost of the route as it stands.
@@ -879,5 +1200,236 @@ mod tests {
         let merged = DurationSegment::merge(0, &DurationSegment::empty(), &a);
         assert_eq!(merged.duration, a.duration);
         assert_eq!(merged.time_warp, a.time_warp);
+    }
+
+    // ─────────────────────────────────── the labels, wired to a real Tour
+
+    /// An instance with real windows, tight enough that most orderings are late.
+    ///
+    /// The tightness matters. With generous windows almost every move has zero
+    /// warp before and after, and a composition that silently drops a piece
+    /// would pass every test — the failures only appear where the schedule is
+    /// actually under pressure.
+    fn timed_problem(n: usize, seed: u32, start: Option<usize>, end: Option<usize>) -> Problem {
+        let mut rng = Rng::new(seed);
+        let mut cells = vec![0i32; n * n];
+        for i in 0..n {
+            for j in 0..n {
+                if i != j {
+                    cells[i * n + j] = 1 + (rng.next_f64() * 300.0) as i32;
+                }
+            }
+        }
+        let mut optional = vec![1u8; n];
+        if let Some(s) = start {
+            optional[s] = 0;
+        }
+        if let Some(e) = end {
+            optional[e] = 0;
+        }
+
+        let mut service = vec![0i64; n];
+        let mut tw_open = vec![0i64; n];
+        let mut tw_close = vec![NEVER; n];
+        for node in 0..n {
+            service[node] = (rng.next_f64() * 60.0) as i64;
+            if rng.next_f64() < 0.7 {
+                let from = (rng.next_f64() * 2000.0) as i64;
+                tw_open[node] = from;
+                tw_close[node] = from + 100 + (rng.next_f64() * 600.0) as i64;
+            }
+        }
+
+        let time = TimeData::new(
+            Matrix::new(n, cells.clone()),
+            service,
+            tw_open,
+            tw_close,
+            0,
+        );
+        Problem::with_time(
+            Matrix::new(n, cells),
+            optional,
+            None,
+            10_000_000,
+            start,
+            end,
+            Some(time),
+        )
+    }
+
+    /// Walk a visiting order with a clock, absorbing lateness as warp.
+    ///
+    /// The slow, obvious answer that every label composition is checked against.
+    /// Deliberately written from the departure time rather than from an optimal
+    /// one — that is what a driver experiences, and it is the thing
+    /// `DurationSegment::departure` exists to pin down.
+    fn simulate_warp(problem: &Problem, order: &[i32]) -> i64 {
+        let time = problem.time.as_ref().unwrap();
+        let mut clock = 0i64;
+        let mut warp = 0i64;
+        for (index, &node) in order.iter().enumerate() {
+            let node = node as usize;
+            if index > 0 {
+                clock += time.travel(order[index - 1] as usize, node);
+            }
+            if clock < time.tw_open[node] {
+                clock = time.tw_open[node];
+            }
+            if clock > time.tw_close[node] {
+                warp += clock - time.tw_close[node];
+                clock = time.tw_close[node];
+            }
+            clock += time.service[node];
+        }
+        warp
+    }
+
+    #[test]
+    fn the_routes_own_warp_matches_a_simulation() {
+        for seed in 1..10u32 {
+            let n = 14;
+            let problem = timed_problem(n, seed, Some(0), Some(n - 1));
+            let tour = seeded_tour(&problem, n);
+            assert_eq!(
+                tour.time_warp(&problem),
+                simulate_warp(&problem, &tour.snapshot()),
+                "seed {seed}"
+            );
+        }
+    }
+
+    /// **The test commit 2 exists for.** Every legal reversal, not a sample.
+    ///
+    /// The composition is head ⊕ reversed-stretch ⊕ tail, and each of the three
+    /// has its own way of being wrong: the head can forget the departure time,
+    /// the stretch can come back in the wrong direction, and the arcs joining
+    /// them can be taken from the wrong nodes. All three produce a plausible
+    /// number, and all three are only visible against a full recompute.
+    #[test]
+    fn every_reversal_predicts_the_schedule_exactly() {
+        for seed in 1..8u32 {
+            for &(start, end) in &[(None, None), (Some(0), Some(13))] {
+                let n = 14;
+                let problem = timed_problem(n, seed, start, end);
+                let tour = seeded_tour(&problem, n);
+                let lo = tour.lo(&problem);
+                let hi = tour.hi(&problem);
+
+                for i in lo..=hi {
+                    for j in (i + 1)..=hi {
+                        let predicted = tour.warp_after_reverse(&problem, i, j);
+                        let mut after = tour.snapshot();
+                        after[i..=j].reverse();
+                        assert_eq!(
+                            predicted,
+                            simulate_warp(&problem, &after),
+                            "seed {seed}, pins {start:?}/{end:?}, reverse({i},{j})"
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    /// The same standard for Or-opt: every segment start, length, gap and
+    /// orientation.
+    #[test]
+    fn every_or_opt_predicts_the_schedule_exactly() {
+        for seed in 1..6u32 {
+            for &(start, end) in &[(None, None), (Some(0), Some(10))] {
+                let n = 11;
+                let problem = timed_problem(n, seed, start, end);
+                let tour = seeded_tour(&problem, n);
+                let lo = tour.lo(&problem);
+                let hi = tour.hi(&problem);
+
+                for seg in 1..=3usize {
+                    for p in lo..=hi {
+                        if p + seg - 1 > hi {
+                            continue;
+                        }
+                        let shortened = n - seg;
+                        for u in tour.lo_gap(&problem)..=tour.hi_gap(&problem, shortened) {
+                            if u == p {
+                                continue;
+                            }
+                            for &reversed in &[false, true] {
+                                if reversed && seg == 1 {
+                                    continue;
+                                }
+                                let predicted =
+                                    tour.warp_after_or_opt(&problem, p, seg, u, reversed);
+
+                                let original = tour.snapshot();
+                                let mut segment: Vec<i32> = original[p..p + seg].to_vec();
+                                if reversed {
+                                    segment.reverse();
+                                }
+                                let mut after: Vec<i32> = original.clone();
+                                after.drain(p..p + seg);
+                                for (k, &node) in segment.iter().enumerate() {
+                                    after.insert(u + k, node);
+                                }
+
+                                assert_eq!(
+                                    predicted,
+                                    simulate_warp(&problem, &after),
+                                    "seed {seed}, pins {start:?}/{end:?}, \
+                                     or_opt(p={p}, seg={seg}, u={u}, rev={reversed})"
+                                );
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /// A route that can meet every window must report exactly zero warp — not
+    /// "a small number". A penalty applied to a feasible route would make the
+    /// search chase lateness that is not there.
+    #[test]
+    fn a_feasible_route_has_no_warp() {
+        let n = 6;
+        let mut cells = vec![0i32; n * n];
+        for i in 0..n {
+            for j in 0..n {
+                if i != j {
+                    cells[i * n + j] = 10;
+                }
+            }
+        }
+        // Wide open windows, and a departure early enough to make them all.
+        let time = TimeData::new(
+            Matrix::new(n, cells.clone()),
+            vec![5; n],
+            vec![0; n],
+            vec![NEVER; n],
+            0,
+        );
+        let problem = Problem::with_time(
+            Matrix::new(n, cells),
+            vec![1; n],
+            None,
+            10_000_000,
+            Some(0),
+            Some(n - 1),
+            Some(time),
+        );
+        let tour = seeded_tour(&problem, n);
+        assert_eq!(tour.time_warp(&problem), 0);
+    }
+
+    /// With no closing time anywhere, the labels are never built and every
+    /// schedule question answers zero — which is what keeps a driver who set no
+    /// windows paying nothing for the machinery.
+    #[test]
+    fn a_problem_without_closing_times_builds_no_labels() {
+        let n = 8;
+        let problem = asymmetric_problem(n, 3, Some(0), Some(7));
+        assert!(!problem.windows_bind());
+        let tour = seeded_tour(&problem, n);
+        assert_eq!(tour.time_warp(&problem), 0);
     }
 }

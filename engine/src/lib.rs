@@ -41,4 +41,5 @@ pub mod localsearch;
 pub mod matrix;
 pub mod problem;
 pub mod rng;
+pub mod segtree;
 pub mod tour;
