@@ -49,6 +49,8 @@ const MAX_N = Number(opt('max-n', 1000))
 const PER_SET = Number(opt('per-set', 8))
 const PROVEN_ONLY = args.includes('--proven-only')
 const HEADED = args.includes('--headed')
+const REQUIRE_NO_COI = args.includes('--no-coi')
+let isolated = null
 const SEED = Number(opt('seed', 1))
 
 const bounds = loadBounds()
@@ -104,6 +106,25 @@ const load = async () => {
   await page.waitForFunction(() => Boolean(window.__bench), null, { timeout: 60_000 })
   const version = await page.evaluate(() => window.__bench.version)
   if (version !== 5) throw new Error(`bench seam version ${version}, expected 5`)
+  /*
+    Record — and on demand require — that none of this needs isolation.
+
+    The BENCH build deliberately injects coi-serviceworker, because the OR-Tools
+    oracle the harness grades against needs SharedArrayBuffer to start at all.
+    Production does not, and `bench:verify-seam` asserts that permanently.
+
+    So the honest thing here is to report what the page actually was, and to let
+    `--no-coi` demand the stronger claim. `npm run bench:tsptw:nocoi` strips the
+    script from a copy of the bench build and passes that flag, which is what
+    turns "tier B needs no cross-origin isolation" from an argument about the
+    source into a measurement of a page that did not have it.
+  */
+  isolated = await page.evaluate(() => window.__bench.isCrossOriginIsolated())
+  if (REQUIRE_NO_COI && isolated) {
+    throw new Error(
+      'the page is cross-origin isolated — this run cannot prove tier B works without it',
+    )
+  }
 }
 await load()
 
@@ -257,7 +278,14 @@ const out = join(RESULTS, opt('out', 'tsptw.json'))
 writeFileSync(
   out,
   JSON.stringify(
-    { generatedAt: new Date().toISOString(), budgetMs: BUDGET, seed: SEED, engines: ENGINES, rows },
+    {
+      generatedAt: new Date().toISOString(),
+      budgetMs: BUDGET,
+      seed: SEED,
+      crossOriginIsolated: isolated,
+      engines: ENGINES,
+      rows,
+    },
     null,
     2,
   ),

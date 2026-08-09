@@ -84,6 +84,9 @@ const ARTEFACTS: Record<EngineVariant, () => URL> = {
   scalar: () => new URL('./wasm/engine.wasm', import.meta.url),
 }
 
+/** One in-flight or finished compilation per variant, per thread. */
+const compiling = new Map<EngineVariant, Promise<WebAssembly.Instance>>()
+
 async function instantiate(url: URL): Promise<WebAssembly.Instance> {
   // The empty import object is the point. There is nothing to call.
   const imports = {}
@@ -130,10 +133,34 @@ export class WasmEngineModule {
     bytes?: BufferSource
   }): Promise<WasmEngineModule> {
     const variant = options?.variant ?? (supportsSimd() ? 'simd' : 'scalar')
-    const instance = options?.bytes
-      ? (await WebAssembly.instantiate(options.bytes, {})).instance
-      : await instantiate(ARTEFACTS[variant]())
-    return new WasmEngineModule(variant, instance)
+    if (options?.bytes) {
+      const { instance } = await WebAssembly.instantiate(options.bytes, {})
+      return new WasmEngineModule(variant, instance)
+    }
+    /*
+      One fetch per variant per thread, however many engines ask.
+
+      M11 runs several WasmEngine instances side by side inside one worker — one
+      per search strategy, so a pool can diversify rather than merely re-seed.
+      Without this cache each of them fetches and compiles its own copy of the
+      same artefact, which is three network requests and three compilations for
+      one thread's worth of searching.
+
+      Cached at MODULE scope, so it is per worker rather than global: workers do
+      not share an address space, and a wasm instance cannot cross a thread
+      boundary anyway.
+    */
+    let loading = compiling.get(variant)
+    if (!loading) {
+      loading = instantiate(ARTEFACTS[variant]()).catch((error: unknown) => {
+        // Do not poison the cache: a transient network failure should be
+        // retryable rather than fatal for the rest of the session.
+        compiling.delete(variant)
+        throw error
+      })
+      compiling.set(variant, loading)
+    }
+    return new WasmEngineModule(variant, await loading)
   }
 
   // ─────────────────────────────────────────────────── memory, carefully

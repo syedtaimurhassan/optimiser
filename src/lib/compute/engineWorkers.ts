@@ -17,6 +17,7 @@ import {
   type SolveWorkerRequest,
   type WorkerEngineKind,
   type WorkerResponse,
+  type WorkerStrategy,
 } from './workerProtocol.ts'
 
 /**
@@ -67,6 +68,35 @@ const MAX_WORKERS = 6
 export function workerCount(hardwareConcurrency: number | null): number {
   const cores = hardwareConcurrency ?? 2
   return Math.max(1, Math.min(MAX_WORKERS, cores - 1))
+}
+
+/**
+ * Which search each worker runs.
+ *
+ * ── Extra cores are diversification, not speedup ──────────────────────────
+ *
+ * The research for this milestone settled that, and the numbers are blunt. iOS
+ * Safari reports a constant `hardwareConcurrency` of 4 on every iPhone from the
+ * 11 to the 17 — it is a fingerprinting defence, not a core count — so a phone
+ * gets three workers whatever silicon it has. Under sustained load phones are
+ * thermally limited rather than compute limited, and schedulers migrate work
+ * onto efficiency cores as the temperature climbs. Three workers is therefore
+ * not three times the search; it is three chances at a good one.
+ *
+ * So they should not all be the same search. Worker 0 runs the measured default;
+ * the others alternate into guided local search and the hybrid, which M10 found
+ * win on different instance sizes — ILS at n = 300, GLS at n = 1000, and ILS
+ * finishing early at n = 100 with two thirds of the budget unspent. Running one
+ * of each means the pool wins wherever any of them would have.
+ *
+ * Worker 0 is pinned to ILS deliberately: with a single worker the pool must
+ * behave exactly like the single-threaded engine, or a one-core device would
+ * silently get a different answer from a two-core one.
+ */
+const STRATEGY_ROTATION: readonly WorkerStrategy[] = ['ils', 'gls', 'hybrid']
+
+export function strategyFor(index: number): WorkerStrategy {
+  return STRATEGY_ROTATION[index % STRATEGY_ROTATION.length]
 }
 
 /**
@@ -325,7 +355,13 @@ export class SolverWorkerPool implements SolverEngine {
       signal?.addEventListener('abort', onAbort, { once: true })
 
       this.workers.forEach((worker, index) => {
-        const message = serialise(request, jobId, baseSeed + index * 0x9e3779b1, this.engine)
+        const message = serialise(
+          request,
+          jobId,
+          baseSeed + index * 0x9e3779b1,
+          this.engine,
+          strategyFor(index),
+        )
         worker.postMessage(message, transferables(message))
       })
     })
@@ -351,6 +387,7 @@ function serialise(
   jobId: number,
   seed: number,
   engine: WorkerEngineKind,
+  strategy: WorkerStrategy,
 ): SolveWorkerRequest {
   const { matrix, constraints } = request
   return {
@@ -374,6 +411,7 @@ function serialise(
     objective: request.objective,
     budgetMs: request.budgetMs,
     departAtSec: request.departAtSec ?? DEFAULT_DEPART_SEC,
+    strategy,
     seed,
   }
 }

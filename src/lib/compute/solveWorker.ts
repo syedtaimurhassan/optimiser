@@ -40,7 +40,20 @@ import {
 */
 const engines = {
   ts: new TsEngine('ts-worker'),
-  wasm: new WasmEngine('wasm-worker'),
+  /*
+    One Rust engine per strategy, not one Rust engine.
+
+    They share a single compiled module — `WasmEngineModule.load` caches per
+    variant per thread — so this is three loaders over one artefact, not three
+    downloads. What it buys is that the pool can hand worker 0 an iterated local
+    search and worker 1 a guided one, which is a different search rather than
+    the same search from a different seed.
+  */
+  wasm: {
+    ils: new WasmEngine('wasm-worker', { strategy: 'ils' }),
+    gls: new WasmEngine('wasm-worker-gls', { strategy: 'gls' }),
+    hybrid: new WasmEngine('wasm-worker-hybrid', { strategy: 'hybrid' }),
+  },
 }
 const controllers = new Map<number, AbortController>()
 
@@ -98,7 +111,11 @@ self.onmessage = async (event: MessageEvent<WorkerRequest>) => {
 
   try {
     const request = rebuild(message)
-    const result = await engines[message.engine ?? 'ts'].solve(
+    const engine =
+      (message.engine ?? 'ts') === 'wasm'
+        ? engines.wasm[message.strategy ?? 'ils']
+        : engines.ts
+    const result = await engine.solve(
       request,
       (progress) =>
         post({

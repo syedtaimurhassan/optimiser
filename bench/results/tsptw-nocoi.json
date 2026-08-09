@@ -1,0 +1,447 @@
+{
+  "generatedAt": "2026-08-09T14:14:19.631Z",
+  "budgetMs": 3000,
+  "seed": 1,
+  "crossOriginIsolated": false,
+  "engines": [
+    "wasm-workers",
+    "ts-workers"
+  ],
+  "rows": [
+    {
+      "set": "Dumas",
+      "instance": "n20w100.001.txt",
+      "n": 21,
+      "published": 237,
+      "proven": true,
+      "engines": {
+        "wasm-workers": {
+          "tourCost": 237,
+          "gap": 0,
+          "violations": 0,
+          "lateness": 0,
+          "worstLate": null,
+          "wallMs": 3032,
+          "engineClaimedFeasible": true,
+          "disagrees": null
+        },
+        "ts-workers": {
+          "tourCost": 237,
+          "gap": 0,
+          "violations": 0,
+          "lateness": 0,
+          "worstLate": null,
+          "wallMs": 913,
+          "engineClaimedFeasible": true,
+          "disagrees": null
+        }
+      }
+    },
+    {
+      "set": "Dumas",
+      "instance": "n60w60.003.txt",
+      "n": 61,
+      "published": 485,
+      "proven": true,
+      "engines": {
+        "wasm-workers": {
+          "tourCost": 485,
+          "gap": 0,
+          "violations": 0,
+          "lateness": 0,
+          "worstLate": null,
+          "wallMs": 3220,
+          "engineClaimedFeasible": true,
+          "disagrees": null
+        },
+        "ts-workers": {
+          "tourCost": 485,
+          "gap": 0,
+          "violations": 0,
+          "lateness": 0,
+          "worstLate": null,
+          "wallMs": 3155,
+          "engineClaimedFeasible": true,
+          "disagrees": null
+        }
+      }
+    },
+    {
+      "set": "Dumas",
+      "instance": "n200w40.005.txt",
+      "n": 201,
+      "published": 1037,
+      "proven": true,
+      "engines": {
+        "wasm-workers": {
+          "tourCost": 1037,
+          "gap": 0,
+          "violations": 0,
+          "lateness": 0,
+          "worstLate": null,
+          "wallMs": 3127,
+          "engineClaimedFeasible": true,
+          "disagrees": null
+        },
+        "ts-workers": {
+          "tourCost": 1040,
+          "gap": 0.289,
+          "violations": 0,
+          "lateness": 0,
+          "worstLate": null,
+          "wallMs": 3119,
+          "engineClaimedFeasible": true,
+          "disagrees": null
+        }
+      }
+    },
+    {
+      "set": "GendreauDumasExtended",
+      "instance": "n20w120.001.txt",
+      "n": 21,
+      "published": 267,
+      "proven": true,
+      "engines": {
+        "wasm-workers": {
+          "tourCost": 267,
+          "gap": 0,
+          "violations": 0,
+          "lateness": 0,
+          "worstLate": null,
+          "wallMs": 3066,
+          "engineClaimedFeasible": true,
+          "disagrees": null
+        },
+        "ts-workers": {
+          "tourCost": 267,
+          "gap": 0,
+          "violations": 0,
+          "lateness": 0,
+          "worstLate": null,
+          "wallMs": 754,
+          "engineClaimedFeasible": true,
+          "disagrees": null
+        }
+      }
+    },
+    {
+      "set": "GendreauDumasExtended",
+      "instance": "n60w180.001.txt",
+      "n": 61,
+      "published": 411,
+      "proven": true,
+      "engines": {
+        "wasm-workers": {
+          "tourCost": 411,
+          "gap": 0,
+          "violations": 0,
+          "lateness": 0,
+          "worstLate": null,
+          "wallMs": 3165,
+          "engineClaimedFeasible": true,
+          "disagrees": null
+        },
+        "ts-workers": {
+          "tourCost": 411,
+          "gap": 0,
+          "violations": 0,
+          "lateness": 0,
+          "worstLate": null,
+          "wallMs": 3120,
+          "engineClaimedFeasible": true,
+          "disagrees": null
+        }
+      }
+    },
+    {
+      "set": "GendreauDumasExtended",
+      "instance": "n100w80.005.txt",
+      "n": 101,
+      "published": 603,
+      "proven": true,
+      "engines": {
+        "wasm-workers": {
+          "tourCost": 603,
+          "gap": 0,
+          "violations": 0,
+          "lateness": 0,
+          "worstLate": null,
+          "wallMs": 3159,
+          "engineClaimedFeasible": true,
+          "disagrees": null
+        },
+        "ts-workers": {
+          "tourCost": 603,
+          "gap": 0,
+          "violations": 0,
+          "lateness": 0,
+          "worstLate": null,
+          "wallMs": 3133,
+          "engineClaimedFeasible": true,
+          "disagrees": null
+        }
+      }
+    },
+    {
+      "set": "OhlmannThomas",
+      "instance": "n150w120.001.txt",
+      "n": 151,
+      "published": 734,
+      "proven": true,
+      "engines": {
+        "wasm-workers": {
+          "tourCost": 734,
+          "gap": 0,
+          "violations": 0,
+          "lateness": 0,
+          "worstLate": null,
+          "wallMs": 3161,
+          "engineClaimedFeasible": true,
+          "disagrees": null
+        },
+        "ts-workers": {
+          "tourCost": 735,
+          "gap": 0.136,
+          "violations": 0,
+          "lateness": 0,
+          "worstLate": null,
+          "wallMs": 3122,
+          "engineClaimedFeasible": true,
+          "disagrees": null
+        }
+      }
+    },
+    {
+      "set": "OhlmannThomas",
+      "instance": "n150w160.003.txt",
+      "n": 151,
+      "published": 608,
+      "proven": true,
+      "engines": {
+        "wasm-workers": {
+          "tourCost": 608,
+          "gap": 0,
+          "violations": 0,
+          "lateness": 0,
+          "worstLate": null,
+          "wallMs": 3166,
+          "engineClaimedFeasible": true,
+          "disagrees": null
+        },
+        "ts-workers": {
+          "tourCost": 617,
+          "gap": 1.48,
+          "violations": 0,
+          "lateness": 0,
+          "worstLate": null,
+          "wallMs": 3110,
+          "engineClaimedFeasible": true,
+          "disagrees": null
+        }
+      }
+    },
+    {
+      "set": "OhlmannThomas",
+      "instance": "n200w140.005.txt",
+      "n": 201,
+      "published": 822,
+      "proven": true,
+      "engines": {
+        "wasm-workers": {
+          "tourCost": 837,
+          "gap": 1.825,
+          "violations": 0,
+          "lateness": 0,
+          "worstLate": null,
+          "wallMs": 3116,
+          "engineClaimedFeasible": true,
+          "disagrees": null
+        },
+        "ts-workers": {
+          "tourCost": 866,
+          "gap": 5.353,
+          "violations": 0,
+          "lateness": 0,
+          "worstLate": null,
+          "wallMs": 3130,
+          "engineClaimedFeasible": true,
+          "disagrees": null
+        }
+      }
+    },
+    {
+      "set": "AFG",
+      "instance": "rbg010a.tw",
+      "n": 11,
+      "published": 671,
+      "proven": true,
+      "engines": {
+        "wasm-workers": {
+          "tourCost": 671,
+          "gap": 0,
+          "violations": 0,
+          "lateness": 0,
+          "worstLate": null,
+          "wallMs": 3155,
+          "engineClaimedFeasible": true,
+          "disagrees": null
+        },
+        "ts-workers": {
+          "tourCost": 671,
+          "gap": 0,
+          "violations": 0,
+          "lateness": 0,
+          "worstLate": null,
+          "wallMs": 273,
+          "engineClaimedFeasible": true,
+          "disagrees": null
+        }
+      }
+    },
+    {
+      "set": "AFG",
+      "instance": "rbg035a.tw",
+      "n": 36,
+      "published": 2144,
+      "proven": true,
+      "engines": {
+        "wasm-workers": {
+          "tourCost": 2144,
+          "gap": 0,
+          "violations": 0,
+          "lateness": 0,
+          "worstLate": null,
+          "wallMs": 3107,
+          "engineClaimedFeasible": true,
+          "disagrees": null
+        },
+        "ts-workers": {
+          "tourCost": 2144,
+          "gap": 0,
+          "violations": 0,
+          "lateness": 0,
+          "worstLate": null,
+          "wallMs": 3157,
+          "engineClaimedFeasible": true,
+          "disagrees": null
+        }
+      }
+    },
+    {
+      "set": "AFG",
+      "instance": "rbg233.tw",
+      "n": 232,
+      "published": 14992,
+      "proven": true,
+      "engines": {
+        "wasm-workers": {
+          "tourCost": 15336,
+          "gap": 2.295,
+          "violations": 0,
+          "lateness": 0,
+          "worstLate": null,
+          "wallMs": 3444,
+          "engineClaimedFeasible": true,
+          "disagrees": null
+        },
+        "ts-workers": {
+          "tourCost": 15345,
+          "gap": 2.355,
+          "violations": 0,
+          "lateness": 0,
+          "worstLate": null,
+          "wallMs": 3486,
+          "engineClaimedFeasible": true,
+          "disagrees": null
+        }
+      }
+    },
+    {
+      "set": "SolomonPotvinBengio",
+      "instance": "rc_206.1.txt",
+      "n": 4,
+      "published": 117.85,
+      "proven": true,
+      "engines": {
+        "wasm-workers": {
+          "tourCost": 117.85,
+          "gap": 0,
+          "violations": 0,
+          "lateness": 0,
+          "worstLate": null,
+          "wallMs": 310,
+          "engineClaimedFeasible": true,
+          "disagrees": null
+        },
+        "ts-workers": {
+          "tourCost": 117.85,
+          "gap": 0,
+          "violations": 0,
+          "lateness": 0,
+          "worstLate": null,
+          "wallMs": 219,
+          "engineClaimedFeasible": true,
+          "disagrees": null
+        }
+      }
+    },
+    {
+      "set": "SolomonPotvinBengio",
+      "instance": "rc_208.2.txt",
+      "n": 29,
+      "published": 533.78,
+      "proven": true,
+      "engines": {
+        "wasm-workers": {
+          "tourCost": 533.78,
+          "gap": 0,
+          "violations": 0,
+          "lateness": 0,
+          "worstLate": null,
+          "wallMs": 3187,
+          "engineClaimedFeasible": true,
+          "disagrees": null
+        },
+        "ts-workers": {
+          "tourCost": 533.78,
+          "gap": 0,
+          "violations": 0,
+          "lateness": 0,
+          "worstLate": null,
+          "wallMs": 1522,
+          "engineClaimedFeasible": true,
+          "disagrees": null
+        }
+      }
+    },
+    {
+      "set": "SolomonPotvinBengio",
+      "instance": "rc_204.1.txt",
+      "n": 46,
+      "published": 878.64,
+      "proven": true,
+      "engines": {
+        "wasm-workers": {
+          "tourCost": 878.64,
+          "gap": 0,
+          "violations": 0,
+          "lateness": 0,
+          "worstLate": null,
+          "wallMs": 3275,
+          "engineClaimedFeasible": true,
+          "disagrees": null
+        },
+        "ts-workers": {
+          "tourCost": 878.64,
+          "gap": 0,
+          "violations": 0,
+          "lateness": 0,
+          "worstLate": null,
+          "wallMs": 3228,
+          "engineClaimedFeasible": true,
+          "disagrees": null
+        }
+      }
+    }
+  ]
+}

@@ -36,6 +36,14 @@ export const PROTOCOL_VERSION = 3
  */
 export type WorkerEngineKind = 'ts' | 'wasm'
 
+/**
+ * Which escape from a local optimum this worker should use.
+ *
+ * The pool assigns them, so N workers are N genuinely different searches rather
+ * than N runs of one search from different seeds. See `strategyFor`.
+ */
+export type WorkerStrategy = 'ils' | 'gls' | 'hybrid'
+
 export interface SolveWorkerRequest {
   type: 'solve'
   version: number
@@ -60,6 +68,7 @@ export interface SolveWorkerRequest {
   seed: number
   /** Seconds from local midnight. Windows mean nothing without it. */
   departAtSec: number
+  strategy: WorkerStrategy
 }
 
 export interface CancelWorkerRequest {

@@ -41,6 +41,7 @@
     "bench:tsptw:fetch": "node bench/fetch-tsptw.mjs",
     "prebench:tsptw": "npm run bench:build",
     "bench:tsptw": "node bench/tsptw.mjs",
+    "bench:tsptw:nocoi": "rm -rf dist-bench-nocoi && cp -R dist-bench dist-bench-nocoi && node bench/strip-coi.mjs dist-bench-nocoi && node bench/tsptw.mjs --dist=dist-bench-nocoi --no-coi --out=tsptw-nocoi.json",
     "prebench:solomon": "npm run bench:build",
     "bench:solomon": "node bench/solomon-routes.mjs"
   },

@@ -66,6 +66,24 @@ for (const file of wasmFiles) {
   }
 }
 
+/*
+  Production must never ask for cross-origin isolation.
+
+  The bench build injects coi-serviceworker on purpose — the OR-Tools oracle
+  needs SharedArrayBuffer to start — and the two builds come off the same
+  index.html, so "production does not have it" is exactly the sort of thing that
+  stops being true by accident. It cost every visitor a forced reload and
+  effectively limited the app to Chromium, which is why M9 removed it, and M11's
+  definition of done rests on the default engine not needing it.
+*/
+const indexHtml = readFileSync(join(ROOT, 'dist-seamcheck', 'index.html'), 'utf8')
+if (/<script[^>]+coi-serviceworker/.test(indexHtml)) {
+  offenders.push(
+    'index.html loads coi-serviceworker.js — production must not require ' +
+      'cross-origin isolation (it forces a reload and is effectively Chromium-only)',
+  )
+}
+
 if (offenders.length > 0) {
   console.error('\nFAIL: dev-only markers found in production output:')
   for (const f of offenders) console.error(`  - ${f}`)
@@ -77,6 +95,7 @@ if (offenders.length > 0) {
 }
 
 console.log(`\nPASS: ${MARKERS.map((m) => `"${m}"`).join(', ')} absent from all production assets.`)
+console.log('PASS: production does not load coi-serviceworker — no isolation required.')
 console.log('PASS: no OR-Tools symbols in production output.')
 console.log(
   wasmFiles.length === 0
