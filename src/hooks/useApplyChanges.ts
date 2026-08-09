@@ -1,9 +1,16 @@
 import { useCallback, useState } from 'react'
 import type { AddressedStop, OptimizedRoute, Route } from '../types'
 import { cumulativeArrivals, serviceSecFor } from '../lib/arrivals'
-import { END_KEY, START_KEY, matrixCacheKey, saveMatrix, toCachedMatrixFlat } from '../lib/costMatrix'
+import {
+  loadMatrix,
+  matrixCacheKey,
+  matrixKeysFor,
+  saveMatrix,
+  seedFromCache,
+  toCachedMatrixFlat,
+} from '../lib/costMatrix'
 import { fetchRouteGeometry } from '../lib/routingService'
-import { joinOrderedStopIds, planSelectiveRoute } from '../lib/planRoute'
+import { joinOrderedStopIds, matrixLayout, planSelectiveRoute } from '../lib/planRoute'
 import { DEFAULT_DEPART_SEC } from '../lib/compute/solverPort'
 import { addedStops, removedStopIds, stagedStops } from '../lib/staging'
 import { useRoutesStore } from '../store/routesStore'
@@ -128,10 +135,28 @@ export function useApplyChanges(route: Route | null) {
     const pending = stops.filter((s) => s.status === 'pending')
 
     try {
+      // The grid this route already paid for, re-indexed onto the new stop set.
+      // Stops that were removed drop out; stops that were added come back unset,
+      // which is exactly what tells the fetch what it still has to buy.
+      const cacheKey = matrixCacheKey(route.id, route.optimizeBy)
+      const layout = matrixLayout({
+        startLocation: route.start,
+        endLocation: route.end,
+        waypoints: pending,
+      })
+      const matrixKeys = matrixKeysFor(
+        layout.matrixWaypointIndex,
+        pending.map((s) => s.id),
+        Boolean(route.start),
+      )
+      const cached = await loadMatrix(cacheKey).catch(() => null)
+      const seed = seedFromCache(cached, matrixKeys, route.optimizeBy)
+
       const result = await planSelectiveRoute({
         startLocation: route.start,
         endLocation: route.end,
         waypoints: pending,
+        seed,
         targetK: route.targetK,
         objective: route.optimizeBy,
         timeBudgetMs: route.searchTierSec * 1000,
@@ -156,17 +181,15 @@ export function useApplyChanges(route: Route | null) {
         signal: controller.signal,
       })
 
-      const { matrix, matrixN, matrixWaypointIndex, ...planned } = result
-      // The matrix's rows are labelled from the planner's POSITIONAL index
-      // list, so a row knows which stop it is without the planner ever having
-      // seen one.
-      const matrixKeys = matrixWaypointIndex.map((waypoint, i) =>
-        waypoint === null
-          ? i === 0 && route.start
-            ? START_KEY
-            : END_KEY
-          : (pending[waypoint]?.id ?? END_KEY),
-      )
+      const {
+        matrix,
+        matrixN,
+        matrixKnown,
+        matrixWaypointIndex: _index,
+        estimatedArcs: _estimated,
+        matrixRequests: _requests,
+        ...planned
+      } = result
       const orderedStopIds = joinOrderedStopIds(result.orderedWaypoints, pending)
 
       const byId = new Map(pending.map((s) => [s.id, s]))
@@ -185,10 +208,10 @@ export function useApplyChanges(route: Route | null) {
         }),
       }
 
-      const cacheKey = matrixCacheKey(route.id, route.optimizeBy)
-      await saveMatrix(cacheKey, toCachedMatrixFlat(matrix, matrixN, matrixKeys, route.optimizeBy)).catch(
-        (e: unknown) => console.warn('[routes] could not cache the cost matrix', e),
-      )
+      await saveMatrix(
+        cacheKey,
+        toCachedMatrixFlat(matrix, matrixN, matrixKeys, route.optimizeBy, matrixKnown),
+      ).catch((e: unknown) => console.warn('[routes] could not cache the cost matrix', e))
 
       applyStagedChanges({ stops, optimized })
       setMatrixCacheKey(cacheKey)

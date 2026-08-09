@@ -2,17 +2,18 @@ import { useRoutesStore, hydrateRoutesStore, SEARCH_TIERS_SEC } from './routesSt
 import { useSolverStore } from './solverStore'
 import { useUiStore } from './uiStore'
 import type { AddressedStop, LatLng, Objective, OptimizedRoute, Favorite } from '../types'
-import { joinOrderedStopIds, planSelectiveRoute } from '../lib/planRoute'
+import { joinOrderedStopIds, matrixLayout, planSelectiveRoute } from '../lib/planRoute'
 import { DEFAULT_DEPART_SEC } from '../lib/compute/solverPort'
 import { warmUpSolver } from '../lib/solver'
 import { activeSelection } from '../lib/compute/active'
 import { describeSelection } from '../lib/compute/registry'
 import { cumulativeArrivals, serviceSecFor } from '../lib/arrivals'
 import {
-  END_KEY,
+  loadMatrix,
   matrixCacheKey,
+  matrixKeysFor,
   saveMatrix,
-  START_KEY,
+  seedFromCache,
   toCachedMatrixFlat,
 } from '../lib/costMatrix'
 
@@ -154,10 +155,37 @@ const ACTIONS = {
     solver.setAbortController(controller)
     try {
       const pending = route.stops.filter((s) => s.status === 'pending')
+
+      /*
+        What we already paid for, before deciding what to buy.
+
+        The keys have to be computed BEFORE the solve now, not after it: the
+        cached grid is an input. `matrixLayout` is the planner's own
+        de-duplication rule, exported so both ends agree on what row 7 is by
+        construction rather than by implementing the same rule twice.
+
+        A failed cache read is a slower solve, never a wrong one — the seed is
+        just an empty grid, and everything gets fetched.
+      */
+      const cacheKey = matrixCacheKey(route.id, route.optimizeBy)
+      const layout = matrixLayout({
+        startLocation: route.start,
+        endLocation: route.end,
+        waypoints: pending,
+      })
+      const matrixKeys = matrixKeysFor(
+        layout.matrixWaypointIndex,
+        pending.map((s) => s.id),
+        Boolean(route.start),
+      )
+      const cached = await loadMatrix(cacheKey).catch(() => null)
+      const seed = seedFromCache(cached, matrixKeys, route.optimizeBy)
+
       const result = await planSelectiveRoute({
         startLocation: route.start,
         endLocation: route.end,
         waypoints: pending,
+        seed,
         targetK: route.targetK,
         objective: route.optimizeBy,
         timeBudgetMs: route.searchTierSec * 1000,
@@ -208,7 +236,21 @@ const ACTIONS = {
         return stop ? serviceSecFor(stop) : 0
       })
 
-      const { matrix, matrixN, matrixWaypointIndex, ...planned } = result
+      /*
+        The grid fields are stripped here rather than spread into the route.
+        `optimized` is persisted, and a Uint8Array mask in the Zustand blob
+        would be re-serialised on every keystroke for the benefit of nobody who
+        reads it — the cache is where the grid lives.
+      */
+      const {
+        matrix,
+        matrixN,
+        matrixKnown,
+        matrixWaypointIndex: _index,
+        estimatedArcs: _estimated,
+        matrixRequests: _requests,
+        ...planned
+      } = result
       const optimized: OptimizedRoute = {
         ...planned,
         orderedStopIds,
@@ -232,17 +274,10 @@ const ACTIONS = {
         optimisation the driver actually asked for. The consequence of losing
         it is a slower insert later, not a wrong one.
       */
-      const matrixKeys = matrixWaypointIndex.map((index, i) =>
-        index === null
-          ? i === 0 && route.start
-            ? START_KEY
-            : END_KEY
-          : (pending[index]?.id ?? END_KEY),
-      )
-      const cacheKey = matrixCacheKey(route.id, route.optimizeBy)
-      await saveMatrix(cacheKey, toCachedMatrixFlat(matrix, matrixN, matrixKeys, route.optimizeBy)).catch(
-        (e: unknown) => console.warn('[routes] could not cache the cost matrix', e),
-      )
+      await saveMatrix(
+        cacheKey,
+        toCachedMatrixFlat(matrix, matrixN, matrixKeys, route.optimizeBy, matrixKnown),
+      ).catch((e: unknown) => console.warn('[routes] could not cache the cost matrix', e))
 
       state.setOptimized(optimized)
       state.setMatrixCacheKey(cacheKey)

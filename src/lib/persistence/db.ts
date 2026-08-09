@@ -72,6 +72,16 @@ export interface MatrixRow {
    * deleted, because every index after it has shifted. See lib/costMatrix.ts.
    */
   keys?: string[]
+  /**
+   * One packed bit per cell: this cost came from a provider, not from a
+   * straight-line estimate.
+   *
+   * Optional, and absent means "all of them" rather than "none of them" — see
+   * `knownOf` in lib/costMatrix.ts. Every row written before M12 came from a
+   * dense fetch, so a missing mask is a true statement about those rows, not a
+   * gap in them.
+   */
+  known?: Uint8Array
   objective: 'duration' | 'distance'
 }
 

@@ -1,10 +1,8 @@
 import type { LineString } from 'geojson'
 import type { LatLng, OptimizedRoute, OrderConstraint } from '../types'
-import {
-  fetchCostMatrix,
-  fetchRouteGeometry,
-  type Objective,
-} from './routingService'
+import { fetchRouteGeometry, type Objective } from './routingService'
+import { buildCostGrid, type GridSeed } from './routing/grid.ts'
+import { getBit } from './routing/sparse.ts'
 import { activeSelection } from './compute/active.ts'
 import { hilbertOrder } from './compute/hilbert.ts'
 import {
@@ -12,7 +10,6 @@ import {
   ORDER_NAMES,
   SKIP_PENALTY,
   makeConstraints,
-  toSolveMatrix,
   type SolveMatrix,
   type SolveProgress,
   type SolverEngine,
@@ -63,6 +60,56 @@ export interface PlanInput {
   breaks?: PlanBreak[]
   /** When the driver leaves, seconds from local midnight. */
   departAtSec?: number
+  /**
+   * What a previous solve of these points already paid for, in MATRIX index
+   * space — see `matrixLayout`, which is exported so the caller can build one.
+   *
+   * Positional, like `stopConstraints`, and for the same reason: the cache is
+   * keyed by stop identity and this module is not allowed to know what a stop
+   * is. The caller translates keys to positions; this module only ever sees a
+   * grid and a mask saying which of its cells are real.
+   */
+  seed?: GridSeed | null
+}
+
+/**
+ * Where each point sits in the matrix.
+ *
+ * The rule is [start?, ...candidates, end?], where a candidate that coincides
+ * with a chosen endpoint is dropped so it is not visited twice. That
+ * de-duplication used to live inside the solve, which meant the caller could
+ * not label a matrix row until after the solve had finished — fine when the
+ * matrix was an output, useless now that it is also an input. Exported so the
+ * cache lookup and the solve agree on what row 7 is, by construction rather
+ * than by both implementing the same rule.
+ */
+export function matrixLayout(input: {
+  startLocation: LatLng | null
+  endLocation: LatLng | null
+  waypoints: readonly LatLng[]
+}): { points: LatLng[]; matrixWaypointIndex: (number | null)[]; candidateIndices: number[] } {
+  const { startLocation, endLocation, waypoints } = input
+  const candidateIndices = waypoints
+    .map((w, i) =>
+      (startLocation && sameCoord(w, startLocation)) || (endLocation && sameCoord(w, endLocation))
+        ? -1
+        : i,
+    )
+    .filter((i) => i >= 0)
+
+  return {
+    points: [
+      ...(startLocation ? [startLocation] : []),
+      ...candidateIndices.map((i) => waypoints[i]),
+      ...(endLocation ? [endLocation] : []),
+    ],
+    matrixWaypointIndex: [
+      ...(startLocation ? [null] : []),
+      ...candidateIndices,
+      ...(endLocation ? [null] : []),
+    ],
+    candidateIndices,
+  }
 }
 
 /** What the caller knows about one waypoint that the geometry does not. */
@@ -159,6 +206,18 @@ export type PlannedRoute = Omit<OptimizedRoute, 'orderedStopIds' | 'arrivalSec'>
   matrix: Int32Array
   /** Side of `matrix`. Carried because a flat buffer cannot report its own. */
   matrixN: number
+  /**
+   * One bit per cell of `matrix`: this cost came from a provider, not a guess.
+   *
+   * Cached alongside the costs, because a cache that cannot tell the two apart
+   * would harden this solve's estimates into next solve's facts — and nothing
+   * downstream would ever ask again.
+   */
+  matrixKnown: Uint8Array
+  /** Arcs of the SOLVED TOUR that were still guesses when it was chosen. */
+  estimatedArcs: number
+  /** Provider requests this plan cost. Zero means the cache answered. */
+  matrixRequests: number
   /** Per matrix index: which `waypoints` entry it is, or null for an endpoint. */
   matrixWaypointIndex: (number | null)[]
   /** True when every time window along the solved order is met. */
@@ -241,27 +300,8 @@ export async function planSelectiveRoute(input: PlanInput): Promise<PlannedRoute
   // Candidates = uploaded stops, minus any that coincide with a chosen
   // endpoint. Their positions in the caller's array are carried alongside, so
   // the caller can name the matrix's rows without this module seeing an id.
-  const candidateIndices = waypoints
-    .map((w, i) => (
-      (startLocation && sameCoord(w, startLocation)) ||
-      (endLocation && sameCoord(w, endLocation))
-        ? -1
-        : i
-    ))
-    .filter((i) => i >= 0)
+  const { points, matrixWaypointIndex, candidateIndices } = matrixLayout(input)
   const candidates = candidateIndices.map((i) => waypoints[i])
-
-  // Build the ordered point list: [start?, ...candidates, end?].
-  const points: LatLng[] = [
-    ...(startLocation ? [startLocation] : []),
-    ...candidates,
-    ...(endLocation ? [endLocation] : []),
-  ]
-  const matrixWaypointIndex: (number | null)[] = [
-    ...(startLocation ? [null] : []),
-    ...candidateIndices,
-    ...(endLocation ? [null] : []),
-  ]
   if (points.length < 2) {
     throw new Error('Add at least two points (upload a file, or set start/end).')
   }
@@ -277,19 +317,27 @@ export async function planSelectiveRoute(input: PlanInput): Promise<PlannedRoute
   // Fixed endpoints occupy slots in the ordered route but aren't candidate stops.
   const fixedCount = (startNode !== null ? 1 : 0) + (endNode !== null ? 1 : 0)
 
-  // 1) Cost grid (tiled + rate-limited for large sets).
-  onStatus?.('Fetching cost matrix…')
-  const rows = await fetchCostMatrix(points, objective, (done, total) => {
-    onStatus?.(
-      total > 1 ? `Fetching cost matrix… ${done}/${total}` : 'Fetching cost matrix…',
-    )
-  })
+  /*
+    1) The cost grid: cache first, then as few requests as the search needs,
+       then a calibrated straight line for everything else.
 
-  // The one conversion. Above this line the world is jagged arrays of doubles
-  // because that is what a JSON API returns; below it, everything is a flat
-  // Int32Array — including, from M10, WASM linear memory.
+    The pinned endpoints are fetched in full. There are at most two of them,
+    every tour uses both, and 2n cells is cheap insurance against the first and
+    last legs of a round being guesses.
+  */
   const n = points.length
-  const matrix = toSolveMatrix(rows)
+  onStatus?.('Fetching cost matrix…')
+  const grid = await buildCostGrid({
+    points,
+    objective,
+    seed: input.seed,
+    mandatory: [startNode, endNode].filter((i): i is number => i !== null),
+    signal,
+    onProgress: (done, total) => {
+      onStatus?.(total > 1 ? `Fetching cost matrix… ${done}/${total}` : 'Fetching cost matrix…')
+    },
+  })
+  const matrix = grid.matrix
 
   /*
     The matrix holds SECONDS on a duration objective and METRES on a distance
@@ -416,11 +464,23 @@ export async function planSelectiveRoute(input: PlanInput): Promise<PlannedRoute
   // costs it is made of — which are the fallback for arrival times when the
   // road router is unreachable.
   let matrixCost = 0
+  let estimatedArcs = 0
   const matrixLegs: number[] = []
   for (let i = 0; i < visited.length - 1; i++) {
     const cell = matrix[visited[i] * n + visited[i + 1]]
     matrixLegs.push(cell)
     matrixCost += cell
+    if (!getBit(grid.known, visited[i] * n + visited[i + 1])) estimatedArcs++
+  }
+
+  /** Everything both return paths carry that describes the GRID, not the tour. */
+  const gridFields = {
+    matrix,
+    matrixN: n,
+    matrixKnown: grid.known,
+    matrixWaypointIndex,
+    estimatedArcs,
+    matrixRequests: grid.requests,
   }
 
   // 3) Best-effort real road geometry for the chosen sequence.
@@ -434,9 +494,7 @@ export async function planSelectiveRoute(input: PlanInput): Promise<PlannedRoute
       durationSeconds: road.durationSeconds,
       legSeconds: road.legSeconds,
       legMeters: road.legMeters,
-      matrix,
-      matrixN: n,
-      matrixWaypointIndex,
+      ...gridFields,
       candidatesVisited: orderedWaypoints.length - fixedCount,
       candidatesTotal: candidates.length,
       estimated: false,
@@ -470,11 +528,10 @@ export async function planSelectiveRoute(input: PlanInput): Promise<PlannedRoute
       // pretending metres are seconds.
       legSeconds: objective === 'duration' ? matrixLegs : straightLegs.map((m) => m / 8),
       legMeters: objective === 'distance' ? matrixLegs : straightLegs,
-      // Still worth caching: the matrix came from OSRM Table and is real. Only
-      // the GEOMETRY leg of the pipeline failed.
-      matrix,
-      matrixN: n,
-      matrixWaypointIndex,
+      // Still worth caching: whatever the grid did fetch is real, and the mask
+      // says which cells those were. Only the GEOMETRY leg of the pipeline
+      // failed.
+      ...gridFields,
       candidatesVisited: orderedWaypoints.length - fixedCount,
       candidatesTotal: candidates.length,
       estimated: true,

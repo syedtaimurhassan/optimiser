@@ -91,8 +91,14 @@ export function planCover(need: NeedSet, order: readonly number[], limits: Provi
 
     for (const i of pending) {
       const wants = need[i] as readonly number[]
+      /*
+        The union is the destinations we NEED, and deliberately does not include
+        the sources themselves. Adding each member as a destination looks free —
+        it buys the intra-band arcs for nothing — but it is what turns "forty
+        stops all need one new column" into a forty-by-forty request. The
+        arithmetic has to serve the smallest useful band, not the tidiest one.
+      */
       const grown = new Set(union)
-      grown.add(i)
       for (const j of wants) grown.add(j)
 
       // The real constraint, not a square-root approximation of it. Sources are
