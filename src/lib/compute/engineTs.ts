@@ -6,6 +6,11 @@ import {
   effectiveOptional,
   makeRng,
   resolveEndpoints,
+  DEFAULT_DEPART_SEC,
+  ORDER_FIRST,
+  ORDER_LAST,
+  TW_NEVER,
+  resolvePins,
   toResult,
   type SolveProgress,
   type SolveRequest,
@@ -133,6 +138,38 @@ export class Search {
   /** Scratch for building a perturbed tour, so ILS allocates nothing per pass. */
   private scratch: Int32Array
 
+  /*
+    ── The schedule, tier D's way ────────────────────────────────────────
+
+    The Rust engine answers "how late would this move make the route" in
+    O(log n), from Vidal labels held in a segment tree. This engine walks the
+    whole route with a clock: O(n) per evaluation.
+
+    That is a real and deliberate difference, and it is the ONLY kind of
+    difference a tier is allowed to have. registry.ts states the rule in bold —
+    tiers differ in SPEED, never in capability — because a feature gated on a
+    capability becomes a bug report nobody can reproduce. So this engine honours
+    windows and pins exactly as the fast one does, and is simply slower at it.
+
+    Reached only where WebAssembly is unavailable, which in practice means a
+    browser old enough that a slower search is the least of its problems.
+  */
+  readonly durations: Int32Array
+  readonly serviceTimeSec: Int32Array
+  readonly twOpenSec: Int32Array
+  readonly twCloseSec: Int32Array
+  readonly departAtSec: number
+  /** True when some node has a closing time — see `Problem::windows_bind`. */
+  readonly windowsBind: boolean
+  /** 0 anywhere, 1 first, 2 last. */
+  readonly pins: Uint8Array
+  readonly firstCount: number
+  readonly lastCount: number
+  /** What a second of lateness costs, in arc units. The driver adapts it. */
+  twPenalty = 0
+  /** Where a candidate post-move order is materialised before being walked. */
+  private trial: Int32Array
+
   constructor(request: SolveRequest) {
     const { matrix } = request
     this.n = matrix.n
@@ -156,6 +193,159 @@ export class Search {
     this.queue = new Int32Array(this.n)
     this.queued = new Uint8Array(this.n)
     this.scratch = new Int32Array(this.n)
+
+    const { serviceTimeSec, twOpenSec, twCloseSec } = request.constraints
+    this.durations = matrix.durations
+    this.serviceTimeSec = serviceTimeSec
+    this.twOpenSec = twOpenSec
+    this.twCloseSec = twCloseSec
+    this.departAtSec = request.departAtSec ?? DEFAULT_DEPART_SEC
+    this.windowsBind = twCloseSec.some((close) => close < TW_NEVER)
+    this.pins = resolvePins(request)
+    let first = 0
+    let last = 0
+    for (const pin of this.pins) {
+      if (pin === ORDER_FIRST) first++
+      else if (pin === ORDER_LAST) last++
+    }
+    this.firstCount = first
+    this.lastCount = last
+    this.trial = new Int32Array(this.n)
+  }
+
+  // ────────────────────────────────────────────────────────── schedule
+
+  /**
+   * Total lateness along a sequence, in seconds. O(n).
+   *
+   * Waiting for a window to open is free; arriving late is absorbed rather than
+   * rejected, which is the whole point of the time-warp relaxation — the search
+   * has to be able to walk through infeasible routes to reach good ones.
+   */
+  warpOf(order: ArrayLike<number>, length: number): number {
+    const { durations, n, serviceTimeSec, twOpenSec, twCloseSec } = this
+    let clock = this.departAtSec
+    let warp = 0
+    for (let i = 0; i < length; i++) {
+      const node = order[i]
+      if (i > 0) clock += durations[order[i - 1] * n + node]
+      if (clock < twOpenSec[node]) clock = twOpenSec[node]
+      if (clock > twCloseSec[node]) {
+        warp += clock - twCloseSec[node]
+        clock = twCloseSec[node]
+      }
+      clock += serviceTimeSec[node]
+    }
+    return warp
+  }
+
+  /** Lateness of the route as it stands, or 0 when nothing can be late. */
+  timeWarp(): number {
+    if (!this.windowsBind) return 0
+    return this.warpOf(this.tour, this.length)
+  }
+
+  /** Lateness now, but only when it can affect a decision. */
+  private warpNow(): number {
+    return this.windowsBind && this.twPenalty !== 0 ? this.timeWarp() : 0
+  }
+
+  /** Price a move's effect on the schedule, in arc units. */
+  private warpCost(after: () => number, before: number): number {
+    if (!this.windowsBind || this.twPenalty === 0) return 0
+    return this.twPenalty * (after() - before)
+  }
+
+  private warpAfterReverse(i: number, j: number): number {
+    const { trial, tour, length } = this
+    trial.set(tour.subarray(0, length))
+    for (let a = i, b = j; a < b; a++, b--) {
+      const swap = trial[a]
+      trial[a] = trial[b]
+      trial[b] = swap
+    }
+    return this.warpOf(trial, length)
+  }
+
+  private warpAfterOrOpt(p: number, seg: number, u: number, reversed: boolean): number {
+    const { trial, tour, length } = this
+    let at = 0
+    const shortened = length - seg
+    const segAt = (k: number) => tour[reversed ? p + seg - 1 - k : p + k]
+    const restAt = (t: number) => (t < p ? tour[t] : tour[t + seg])
+    for (let t = 0; t < u; t++) trial[at++] = restAt(t)
+    for (let k = 0; k < seg; k++) trial[at++] = segAt(k)
+    for (let t = u; t < shortened; t++) trial[at++] = restAt(t)
+    return this.warpOf(trial, length)
+  }
+
+  private warpAfterInsert(node: number, u: number): number {
+    const { trial, tour, length } = this
+    trial.set(tour.subarray(0, u))
+    trial[u] = node
+    for (let t = u; t < length; t++) trial[t + 1] = tour[t]
+    return this.warpOf(trial, length + 1)
+  }
+
+  private warpAfterRemove(p: number): number {
+    const { trial, tour, length } = this
+    trial.set(tour.subarray(0, p))
+    for (let t = p + 1; t < length; t++) trial[t - 1] = tour[t]
+    return this.warpOf(trial, length - 1)
+  }
+
+  // ─────────────────────────────────────────────────────────── the zones
+
+  /**
+   * The span of positions a move may rearrange, for the zone holding `p`.
+   *
+   * Mirrors `Tour::zone` in the Rust engine — see the `pin` field on `Problem`
+   * for the three zones and why crossing between them is forbidden. Returns null
+   * for a pinned depot or an empty zone.
+   */
+  zone(p: number): [number, number] | null {
+    const lo = this.start === null ? 0 : 1
+    const hi = this.end === null ? this.length - 1 : this.length - 2
+    if (this.firstCount === 0 && this.lastCount === 0) {
+      return p >= lo && p <= hi && lo <= hi ? [lo, hi] : null
+    }
+    const s = this.start === null ? 0 : 1
+    const e = this.end === null ? 0 : 1
+    const firstEnd = s + this.firstCount
+    const autoEnd = Math.max(firstEnd, this.length - e - this.lastCount)
+    let span: [number, number]
+    if (p < s) return null
+    else if (p < firstEnd) span = [s, firstEnd - 1]
+    else if (p < autoEnd) span = [firstEnd, autoEnd - 1]
+    else if (p < this.length - e) span = [autoEnd, this.length - e - 1]
+    else return null
+    return span[0] > span[1] ? null : span
+  }
+
+  /** Lowest gap an unpinned insertion may use — past the leading pinned run. */
+  loGap(): number {
+    const start = this.start === null ? 0 : 1
+    if (this.firstCount === 0) return start
+    let at = start
+    while (at < this.length && this.pins[this.tour[at]] === ORDER_FIRST) at++
+    return at
+  }
+
+  /** Highest gap an unpinned insertion may use, for a route of `length`. */
+  hiGap(length: number): number {
+    let at = this.end === null ? length : length - 1
+    if (this.lastCount === 0) return at
+    while (at > 0 && this.pins[this.tour[at - 1]] === ORDER_LAST) at--
+    return at
+  }
+
+  /** Gaps an absent node may occupy, given its pin class. Inclusive. */
+  private gapRange(node: number): [number, number] {
+    const start = this.start === null ? 0 : 1
+    const end = this.end === null ? this.length : this.length - 1
+    if (this.pins[node] === ORDER_FIRST) return [start, this.loGap()]
+    if (this.pins[node] === ORDER_LAST) return [this.hiGap(this.length), end]
+    return [this.loGap(), this.hiGap(this.length)]
   }
 
   // ───────────────────────────────────────────────────────── candidates
@@ -364,7 +554,14 @@ export class Search {
   private twoOptFrom(a: number): boolean {
     const p = this.pos[a]
     if (p < 0) return false
-    const { candidates, width, lo, hi } = this
+    // The zone, not the whole route: a move may reorder within the first block,
+    // the unpinned middle, or the last block, never across a boundary. Same rule
+    // as the Rust engine, and for the same reason — see `Tour::zone`.
+    const span = this.zone(p)
+    if (!span) return false
+    const [lo, hi] = span
+    const warpNow = this.warpNow()
+    const { candidates, width } = this
     const base = a * width
 
     for (let s = 0; s < width; s++) {
@@ -374,7 +571,9 @@ export class Search {
 
       // `a` before `c`: reverse (p+1 .. q), creating the arc a -> c.
       if (q >= p + 1 && p + 1 >= lo && q <= hi) {
-        const delta = this.reverseDelta(p + 1, q)
+        const delta =
+          this.reverseDelta(p + 1, q) +
+          this.warpCost(() => this.warpAfterReverse(p + 1, q), warpNow)
         if (delta < -1e-9) {
           this.applyReverse(p + 1, q)
           this.wake(a)
@@ -385,7 +584,9 @@ export class Search {
 
       // `c` before `a`: reverse (q+1 .. p), creating the arc c -> a.
       if (p >= q + 1 && q + 1 >= lo && p <= hi) {
-        const delta = this.reverseDelta(q + 1, p)
+        const delta =
+          this.reverseDelta(q + 1, p) +
+          this.warpCost(() => this.warpAfterReverse(q + 1, p), warpNow)
         if (delta < -1e-9) {
           this.applyReverse(q + 1, p)
           this.wake(a)
@@ -475,7 +676,11 @@ export class Search {
   private orOptFrom(a: number): boolean {
     const p = this.pos[a]
     if (p < 0) return false
-    const { candidates, width, length, lo, hi } = this
+    const span = this.zone(p)
+    if (!span) return false
+    const [lo, hi] = span
+    const warpNow = this.warpNow()
+    const { candidates, width, length } = this
 
     for (let len = 1; len <= MAX_SEGMENT; len++) {
       if (p + len - 1 > hi || p < lo) break
@@ -491,15 +696,16 @@ export class Search {
         // Gap indices in the shortened tour, either side of `c`.
         const shifted = q > p ? q - len : q
         for (const u of [shifted, shifted + 1]) {
-          const shortened = length - len
-          const loGap = this.start === null ? 0 : 1
-          const hiGap = this.end === null ? shortened : shortened - 1
-          if (u < loGap || u > hiGap) continue
+          // In the shortened tour the zone loses `len` positions, so its last
+          // legal gap moves down by the same amount.
+          if (u < lo || u > hi + 1 - len) continue
           if (u === p) continue // putting it back where it came from
 
           for (const reversed of [false, true]) {
             if (reversed && len === 1) continue
-            const delta = this.orOptDelta(p, len, u, reversed)
+            const delta =
+              this.orOptDelta(p, len, u, reversed) +
+              this.warpCost(() => this.warpAfterOrOpt(p, len, u, reversed), warpNow)
             if (delta < -1e-9) {
               const moved = this.tour.slice(p, p + len)
               this.applyOrOpt(p, len, u, reversed)
@@ -517,26 +723,33 @@ export class Search {
   // ────────────────────────────────────────────────── add / drop / swap
 
   /** Cheapest gap for an absent node, as (gap index, cost). */
-  private bestInsertion(node: number): { at: number; cost: number } {
+  private bestInsertion(node: number): { at: number; cost: number; arcs: number } {
     const { cells, n, length, tour } = this
-    const loGap = this.start === null ? 0 : 1
-    const hiGap = this.end === null ? length : length - 1
+    const [loGap, hiGap] = this.gapRange(node)
+    const warpNow = this.warpNow()
 
     let bestAt = loGap
     let bestCost = Infinity
+    let bestArcs = Infinity
     for (let u = loGap; u <= hiGap; u++) {
       const left = u > 0 ? tour[u - 1] : -1
       const right = u < length ? tour[u] : -1
-      const cost =
+      const arcs =
         (left >= 0 ? cells[left * n + node] : 0) +
         (right >= 0 ? cells[node * n + right] : 0) -
         (left >= 0 && right >= 0 ? cells[left * n + right] : 0)
+      // Two costs, for two different questions — see `Insertion` in the Rust
+      // engine's tour.rs. `cost` decides WHERE the stop goes, `arcs` decides
+      // whether it goes at all, and conflating them lets the search buy
+      // punctuality by abandoning a delivery.
+      const cost = arcs + this.warpCost(() => this.warpAfterInsert(node, u), warpNow)
       if (cost < bestCost) {
         bestCost = cost
+        bestArcs = arcs
         bestAt = u
       }
     }
-    return { at: bestAt, cost: bestCost }
+    return { at: bestAt, cost: bestCost, arcs: bestArcs }
   }
 
   /** What removing the node at position `p` saves in arcs. */
@@ -584,6 +797,13 @@ export class Search {
       if (p < this.lo || p > this.hi) continue
       const node = this.tour[p]
       if (this.optional[node] !== 1) continue
+      /*
+        Arcs alone, with no warp relief — same rule as the Rust engine.
+
+        Dropping a stop does relieve lateness, and pricing that in makes
+        abandoning a delivery the cheapest move available on a day that cannot
+        be done on time. Lateness decides where a stop goes, never whether.
+      */
       if (this.removalGain(p) - this.skipPenalty > 1e-9) {
         this.removeAt(p)
         improved = true
@@ -595,8 +815,8 @@ export class Search {
       for (let node = 0; node < this.n; node++) {
         if (this.optional[node] !== 1 || this.pos[node] !== -1) continue
         if (this.optionalVisited() >= this.cap) break
-        const { at, cost } = this.bestInsertion(node)
-        if (cost - this.skipPenalty < -1e-9) {
+        const { at, arcs } = this.bestInsertion(node)
+        if (arcs - this.skipPenalty < -1e-9) {
           this.insertAt(node, at)
           this.wake(node)
           improved = true
@@ -614,7 +834,10 @@ export class Search {
         let worstGain = -Infinity
         for (let p = this.lo; p <= this.hi && p < this.length; p++) {
           if (this.optional[this.tour[p]] !== 1) continue
-          const gain = this.removalGain(p)
+          const warpNow = this.warpNow()
+          const gain =
+            this.removalGain(p) -
+            this.warpCost(() => this.warpAfterRemove(p), warpNow)
           if (gain > worstGain) {
             worstGain = gain
             worstAt = p
@@ -676,10 +899,11 @@ export class Search {
    * instead of exploring, so segment reversal is deliberately not used here.
    */
   doubleBridge(rng: () => number): boolean {
-    // The last cut may not detach a pinned end, and the first may not detach a
-    // pinned start.
-    const aMin = 1
-    const cMax = this.end === null ? this.length : this.length - 1
+    // Confined to the unpinned middle. Reaching into the first or last block
+    // would move a stop the driver explicitly placed there, and the local
+    // search — which respects the zones — could not put it back.
+    const aMin = Math.max(1, this.loGap())
+    const cMax = this.hiGap(this.length)
     if (cMax - aMin < 3) return false
 
     // Drawn nested rather than drawn-and-sorted. Three independent draws collide
@@ -879,11 +1103,61 @@ export class TsEngine implements SolverEngine {
     const rng = makeRng(request.seed ?? 0x9e3779b9)
     const search = new Search(request)
 
+    /*
+      Seed the lateness price from the instance's own scale, then construct
+      again with it in hand — the same two-pass opening the Rust driver uses. A
+      first route built with no regard for the clock can be so late that the
+      descent spends its whole budget climbing out.
+    */
     search.construct(request.seedOrder)
+    if (search.windowsBind) {
+      const arcs = Math.max(1, search.length - 1)
+      search.twPenalty = Math.max(1, Math.round(search.cost() / arcs))
+      search.construct(request.seedOrder)
+    }
     search.localSearch(deadline)
+
+    /*
+      Two bests, for the same reason the Rust driver keeps two: "cheapest" and
+      "on time" are different questions, and a cheaper late route must never be
+      returned when an on-time one was found. Both judged unpenalised, so a
+      route recorded early stays comparable with one recorded later.
+    */
+    const penalised = () => search.objective() + search.twPenalty * search.timeWarp()
+    let bestFeasible: Int32Array | null = null
+    let bestFeasibleObjective = Infinity
+    let bestWarp = Infinity
+
+    const record = (): boolean => {
+      const objective = search.objective()
+      const warp = search.timeWarp()
+      let improved = false
+      if (warp === 0 && objective < bestFeasibleObjective - 1e-9) {
+        bestFeasibleObjective = objective
+        bestFeasible = search.snapshot()
+        improved = true
+      }
+      if (warp < bestWarp || (warp === bestWarp && objective < bestObjective - 1e-9)) {
+        bestWarp = warp
+        bestObjective = objective
+        best = search.snapshot()
+        improved = true
+      }
+      return improved
+    }
+
+    /** Push the price of lateness towards the feasibility boundary. */
+    const adapt = (warp: number) => {
+      if (!search.windowsBind) return
+      search.twPenalty =
+        warp > 0
+          ? Math.min(1_000_000_000, Math.floor((search.twPenalty * 5) / 4) + 1)
+          : Math.max(1, Math.floor((search.twPenalty * 4) / 5))
+    }
 
     let best = search.snapshot()
     let bestObjective = search.objective()
+    record()
     let iterations = 0
     let lastYield = Date.now()
     let lastProgress = 0
@@ -919,7 +1193,7 @@ export class TsEngine implements SolverEngine {
     // How far uphill the walk may drift. Zero unless the K cap binds — see the
     // acceptance branch below for why.
     const drift = search.hasAbsentCandidates() ? 0.02 : 0
-    let currentObjective = bestObjective
+    let currentObjective = penalised()
 
     while (Date.now() < deadline && barrenRestarts < BARREN_RESTARTS) {
       if (signal?.aborted) throw abortError()
@@ -953,10 +1227,12 @@ export class TsEngine implements SolverEngine {
       }
       iterations++
 
-      const objective = search.objective()
-      if (objective < bestObjective - 1e-9) {
-        bestObjective = objective
-        best = search.snapshot()
+      // The PENALISED objective, so a route that is cheap only because it is
+      // late does not read as an improvement. `record` judges what to KEEP on
+      // unpenalised terms.
+      const objective = penalised()
+      const warp = search.timeWarp()
+      if (record()) {
         currentObjective = objective
         sinceImprovement = 0
         barrenRestarts = 0
@@ -986,9 +1262,10 @@ export class TsEngine implements SolverEngine {
       } else {
         sinceImprovement++
         search.restore(best)
-        currentObjective = bestObjective
+        currentObjective = penalised()
       }
 
+      adapt(warp)
       report(false)
 
       const now = Date.now()
@@ -1000,7 +1277,8 @@ export class TsEngine implements SolverEngine {
     }
 
     report(true)
-    return toResult(request, best)
+    // On time if we ever found one, least-late otherwise.
+    return toResult(request, bestFeasible ?? best)
   }
 }
 
