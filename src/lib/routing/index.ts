@@ -9,17 +9,30 @@
  */
 
 import { createOsrmProvider } from './osrm.ts'
+import { createValhallaProvider } from './valhalla.ts'
 import { createRoutingService, type RoutingService } from './service.ts'
 
 export * from './types.ts'
 export * from './service.ts'
 export { createOsrmProvider, OSRM_ID, toIntegerCells } from './osrm.ts'
+export { createValhallaProvider, VALHALLA_ID } from './valhalla.ts'
 
 let singleton: RoutingService | null = null
 
+/**
+ * OSRM primary, Valhalla fallback.
+ *
+ * Not a close call. OSRM answers a 100×100 table in 0.3 s and takes 10,000
+ * cells per request; Valhalla takes 2,500 and needs eight seconds for them.
+ * But OSRM is a demo server that says out loud it may be withdrawn without
+ * notice, and the fallback needs no key, which is what makes it a real one.
+ */
 export function getRoutingService(): RoutingService {
   if (!singleton) {
-    singleton = createRoutingService({ primary: createOsrmProvider() })
+    singleton = createRoutingService({
+      primary: createOsrmProvider(),
+      fallback: createValhallaProvider(),
+    })
   }
   return singleton
 }
