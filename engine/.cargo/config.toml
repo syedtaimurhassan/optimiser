@@ -9,5 +9,11 @@
 # n² × 4 B = 4 MB, and everything else together is under 100 KB. We are nowhere
 # near this ceiling; the number exists so that the ceiling is one WE chose rather
 # than one the linker picked.
+#
+# NOTE: this applies to a bare `cargo build` only. `scripts/build-engine.mjs`
+# sets RUSTFLAGS, and RUSTFLAGS REPLACES this key rather than merging with it —
+# so the script passes the same flag itself, and is the real source of truth for
+# what ships. The check at the end of that script fails the build if either
+# artefact comes out without a bounded maximum.
 [target.wasm32-unknown-unknown]
 rustflags = ["-C", "link-arg=--max-memory=268435456"]

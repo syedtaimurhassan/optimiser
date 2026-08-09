@@ -33,3 +33,4 @@ bench/fixtures/tsplib/
 # src/lib/compute/wasm/) so that `npm run build` works on a machine with no Rust
 # toolchain; only the intermediates are ignored.
 engine/target/
+engine/target-simd/

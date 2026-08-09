@@ -35,6 +35,8 @@
 //! owns every question about what those integers mean.
 
 pub mod construct;
+pub mod driver;
+pub mod ffi;
 pub mod localsearch;
 pub mod matrix;
 pub mod problem;
