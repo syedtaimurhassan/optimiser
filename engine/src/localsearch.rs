@@ -202,9 +202,27 @@ impl LocalSearch {
             match self.pop(tour) {
                 Some(node) => {
                     *budget -= 1;
-                    if self.two_opt_from(problem, tour, node)
+                    /*
+                      The operator table, in the order they are tried.
+
+                      First improvement, cheapest operator first: a node's sweep
+                      stops at the first move that pays, so putting the cheap
+                      neighbourhoods before the expensive ones means the
+                      expensive ones only run where the cheap ones found
+                      nothing. Adding an operator is adding a line here and a
+                      method below — which is the point of writing it as a
+                      table rather than as a chain of `||`.
+
+                      2-opt and Or-opt are M10's. `exchange` is
+                      `use_exchange` from OR-Tools' operator set, and it is here
+                      because it cannot be composed from the other two: trading
+                      two stops that sit far apart in the route takes several
+                      individually-worse moves any other way.
+                    */
+                    let improved = self.two_opt_from(problem, tour, node)
                         || self.or_opt_from(problem, tour, node)
-                    {
+                        || self.exchange_from(problem, tour, node);
+                    if improved {
                         self.push(node as i32);
                     }
                 }
@@ -369,6 +387,56 @@ impl LocalSearch {
                         }
                     }
                 }
+            }
+        }
+        false
+    }
+
+    // ─────────────────────────────────────────────────────── exchange
+
+    /// Swap `a` with one of its candidates, first improvement.
+    ///
+    /// `use_exchange` in OR-Tools' operator set. Confined to one zone like every
+    /// other move, and searched over `a`'s candidate list rather than over every
+    /// position — swapping a stop with something on the other side of the city
+    /// is never the improving move, and scanning for it would cost O(n) per node
+    /// and swamp the candidate lists that make the rest of this cheap.
+    fn exchange_from(&mut self, problem: &Problem, tour: &mut Tour, a: usize) -> bool {
+        let p = tour.pos[a];
+        if p < 0 {
+            return false;
+        }
+        let p = p as usize;
+        let Some((lo, hi)) = tour.zone(problem, p) else {
+            return false;
+        };
+        let warp_now = self.warp_now(problem, tour);
+
+        for slot in 0..problem.candidates.width {
+            let c = problem.candidates.of(a)[slot] as usize;
+            let q = tour.pos[c];
+            if q < 0 {
+                continue;
+            }
+            let q = q as usize;
+            if q < lo || q > hi || q == p {
+                continue;
+            }
+            // Ordered, because `exchange_delta` is written for `p < q` and the
+            // adjacent case depends on which of the two comes first.
+            let (left, right) = if p < q { (p, q) } else { (q, p) };
+
+            let delta = tour.exchange_delta(problem, left, right)
+                + self.warp_cost(
+                    problem,
+                    || tour.warp_after_exchange(problem, left, right),
+                    warp_now,
+                );
+            if delta < 0 {
+                tour.apply_exchange(problem, left, right);
+                self.wake(tour, a);
+                self.wake(tour, c);
+                return true;
             }
         }
         false

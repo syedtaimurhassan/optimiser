@@ -729,6 +729,88 @@ impl Tour {
         added - removed + reversal
     }
 
+    // ─────────────────────────────────────────────────────── exchange
+
+    /// Exact delta of swapping the occupants of positions `p` and `q`, `p < q`.
+    ///
+    /// ── The operator OR-Tools has and M10 did not ─────────────────────────
+    ///
+    /// `use_exchange` in `routing_parameters.proto`. It is not reachable by
+    /// composing the two moves we already had, which is the reason it earns its
+    /// place: 2-opt reverses a contiguous run, Or-opt slides a short run
+    /// somewhere else, and neither can trade two stops that are far apart in the
+    /// route without passing through several worse solutions on the way.
+    ///
+    /// Cheap, too. Four arcs leave and four arrive, all O(1) — and unlike 2-opt
+    /// there is no reversal, so the direction of every arc between `p` and `q`
+    /// is untouched and the asymmetric correction term does not arise at all.
+    ///
+    /// ── The adjacent case is a different move ─────────────────────────────
+    ///
+    /// When `q == p + 1` the two nodes share an arc: `p → q` is removed and
+    /// `q → p` appears in its place, so there are three arcs on each side rather
+    /// than four. Writing the general case and letting the shared arc cancel
+    /// gives the wrong answer, because on an asymmetric matrix `d(p,q)` and
+    /// `d(q,p)` are different numbers and the cancellation is not a cancellation.
+    pub fn exchange_delta(&self, problem: &Problem, p: usize, q: usize) -> i64 {
+        debug_assert!(p < q && q < self.len);
+        let m = &problem.matrix;
+        let a = self.order[p] as usize;
+        let b = self.order[q] as usize;
+
+        if q == p + 1 {
+            let removed = self.arc_in(problem, p, a)
+                + i64::from(m.at(a, b))
+                + self.arc_out(problem, q, b);
+            let added = self.arc_in(problem, p, b)
+                + i64::from(m.at(b, a))
+                + self.arc_out(problem, q, a);
+            return added - removed;
+        }
+
+        let removed = self.arc_in(problem, p, a)
+            + self.arc_out(problem, p, a)
+            + self.arc_in(problem, q, b)
+            + self.arc_out(problem, q, b);
+        let added = self.arc_in(problem, p, b)
+            + self.arc_out(problem, p, b)
+            + self.arc_in(problem, q, a)
+            + self.arc_out(problem, q, a);
+        added - removed
+    }
+
+    /// Total lateness the route WOULD have with `p` and `q` swapped.
+    ///
+    /// Five pieces at most — prefix, one node, the untouched middle, the other
+    /// node, suffix — and the middle is the only O(log n) query.
+    pub fn warp_after_exchange(&self, problem: &Problem, p: usize, q: usize) -> i64 {
+        debug_assert!(p < q && q < self.len);
+        let a = self.order[p] as usize;
+        let b = self.order[q] as usize;
+        let mut chain = Chain::new(problem);
+        if p > 0 {
+            chain.push(&self.pre[p - 1], self.order[0] as usize, self.order[p - 1] as usize);
+        }
+        chain.push_node(b);
+        if q > p + 1 {
+            chain.push(
+                &self.segment_label(problem, p + 1, q - 1, false),
+                self.order[p + 1] as usize,
+                self.order[q - 1] as usize,
+            );
+        }
+        chain.push_node(a);
+        if let Some(tail) = self.tail(q + 1) {
+            chain.push(tail, self.order[q + 1] as usize, self.order[self.len - 1] as usize);
+        }
+        chain.time_warp()
+    }
+
+    pub fn apply_exchange(&mut self, problem: &Problem, p: usize, q: usize) {
+        self.order.swap(p, q);
+        self.refresh(problem);
+    }
+
     pub fn apply_reverse(&mut self, problem: &Problem, i: usize, j: usize) {
         self.order[i..=j].reverse();
         self.refresh(problem);
@@ -1115,6 +1197,94 @@ mod tests {
                                 );
                             }
                         }
+                    }
+                }
+            }
+        }
+    }
+
+    /// Every legal (p, q), not a sample — and the point of exhausting it is the
+    /// ADJACENT case, which is a different formula. A version that writes the
+    /// general four-arc delta and lets the shared arc cancel is right for every
+    /// non-adjacent pair and wrong for every adjacent one, on an asymmetric
+    /// matrix, by exactly `d(a,b) − d(b,a)`.
+    #[test]
+    fn exchange_delta_is_exact_for_every_legal_move() {
+        for seed in 1..8u32 {
+            for &(start, end) in &[
+                (None, None),
+                (Some(0), None),
+                (None, Some(11)),
+                (Some(0), Some(11)),
+            ] {
+                let n = 12;
+                let problem = asymmetric_problem(n, seed, start, end);
+                let tour = seeded_tour(&problem, n);
+                let before = tour.cost();
+                let lo = tour.lo(&problem);
+                let hi = tour.hi(&problem);
+
+                let mut adjacent_checked = 0;
+                for p in lo..=hi {
+                    for q in (p + 1)..=hi {
+                        let predicted = tour.exchange_delta(&problem, p, q);
+
+                        let mut after = tour.snapshot();
+                        after.swap(p, q);
+                        let actual = recompute(&problem, &after) - before;
+
+                        assert_eq!(
+                            predicted, actual,
+                            "seed {seed}, pins {start:?}/{end:?}, exchange({p},{q})"
+                        );
+                        if q == p + 1 {
+                            adjacent_checked += 1;
+                        }
+                    }
+                }
+                assert!(adjacent_checked > 0, "the adjacent case was never reached");
+            }
+        }
+    }
+
+    #[test]
+    fn apply_exchange_matches_its_delta() {
+        let n = 11;
+        let problem = asymmetric_problem(n, 23, Some(0), Some(10));
+        let mut tour = seeded_tour(&problem, n);
+        for p in 1..=9 {
+            for q in (p + 1)..=9 {
+                let before = tour.cost();
+                let predicted = tour.exchange_delta(&problem, p, q);
+                tour.apply_exchange(&problem, p, q);
+                assert_eq!(tour.cost() - before, predicted, "exchange({p},{q})");
+                // Swapping the same pair again restores the route exactly.
+                tour.apply_exchange(&problem, p, q);
+                assert_eq!(tour.cost(), before);
+            }
+        }
+    }
+
+    #[test]
+    fn every_exchange_predicts_the_schedule_exactly() {
+        for seed in 1..6u32 {
+            for &(start, end) in &[(None, None), (Some(0), Some(11))] {
+                let n = 12;
+                let problem = timed_problem(n, seed, start, end);
+                let tour = seeded_tour(&problem, n);
+                let lo = tour.lo(&problem);
+                let hi = tour.hi(&problem);
+
+                for p in lo..=hi {
+                    for q in (p + 1)..=hi {
+                        let predicted = tour.warp_after_exchange(&problem, p, q);
+                        let mut after = tour.snapshot();
+                        after.swap(p, q);
+                        assert_eq!(
+                            predicted,
+                            simulate_warp(&problem, &after),
+                            "seed {seed}, pins {start:?}/{end:?}, exchange({p},{q})"
+                        );
                     }
                 }
             }

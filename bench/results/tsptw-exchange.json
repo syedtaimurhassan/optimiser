@@ -1,0 +1,737 @@
+{
+  "generatedAt": "2026-08-09T16:48:11.970Z",
+  "budgetMs": 3000,
+  "seed": 1,
+  "crossOriginIsolated": true,
+  "engines": [
+    "wasm",
+    "wasm-workers"
+  ],
+  "rows": [
+    {
+      "set": "Dumas",
+      "instance": "n20w100.001.txt",
+      "n": 21,
+      "published": 237,
+      "proven": true,
+      "engines": {
+        "wasm": {
+          "tourCost": 237,
+          "gap": 0,
+          "violations": 0,
+          "lateness": 0,
+          "worstLate": null,
+          "wallMs": 407,
+          "engineClaimedFeasible": true,
+          "disagrees": null
+        },
+        "wasm-workers": {
+          "tourCost": 237,
+          "gap": 0,
+          "violations": 0,
+          "lateness": 0,
+          "worstLate": null,
+          "wallMs": 3142,
+          "engineClaimedFeasible": true,
+          "disagrees": null
+        }
+      }
+    },
+    {
+      "set": "Dumas",
+      "instance": "n40w20.005.txt",
+      "n": 41,
+      "published": 499,
+      "proven": true,
+      "engines": {
+        "wasm": {
+          "tourCost": 499,
+          "gap": 0,
+          "violations": 0,
+          "lateness": 0,
+          "worstLate": null,
+          "wallMs": 1459,
+          "engineClaimedFeasible": true,
+          "disagrees": null
+        },
+        "wasm-workers": {
+          "tourCost": 499,
+          "gap": 0,
+          "violations": 0,
+          "lateness": 0,
+          "worstLate": null,
+          "wallMs": 3094,
+          "engineClaimedFeasible": true,
+          "disagrees": null
+        }
+      }
+    },
+    {
+      "set": "Dumas",
+      "instance": "n60w60.003.txt",
+      "n": 61,
+      "published": 485,
+      "proven": true,
+      "engines": {
+        "wasm": {
+          "tourCost": 485,
+          "gap": 0,
+          "violations": 0,
+          "lateness": 0,
+          "worstLate": null,
+          "wallMs": 2422,
+          "engineClaimedFeasible": true,
+          "disagrees": null
+        },
+        "wasm-workers": {
+          "tourCost": 485,
+          "gap": 0,
+          "violations": 0,
+          "lateness": 0,
+          "worstLate": null,
+          "wallMs": 3177,
+          "engineClaimedFeasible": true,
+          "disagrees": null
+        }
+      }
+    },
+    {
+      "set": "Dumas",
+      "instance": "n100w40.002.txt",
+      "n": 101,
+      "published": 653,
+      "proven": true,
+      "engines": {
+        "wasm": {
+          "tourCost": 653,
+          "gap": 0,
+          "violations": 0,
+          "lateness": 0,
+          "worstLate": null,
+          "wallMs": 3108,
+          "engineClaimedFeasible": true,
+          "disagrees": null
+        },
+        "wasm-workers": {
+          "tourCost": 653,
+          "gap": 0,
+          "violations": 0,
+          "lateness": 0,
+          "worstLate": null,
+          "wallMs": 3115,
+          "engineClaimedFeasible": true,
+          "disagrees": null
+        }
+      }
+    },
+    {
+      "set": "Dumas",
+      "instance": "n200w40.005.txt",
+      "n": 201,
+      "published": 1037,
+      "proven": true,
+      "engines": {
+        "wasm": {
+          "tourCost": 1037,
+          "gap": 0,
+          "violations": 0,
+          "lateness": 0,
+          "worstLate": null,
+          "wallMs": 3434,
+          "engineClaimedFeasible": true,
+          "disagrees": null
+        },
+        "wasm-workers": {
+          "tourCost": 1037,
+          "gap": 0,
+          "violations": 0,
+          "lateness": 0,
+          "worstLate": null,
+          "wallMs": 3119,
+          "engineClaimedFeasible": true,
+          "disagrees": null
+        }
+      }
+    },
+    {
+      "set": "GendreauDumasExtended",
+      "instance": "n20w120.001.txt",
+      "n": 21,
+      "published": 267,
+      "proven": true,
+      "engines": {
+        "wasm": {
+          "tourCost": 267,
+          "gap": 0,
+          "violations": 0,
+          "lateness": 0,
+          "worstLate": null,
+          "wallMs": 824,
+          "engineClaimedFeasible": true,
+          "disagrees": null
+        },
+        "wasm-workers": {
+          "tourCost": 267,
+          "gap": 0,
+          "violations": 0,
+          "lateness": 0,
+          "worstLate": null,
+          "wallMs": 3212,
+          "engineClaimedFeasible": true,
+          "disagrees": null
+        }
+      }
+    },
+    {
+      "set": "GendreauDumasExtended",
+      "instance": "n40w140.003.txt",
+      "n": 41,
+      "published": 398,
+      "proven": true,
+      "engines": {
+        "wasm": {
+          "tourCost": 398,
+          "gap": 0,
+          "violations": 0,
+          "lateness": 0,
+          "worstLate": null,
+          "wallMs": 1460,
+          "engineClaimedFeasible": true,
+          "disagrees": null
+        },
+        "wasm-workers": {
+          "tourCost": 398,
+          "gap": 0,
+          "violations": 0,
+          "lateness": 0,
+          "worstLate": null,
+          "wallMs": 3186,
+          "engineClaimedFeasible": true,
+          "disagrees": null
+        }
+      }
+    },
+    {
+      "set": "GendreauDumasExtended",
+      "instance": "n60w180.001.txt",
+      "n": 61,
+      "published": 411,
+      "proven": true,
+      "engines": {
+        "wasm": {
+          "tourCost": 411,
+          "gap": 0,
+          "violations": 0,
+          "lateness": 0,
+          "worstLate": null,
+          "wallMs": 2618,
+          "engineClaimedFeasible": true,
+          "disagrees": null
+        },
+        "wasm-workers": {
+          "tourCost": 411,
+          "gap": 0,
+          "violations": 0,
+          "lateness": 0,
+          "worstLate": null,
+          "wallMs": 3123,
+          "engineClaimedFeasible": true,
+          "disagrees": null
+        }
+      }
+    },
+    {
+      "set": "GendreauDumasExtended",
+      "instance": "n80w180.003.txt",
+      "n": 81,
+      "published": 524,
+      "proven": true,
+      "engines": {
+        "wasm": {
+          "tourCost": 524,
+          "gap": 0,
+          "violations": 0,
+          "lateness": 0,
+          "worstLate": null,
+          "wallMs": 3124,
+          "engineClaimedFeasible": true,
+          "disagrees": null
+        },
+        "wasm-workers": {
+          "tourCost": 524,
+          "gap": 0,
+          "violations": 0,
+          "lateness": 0,
+          "worstLate": null,
+          "wallMs": 3117,
+          "engineClaimedFeasible": true,
+          "disagrees": null
+        }
+      }
+    },
+    {
+      "set": "GendreauDumasExtended",
+      "instance": "n100w80.005.txt",
+      "n": 101,
+      "published": 603,
+      "proven": true,
+      "engines": {
+        "wasm": {
+          "tourCost": 603,
+          "gap": 0,
+          "violations": 0,
+          "lateness": 0,
+          "worstLate": null,
+          "wallMs": 3100,
+          "engineClaimedFeasible": true,
+          "disagrees": null
+        },
+        "wasm-workers": {
+          "tourCost": 603,
+          "gap": 0,
+          "violations": 0,
+          "lateness": 0,
+          "worstLate": null,
+          "wallMs": 3122,
+          "engineClaimedFeasible": true,
+          "disagrees": null
+        }
+      }
+    },
+    {
+      "set": "OhlmannThomas",
+      "instance": "n150w120.001.txt",
+      "n": 151,
+      "published": 734,
+      "proven": true,
+      "engines": {
+        "wasm": {
+          "tourCost": 734,
+          "gap": 0,
+          "violations": 0,
+          "lateness": 0,
+          "worstLate": null,
+          "wallMs": 3112,
+          "engineClaimedFeasible": true,
+          "disagrees": null
+        },
+        "wasm-workers": {
+          "tourCost": 734,
+          "gap": 0,
+          "violations": 0,
+          "lateness": 0,
+          "worstLate": null,
+          "wallMs": 3125,
+          "engineClaimedFeasible": true,
+          "disagrees": null
+        }
+      }
+    },
+    {
+      "set": "OhlmannThomas",
+      "instance": "n150w140.002.txt",
+      "n": 151,
+      "published": 755,
+      "proven": true,
+      "engines": {
+        "wasm": {
+          "tourCost": 773,
+          "gap": 2.384,
+          "violations": 0,
+          "lateness": 0,
+          "worstLate": null,
+          "wallMs": 3094,
+          "engineClaimedFeasible": true,
+          "disagrees": null
+        },
+        "wasm-workers": {
+          "tourCost": 757,
+          "gap": 0.265,
+          "violations": 0,
+          "lateness": 0,
+          "worstLate": null,
+          "wallMs": 3102,
+          "engineClaimedFeasible": true,
+          "disagrees": null
+        }
+      }
+    },
+    {
+      "set": "OhlmannThomas",
+      "instance": "n150w160.003.txt",
+      "n": 151,
+      "published": 608,
+      "proven": true,
+      "engines": {
+        "wasm": {
+          "tourCost": 608,
+          "gap": 0,
+          "violations": 0,
+          "lateness": 0,
+          "worstLate": null,
+          "wallMs": 3110,
+          "engineClaimedFeasible": true,
+          "disagrees": null
+        },
+        "wasm-workers": {
+          "tourCost": 608,
+          "gap": 0,
+          "violations": 0,
+          "lateness": 0,
+          "worstLate": null,
+          "wallMs": 3112,
+          "engineClaimedFeasible": true,
+          "disagrees": null
+        }
+      }
+    },
+    {
+      "set": "OhlmannThomas",
+      "instance": "n200w120.004.txt",
+      "n": 201,
+      "published": 777,
+      "proven": true,
+      "engines": {
+        "wasm": {
+          "tourCost": 777,
+          "gap": 0,
+          "violations": 0,
+          "lateness": 0,
+          "worstLate": null,
+          "wallMs": 3106,
+          "engineClaimedFeasible": true,
+          "disagrees": null
+        },
+        "wasm-workers": {
+          "tourCost": 777,
+          "gap": 0,
+          "violations": 0,
+          "lateness": 0,
+          "worstLate": null,
+          "wallMs": 3125,
+          "engineClaimedFeasible": true,
+          "disagrees": null
+        }
+      }
+    },
+    {
+      "set": "OhlmannThomas",
+      "instance": "n200w140.005.txt",
+      "n": 201,
+      "published": 822,
+      "proven": true,
+      "engines": {
+        "wasm": {
+          "tourCost": 841,
+          "gap": 2.311,
+          "violations": 0,
+          "lateness": 0,
+          "worstLate": null,
+          "wallMs": 3109,
+          "engineClaimedFeasible": true,
+          "disagrees": null
+        },
+        "wasm-workers": {
+          "tourCost": 835,
+          "gap": 1.582,
+          "violations": 0,
+          "lateness": 0,
+          "worstLate": null,
+          "wallMs": 3097,
+          "engineClaimedFeasible": true,
+          "disagrees": null
+        }
+      }
+    },
+    {
+      "set": "AFG",
+      "instance": "rbg010a.tw",
+      "n": 11,
+      "published": 671,
+      "proven": true,
+      "engines": {
+        "wasm": {
+          "tourCost": 671,
+          "gap": 0,
+          "violations": 0,
+          "lateness": 0,
+          "worstLate": null,
+          "wallMs": 272,
+          "engineClaimedFeasible": true,
+          "disagrees": null
+        },
+        "wasm-workers": {
+          "tourCost": 671,
+          "gap": 0,
+          "violations": 0,
+          "lateness": 0,
+          "worstLate": null,
+          "wallMs": 3074,
+          "engineClaimedFeasible": true,
+          "disagrees": null
+        }
+      }
+    },
+    {
+      "set": "AFG",
+      "instance": "rbg021.4.tw",
+      "n": 20,
+      "published": 4525,
+      "proven": true,
+      "engines": {
+        "wasm": {
+          "tourCost": 4525,
+          "gap": 0,
+          "violations": 0,
+          "lateness": 0,
+          "worstLate": null,
+          "wallMs": 884,
+          "engineClaimedFeasible": true,
+          "disagrees": null
+        },
+        "wasm-workers": {
+          "tourCost": 4525,
+          "gap": 0,
+          "violations": 0,
+          "lateness": 0,
+          "worstLate": null,
+          "wallMs": 3202,
+          "engineClaimedFeasible": true,
+          "disagrees": null
+        }
+      }
+    },
+    {
+      "set": "AFG",
+      "instance": "rbg035a.tw",
+      "n": 36,
+      "published": 2144,
+      "proven": true,
+      "engines": {
+        "wasm": {
+          "tourCost": 2144,
+          "gap": 0,
+          "violations": 0,
+          "lateness": 0,
+          "worstLate": null,
+          "wallMs": 1627,
+          "engineClaimedFeasible": true,
+          "disagrees": null
+        },
+        "wasm-workers": {
+          "tourCost": 2144,
+          "gap": 0,
+          "violations": 0,
+          "lateness": 0,
+          "worstLate": null,
+          "wallMs": 3085,
+          "engineClaimedFeasible": true,
+          "disagrees": null
+        }
+      }
+    },
+    {
+      "set": "AFG",
+      "instance": "rbg086a.tw",
+      "n": 87,
+      "published": 8400,
+      "proven": true,
+      "engines": {
+        "wasm": {
+          "tourCost": 8405,
+          "gap": 0.06,
+          "violations": 0,
+          "lateness": 0,
+          "worstLate": null,
+          "wallMs": 3084,
+          "engineClaimedFeasible": true,
+          "disagrees": null
+        },
+        "wasm-workers": {
+          "tourCost": 8401,
+          "gap": 0.012,
+          "violations": 0,
+          "lateness": 0,
+          "worstLate": null,
+          "wallMs": 3134,
+          "engineClaimedFeasible": true,
+          "disagrees": null
+        }
+      }
+    },
+    {
+      "set": "AFG",
+      "instance": "rbg233.tw",
+      "n": 232,
+      "published": 14992,
+      "proven": true,
+      "engines": {
+        "wasm": {
+          "tourCost": 15332,
+          "gap": 2.268,
+          "violations": 0,
+          "lateness": 0,
+          "worstLate": null,
+          "wallMs": 3429,
+          "engineClaimedFeasible": true,
+          "disagrees": null
+        },
+        "wasm-workers": {
+          "tourCost": 15329,
+          "gap": 2.248,
+          "violations": 0,
+          "lateness": 0,
+          "worstLate": null,
+          "wallMs": 3307,
+          "engineClaimedFeasible": true,
+          "disagrees": null
+        }
+      }
+    },
+    {
+      "set": "SolomonPotvinBengio",
+      "instance": "rc_206.1.txt",
+      "n": 4,
+      "published": 117.85,
+      "proven": true,
+      "engines": {
+        "wasm": {
+          "tourCost": 117.85,
+          "gap": 0,
+          "violations": 0,
+          "lateness": 0,
+          "worstLate": null,
+          "wallMs": 205,
+          "engineClaimedFeasible": true,
+          "disagrees": null
+        },
+        "wasm-workers": {
+          "tourCost": 117.85,
+          "gap": 0,
+          "violations": 0,
+          "lateness": 0,
+          "worstLate": null,
+          "wallMs": 748,
+          "engineClaimedFeasible": true,
+          "disagrees": null
+        }
+      }
+    },
+    {
+      "set": "SolomonPotvinBengio",
+      "instance": "rc_204.3.txt",
+      "n": 24,
+      "published": 455.03,
+      "proven": true,
+      "engines": {
+        "wasm": {
+          "tourCost": 455.03,
+          "gap": 0,
+          "violations": 0,
+          "lateness": 0,
+          "worstLate": null,
+          "wallMs": 907,
+          "engineClaimedFeasible": true,
+          "disagrees": null
+        },
+        "wasm-workers": {
+          "tourCost": 455.03,
+          "gap": 0,
+          "violations": 0,
+          "lateness": 0,
+          "worstLate": null,
+          "wallMs": 3401,
+          "engineClaimedFeasible": true,
+          "disagrees": null
+        }
+      }
+    },
+    {
+      "set": "SolomonPotvinBengio",
+      "instance": "rc_208.2.txt",
+      "n": 29,
+      "published": 533.78,
+      "proven": true,
+      "engines": {
+        "wasm": {
+          "tourCost": 533.78,
+          "gap": 0,
+          "violations": 0,
+          "lateness": 0,
+          "worstLate": null,
+          "wallMs": 1516,
+          "engineClaimedFeasible": true,
+          "disagrees": null
+        },
+        "wasm-workers": {
+          "tourCost": 533.78,
+          "gap": 0,
+          "violations": 0,
+          "lateness": 0,
+          "worstLate": null,
+          "wallMs": 3094,
+          "engineClaimedFeasible": true,
+          "disagrees": null
+        }
+      }
+    },
+    {
+      "set": "SolomonPotvinBengio",
+      "instance": "rc_207.1.txt",
+      "n": 34,
+      "published": 732.68,
+      "proven": true,
+      "engines": {
+        "wasm": {
+          "tourCost": 732.68,
+          "gap": 0,
+          "violations": 0,
+          "lateness": 0,
+          "worstLate": null,
+          "wallMs": 1374,
+          "engineClaimedFeasible": true,
+          "disagrees": null
+        },
+        "wasm-workers": {
+          "tourCost": 732.68,
+          "gap": 0,
+          "violations": 0,
+          "lateness": 0,
+          "worstLate": null,
+          "wallMs": 3228,
+          "engineClaimedFeasible": true,
+          "disagrees": null
+        }
+      }
+    },
+    {
+      "set": "SolomonPotvinBengio",
+      "instance": "rc_204.1.txt",
+      "n": 46,
+      "published": 878.64,
+      "proven": true,
+      "engines": {
+        "wasm": {
+          "tourCost": 878.64,
+          "gap": 0,
+          "violations": 0,
+          "lateness": 0,
+          "worstLate": null,
+          "wallMs": 1711,
+          "engineClaimedFeasible": true,
+          "disagrees": null
+        },
+        "wasm-workers": {
+          "tourCost": 878.64,
+          "gap": 0,
+          "violations": 0,
+          "lateness": 0,
+          "worstLate": null,
+          "wallMs": 3206,
+          "engineClaimedFeasible": true,
+          "disagrees": null
+        }
+      }
+    }
+  ]
+}
