@@ -24,13 +24,24 @@ import type { Objective } from '../../types'
  */
 
 /** Bumped when the shape changes, so a stale worker fails loudly. */
-export const PROTOCOL_VERSION = 1
+export const PROTOCOL_VERSION = 2
+
+/**
+ * Which engine the worker should run.
+ *
+ * The pool, not the worker, decides. A worker that chose for itself would have
+ * to know about device capabilities and tiers, and there would be no way to ask
+ * one worker for a TypeScript answer and another for a WebAssembly one — which
+ * is exactly what the benchmark needs in order to compare them.
+ */
+export type WorkerEngineKind = 'ts' | 'wasm'
 
 export interface SolveWorkerRequest {
   type: 'solve'
   version: number
   /** Correlates replies with requests; a late reply from a cancelled run is dropped. */
   jobId: number
+  engine: WorkerEngineKind
   n: number
   durations: ArrayBuffer
   distances: ArrayBuffer | null

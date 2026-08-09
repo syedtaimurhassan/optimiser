@@ -91,21 +91,53 @@ describe('selectEngine', () => {
   })
 
   test('a single-core device does not spawn a pool to race itself', () => {
+    // Changed in M10, deliberately. This used to fall all the way to tier D on
+    // the reasoning that N workers on one core are N searches contending for
+    // it. That reasoning is about the POOL, and tier C is one worker — so a
+    // single-core device now gets the Rust engine without racing anything.
+    // Still off the main thread, because a solve that blocks it freezes the
+    // map, the sheet and the cancel button for the whole budget.
     const selection = selectEngine(caps({ hardwareConcurrency: 1 }))
-    assert.equal(selection.tier, 'D')
+    assert.equal(selection.tier, 'C')
+    assert.equal(selection.engine.id, 'wasm-st')
   })
 
-  test('workers and more than one core get the pool', () => {
+  test('a single-core device with no WebAssembly still falls to tier D', () => {
+    const selection = selectEngine(caps({ hardwareConcurrency: 1, wasm: false }))
+    assert.equal(selection.tier, 'D')
+    assert.equal(selection.engine, engineTs)
+  })
+
+  test('workers and more than one core get the wasm pool', () => {
     const selection = selectEngine(caps({ hardwareConcurrency: 4, wasmSimd: true }))
     assert.equal(selection.tier, 'B')
-    assert.equal(selection.engine.id, 'ts-workers')
+    assert.equal(selection.engine.id, 'wasm-workers')
     assert.equal(describeSelection(selection), 'Fast')
   })
 
+  test('without WebAssembly, tier B falls back to the TypeScript pool', () => {
+    // The reason the pool was made engine-agnostic rather than replaced: this
+    // device still has four cores and should still get to use them.
+    const selection = selectEngine(caps({ hardwareConcurrency: 4, wasm: false }))
+    assert.equal(selection.tier, 'B')
+    assert.equal(selection.engine.id, 'ts-workers')
+  })
+
+  test('registration order decides which tier-B engine wins', () => {
+    // `selectEngine` takes the first supported entry, and `registerEngine`
+    // sorts stably, so the order in registry.ts IS the policy. If wasm-workers
+    // ever sorted below ts-workers the Rust engine would quietly stop reaching
+    // users while every other test here still passed.
+    const tierB = registeredEngines()
+      .filter((engine) => engine.tier === 'B')
+      .map((engine) => engine.id)
+    assert.deepEqual(tierB, ['wasm-workers', 'ts-workers'])
+  })
+
   test('the pool does not need SIMD, even though the tier is defined by it', () => {
-    // claimedTier says this device is a C (WASM, no SIMD). The pure-TypeScript
-    // pool needs no vector instructions, so it runs anyway — a tier describes
-    // the device, `supported` describes the engine.
+    // claimedTier says this device is a C (WASM, no SIMD). The scalar artefact
+    // runs anywhere WebAssembly does, so the pool runs anyway — a tier
+    // describes the device, `supported` describes the engine.
     const selection = selectEngine(caps({ wasmSimd: false, hardwareConcurrency: 4 }))
     assert.equal(selection.claimed, 'C')
     assert.equal(selection.tier, 'B')

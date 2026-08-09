@@ -1,6 +1,6 @@
 import type { Capabilities } from '../device/capabilities.ts'
 import { engineTs } from './engineTs.ts'
-import { TsWorkerPool, workerCount } from './engineTsWorkers.ts'
+import { SolverWorkerPool, workerCount } from './engineWorkers.ts'
 import type { SolverEngine } from './solverPort.ts'
 
 /**
@@ -110,29 +110,77 @@ export function registeredEngines(): readonly RegisteredEngine[] {
 }
 
 /**
- * Tier B. The same search, N seeds, best-of.
+ * Tier B, first choice. The Rust engine, N seeds, best-of.
  *
- * Needs workers and nothing else — notably not SIMD, despite `claimedTier`
- * using SIMD to decide whether a device is a B. That is not an inconsistency:
- * the tier describes what the DEVICE can do, while `supported` describes what
- * this ENGINE needs, and a pure-TypeScript pool needs no vector instructions.
- * Gating it on SIMD would deny a perfectly good four-core phone its cores over
- * a capability it was never going to use.
+ * ── Registration order IS the policy ──────────────────────────────────────
+ *
+ * Two engines sit at tier B, and `selectEngine` takes the first one this device
+ * supports. `registerEngine` sorts by tier with a stable sort, so within a tier
+ * the order below is preserved and this entry wins wherever it can run. Moving
+ * it under `ts-workers` would silently retire the Rust engine for every user
+ * while leaving every test passing.
+ *
+ * Not gated on SIMD. `claimedTier` uses SIMD to decide whether a DEVICE is a B,
+ * which is a different question from what this ENGINE needs: the scalar
+ * artefact runs anywhere WebAssembly does, back to Safari 15. Gating on SIMD
+ * would deny a four-core phone the faster engine over a capability the scalar
+ * build was never going to use.
+ */
+registerEngine({
+  id: 'wasm-workers',
+  tier: 'B',
+  create: () => {
+    if (!wasmPool) {
+      wasmPool = new SolverWorkerPool(
+        workerCount(navigator?.hardwareConcurrency ?? null),
+        'wasm',
+      )
+    }
+    return wasmPool
+  },
+  supported: (caps) => caps.wasm && caps.workers && (caps.hardwareConcurrency ?? 1) > 1,
+})
+
+/**
+ * Tier B, fallback. The same pool running the TypeScript search.
+ *
+ * Reached when the device has cores but no WebAssembly at all. Rare, and the
+ * whole reason the pool was made engine-agnostic rather than replaced.
  */
 registerEngine({
   id: 'ts-workers',
   tier: 'B',
   create: () => {
-    if (!pool) {
-      pool = new TsWorkerPool(workerCount(navigator?.hardwareConcurrency ?? null))
+    if (!tsPool) {
+      tsPool = new SolverWorkerPool(workerCount(navigator?.hardwareConcurrency ?? null), 'ts')
     }
-    return pool
+    return tsPool
   },
   supported: (caps) => caps.workers && (caps.hardwareConcurrency ?? 1) > 1,
 })
 
-/** One pool per session; spawning a second set of workers helps nobody. */
-let pool: TsWorkerPool | null = null
+/**
+ * Tier C. The Rust engine in ONE worker.
+ *
+ * For a single-core device — where N workers would be N searches contending for
+ * one core and finishing later than one search would have. Still a worker
+ * rather than the main thread, because a solve that blocks the main thread
+ * freezes the map, the sheet and the cancel button for its whole budget.
+ */
+registerEngine({
+  id: 'wasm-st',
+  tier: 'C',
+  create: () => {
+    if (!singleWasm) singleWasm = new SolverWorkerPool(1, 'wasm', 'wasm-st')
+    return singleWasm
+  },
+  supported: (caps) => caps.wasm && caps.workers,
+})
+
+/** One pool per session per kind; spawning a second set of workers helps nobody. */
+let wasmPool: SolverWorkerPool | null = null
+let tsPool: SolverWorkerPool | null = null
+let singleWasm: SolverWorkerPool | null = null
 
 /** Tier D. Needs nothing, which is the point of it. */
 registerEngine({

@@ -1,4 +1,5 @@
 import { TsEngine } from './engineTs.ts'
+import { WasmEngine } from './engineWasm.ts'
 import { abortError, type SolveRequest } from './solverPort.ts'
 import {
   PROTOCOL_VERSION,
@@ -29,7 +30,18 @@ import {
  * yield mid-call and will chunk its solve instead, for exactly this reason.
  */
 
-const engine = new TsEngine('ts-worker')
+/*
+  Both engines, chosen per job.
+
+  Statically imported rather than dynamically: `engineWasm` is a few kilobytes
+  of loader, and the 48 KB artefact it fetches is only requested when a solve
+  actually asks for it. A dynamic import here would buy nothing and add a
+  failure mode on a flaky connection, mid-solve, in a worker.
+*/
+const engines = {
+  ts: new TsEngine('ts-worker'),
+  wasm: new WasmEngine('wasm-worker'),
+}
 const controllers = new Map<number, AbortController>()
 
 const post = (message: WorkerResponse, transfer: Transferable[] = []) => {
@@ -85,7 +97,7 @@ self.onmessage = async (event: MessageEvent<WorkerRequest>) => {
 
   try {
     const request = rebuild(message)
-    const result = await engine.solve(
+    const result = await engines[message.engine ?? 'ts'].solve(
       request,
       (progress) =>
         post({

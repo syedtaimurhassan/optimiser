@@ -22,7 +22,8 @@
 import { useRoutesStore } from './store/routesStore'
 import { useUiStore } from './store/uiStore'
 import { engineTs } from './lib/compute/engineTs'
-import { TsWorkerPool, workerCount } from './lib/compute/engineTsWorkers'
+import { SolverWorkerPool, workerCount } from './lib/compute/engineWorkers'
+import { WasmEngine } from './lib/compute/engineWasm'
 import {
   SKIP_PENALTY,
   makeConstraints,
@@ -105,8 +106,24 @@ declare global {
 const ENGINES: Record<string, () => Promise<SolverEngine>> = {
   ts: async () => engineTs,
   'ts-workers': async () => {
-    if (!pool) pool = new TsWorkerPool(workerCount(navigator.hardwareConcurrency ?? null))
-    return pool
+    if (!tsPool) tsPool = new SolverWorkerPool(workerCount(navigator.hardwareConcurrency ?? null), 'ts')
+    return tsPool
+  },
+  /*
+    The Rust engine, four ways.
+
+    `wasm` is what tier C runs and what the head-to-head against `ts` is for.
+    `wasm-workers` is what tier B actually ships. `wasm-gls` and `wasm-hybrid`
+    exist because M10 implemented two search strategies and the choice between
+    them should be settled by the harness against proven optima, not by whichever
+    looked better on one laptop.
+  */
+  wasm: async () => wasmSingle,
+  'wasm-gls': async () => wasmGls,
+  'wasm-hybrid': async () => wasmHybrid,
+  'wasm-workers': async () => {
+    if (!wasmPool) wasmPool = new SolverWorkerPool(workerCount(navigator.hardwareConcurrency ?? null), 'wasm')
+    return wasmPool
   },
   /*
     The oracle.
@@ -121,7 +138,11 @@ const ENGINES: Record<string, () => Promise<SolverEngine>> = {
   },
 }
 
-let pool: TsWorkerPool | null = null
+let tsPool: SolverWorkerPool | null = null
+let wasmPool: SolverWorkerPool | null = null
+const wasmSingle = new WasmEngine('wasm')
+const wasmGls = new WasmEngine('wasm-gls', { strategy: 'gls' })
+const wasmHybrid = new WasmEngine('wasm-hybrid', { strategy: 'hybrid' })
 
 function buildRequest(
   matrix: number[][],

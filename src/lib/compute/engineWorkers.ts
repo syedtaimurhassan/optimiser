@@ -12,12 +12,22 @@ import {
 import {
   PROTOCOL_VERSION,
   type SolveWorkerRequest,
+  type WorkerEngineKind,
   type WorkerResponse,
 } from './workerProtocol.ts'
 
 /**
- * Tier B — the same TypeScript search, run N times in parallel from different
- * seeds, best answer wins.
+ * Tier B — the same search, run N times in parallel from different seeds, best
+ * answer wins.
+ *
+ * ── Which search is not this file's business ──────────────────────────────
+ *
+ * The pool is engine-agnostic: it is told `ts` or `wasm` at construction and
+ * passes that along to every worker. Everything below — the seeding, the
+ * re-validation, the failure handling — is identical either way, and it has to
+ * be, because the benchmark's whole job is to compare two engines under the
+ * same conditions. A pool that treated them differently would be measuring
+ * itself.
  *
  * ── Why independent workers rather than one parallel search ───────────────
  *
@@ -83,15 +93,18 @@ interface Job {
   signal?: AbortSignal
 }
 
-export class TsWorkerPool implements SolverEngine {
-  readonly id = 'ts-workers'
+export class SolverWorkerPool implements SolverEngine {
+  readonly id: string
   private readonly size: number
+  private readonly engine: WorkerEngineKind
   private workers: Worker[] = []
   private nextJobId = 1
   private jobs = new Map<number, Job>()
 
-  constructor(size: number) {
+  constructor(size: number, engine: WorkerEngineKind = 'ts', id?: string) {
     this.size = Math.max(1, size)
+    this.engine = engine
+    this.id = id ?? `${engine}-workers`
   }
 
   /**
@@ -210,6 +223,15 @@ export class TsWorkerPool implements SolverEngine {
       that it is about to be slower.
     */
     if (this.workers.length === 0 && !job.signal?.aborted) {
+      /*
+        Deliberately the TypeScript engine, even for a wasm pool.
+
+        We are here because every worker died, and one likely reason is that
+        the browser could not load a module from this origin at all. Answering
+        with an engine that needs to fetch a 48 KB artefact to do anything
+        would be betting on the same thing having just failed. `engineTs` needs
+        nothing.
+      */
       engineTs.solve(job.request, job.onProgress, job.signal).then(job.resolve, job.reject)
       return
     }
@@ -286,7 +308,7 @@ export class TsWorkerPool implements SolverEngine {
       signal?.addEventListener('abort', onAbort, { once: true })
 
       this.workers.forEach((worker, index) => {
-        const message = serialise(request, jobId, baseSeed + index * 0x9e3779b1)
+        const message = serialise(request, jobId, baseSeed + index * 0x9e3779b1, this.engine)
         worker.postMessage(message, transferables(message))
       })
     })
@@ -307,12 +329,18 @@ export class TsWorkerPool implements SolverEngine {
  * source and the caller's request must survive being handed to N workers — and
  * must still be scoreable by the referee when they come back.
  */
-function serialise(request: SolveRequest, jobId: number, seed: number): SolveWorkerRequest {
+function serialise(
+  request: SolveRequest,
+  jobId: number,
+  seed: number,
+  engine: WorkerEngineKind,
+): SolveWorkerRequest {
   const { matrix, constraints } = request
   return {
     type: 'solve',
     version: PROTOCOL_VERSION,
     jobId,
+    engine,
     n: matrix.n,
     durations: matrix.durations.slice().buffer as ArrayBuffer,
     distances: matrix.distances ? (matrix.distances.slice().buffer as ArrayBuffer) : null,

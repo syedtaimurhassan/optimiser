@@ -45,12 +45,24 @@ for (const file of readdirSync(assets)) {
   }
 }
 
-// A .wasm in the output means the 16 MB routing binary got emitted even if no
-// JavaScript references it by name.
-for (const file of readdirSync(assets)) {
-  if (file.endsWith('.wasm')) {
-    const mb = (statSync(join(assets, file)).size / 1048576).toFixed(1)
-    offenders.push(`assets/${file} is a ${mb} MB WebAssembly binary`)
+/*
+  WebAssembly in production: exactly one thing is allowed there now.
+
+  Until M10 this asserted that NO .wasm reached the bundle, because the only
+  candidate was OR-Tools' 16 MB routing binary. M10 ships its own engine, so the
+  rule becomes a size limit instead of a ban — which still catches the thing the
+  ban was for. The Rust artefacts are under 50 KB, so anything approaching a
+  megabyte is not ours.
+*/
+const MAX_WASM_BYTES = 512 * 1024
+const wasmFiles = readdirSync(assets).filter((file) => file.endsWith('.wasm'))
+for (const file of wasmFiles) {
+  const bytes = statSync(join(assets, file)).size
+  if (bytes > MAX_WASM_BYTES) {
+    offenders.push(
+      `assets/${file} is a ${(bytes / 1048576).toFixed(1)} MB WebAssembly binary — ` +
+        `the solver engine is under 50 KB, so this is something else`,
+    )
   }
 }
 
@@ -65,4 +77,12 @@ if (offenders.length > 0) {
 }
 
 console.log(`\nPASS: ${MARKERS.map((m) => `"${m}"`).join(', ')} absent from all production assets.`)
-console.log('PASS: no OR-Tools symbols and no .wasm in production output.')
+console.log('PASS: no OR-Tools symbols in production output.')
+console.log(
+  wasmFiles.length === 0
+    ? 'PASS: no WebAssembly emitted.'
+    : `PASS: ${wasmFiles.length} WebAssembly artefact(s), all under ${MAX_WASM_BYTES / 1024} KB: ` +
+      wasmFiles
+        .map((f) => `${f} (${(statSync(join(assets, f)).size / 1024).toFixed(1)} KB)`)
+        .join(', '),
+)
