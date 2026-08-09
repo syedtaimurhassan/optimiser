@@ -30,17 +30,17 @@ export { createPhotonProvider, PHOTON_ID } from './photon.ts'
 /**
  * The Geoapify key.
  *
- * It ships in the bundle, in the clear, and is NOT referrer-restricted — the
- * dashboard offered no way to restrict it. This is a deliberate, accepted risk
- * rather than an oversight, and the design compensates for it rather than
- * pretending otherwise:
+ * It ships in the bundle, in the clear, and — since some point between M6 and
+ * M12 — it is origin-restricted. M6 said otherwise and M6 is now wrong: a live
+ * check in M12 gets 401 `Not allowed` for a foreign `Origin` and 200 for ours.
  *
- *   - the free tier has no billing overage, so an abused key degrades, never bills;
- *   - the cache and debounce keep our own consumption low;
- *   - Photon needs no key at all, so exhaustion is survivable.
+ * So the failover below is no longer the thing standing between us and a
+ * stranger spending our quota. It is still worth having for the ordinary
+ * reasons — the free tier runs out, and a request from a browser with no
+ * network reaches nobody — but the risk M6 accepted has largely closed itself.
  *
- * If a way to restrict it appears, restrict it — that removes the only reason
- * any of the above is load-bearing.
+ * `http://localhost:5173` is not on the allowlist, so `npm run dev` searches
+ * on Photon. See the note in geoapify.ts.
  */
 function readApiKey(): string {
   // `import.meta.env` exists under Vite and is undefined under `node --test`,

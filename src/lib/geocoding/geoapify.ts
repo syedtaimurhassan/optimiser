@@ -13,11 +13,21 @@
  *
  * ── The key ───────────────────────────────────────────────────────────────
  *
- * It ships in the bundle and is NOT referrer-restricted (the dashboard offered
- * no way to). Treat the quota as public and exhaustible by strangers — which is
- * precisely why `service.ts` fails over to Photon rather than surfacing an
- * error. The blast radius is bounded: the free tier has no billing overage, so
- * the worst case is degradation, never a bill.
+ * It ships in the bundle, and since some point between M6 and M12 it IS
+ * origin-restricted. Verified against the live API in M12: a request carrying
+ * `Origin: https://example.com` gets 401 `Not allowed`, and one carrying our
+ * GitHub Pages origin gets 200. M6 recorded that the dashboard offered no way
+ * to restrict it; that is no longer true, and the note has been corrected
+ * rather than left to mislead the next person who reads it.
+ *
+ * Two things follow. A browser cannot forge `Origin`, so the quota is no
+ * longer public — the failover to Photon is now a resilience measure rather
+ * than the thing standing between us and a stranger's traffic. And requests
+ * with NO Origin header at all (curl, a native app) still pass, which is the
+ * ordinary limit of origin allowlisting and not something to design around.
+ *
+ * `http://localhost:5173` is NOT on the allowlist, so local development runs
+ * on Photon. Add it in the dashboard if that ever matters.
  */
 
 import type { Address } from '../../types.ts'

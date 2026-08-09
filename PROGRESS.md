@@ -2124,3 +2124,238 @@ first work if multi-vehicle ever lands.
 merges that create warp), TABU_SEARCH, `make_chain_inactive` and
 `swap_active_chain` for prize-collecting with clusters, `relocate_expensive_chain`,
 and Or-3-opt.
+
+---
+
+## M12 — The fetch stops being quadratic
+
+**Status: all five tasks done. The Geoapify matrix adapter from Task 1 is
+researched and verified but deliberately not wired — see Deferred.**
+
+### What changed
+
+The solver was fast and the matrix API was the wall. A 300-stop route paid for
+90,000 cells across ten paced requests every single time it was solved, and a
+cache that had existed since M8 was never once consulted by the plan path.
+
+```
+src/lib/routing/          NEW — the provider seam
+  types.ts        MatrixProvider, ProviderLimits, RoutingError, fits()
+  osrm.ts         the demo server, its two real limits, band URLs
+  valhalla.ts     FOSSGIS, keyless, POST, the fallback
+  service.ts      splitting, pacing, failover, route chunking
+  cover.ts        sparse pattern -> rectangles a provider will accept
+  sparse.ts       candidate lists, the estimate calibration, the bitset
+  grid.ts         cache -> sparse fetch -> estimates, and the refinement
+  index.ts        composition root; nothing above it names a provider
+src/lib/net/
+  reachability.ts NEW — measured, not asked
+src/store/syncStore.ts  NEW — online, saved, estimated
+src/components/SyncPill.tsx NEW
+src/lib/planRoute.ts    matrixLayout() exported; seed in, mask out; refine loop
+src/lib/costMatrix.ts   the mask, seedFromCache(), matrixKeysFor(), Int32Array
+src/lib/routingService.ts  now a facade; MAX_TABLE_POINTS 300 -> 1000
+bench/m12-matrix.mjs    NEW — requests AND quality, no network
+```
+
+### The provider research, and what the live services actually do
+
+Every number below was probed against the live endpoint. Three of the four
+disagreed with the documentation.
+
+| | OSRM demo | Valhalla FOSSGIS |
+|---|---|---|
+| cells/request | **10,000** (9,900 Ok, 10,200 TooBig) | **2,500** (50×50 ok, 100×100 error 150) |
+| URL ceiling | **8,192 B** — 450 coords at 5 dp is 8,179 and works, 454 is 8,251 and 414s | none (POST) |
+| CORS | `allow-origin: *` | `*`, and the preflight allows `X-Client-Id` |
+| speed | 100×100 in **0.3 s** | 50×50 in **8–12 s**; 1×2,000 in 85 s |
+
+OSRM's error message says "Too many table coordinates" and means neither: 101
+coordinates fail only because 101² > 10,000. The 8 KB URL is what actually
+capped the app at 300 stops, and it is why `table()` now sends only the
+coordinates a band references.
+
+`User-Agent`, which OSRM's policy asks for, is a forbidden header name for
+`fetch` and cannot be honoured by any browser app. `X-Client-Id`, which FOSSGIS
+asks for, is allowed by their preflight and is sent.
+
+**Everything else is out, and mostly for M6's reason rather than on price.** A
+cached cost matrix is a derivative database, so the storage clause that
+disqualified Google, Mapbox, HERE and TomTom for geocoding disqualifies them
+here too. On top of that: Mapbox takes **25 coordinates per request** (10 with
+traffic), so a 300-stop route is 144 requests; Google Route Matrix bills per
+element with ~10k free a month, which is one 100-stop matrix; GraphHopper does
+not offer the Matrix API on the free plan at all; MapTiler's is in beta behind
+enterprise "Logistics Session" pricing.
+
+**OpenRouteService: the M6 conclusion holds, but not for M6's reason.**
+`openrouteservice.org/terms-of-service/` now 301s to `account.heigit.org/info/tos`,
+effective 2018, and it contains no API-key clause of any kind — nothing about
+client-side use, secrecy or caching. The plans page still renders as an empty
+JS shell to a fetcher. The prohibition remains unverifiable, which for a key
+shipping in a public bundle is the same practical answer.
+
+### 🔴 Two corrections to things this repo asserts in three places
+
+**The Geoapify key IS origin-restricted.** M6 recorded that the dashboard
+offered no way to restrict it and that the quota should be treated as public.
+Verified live in M12: `Origin: https://example.com` gets 401 `Not allowed`, our
+GitHub Pages origin gets 200. Corrected in `.env`, `geocoding/index.ts` and
+`geoapify.ts`. The Photon failover is now resilience rather than the only thing
+standing between us and a stranger's traffic.
+
+**`http://localhost:5173` is not on that allowlist**, so `npm run dev` has been
+geocoding on Photon, silently, since the restriction was added. Adding it is a
+dashboard action.
+
+### The two measurements that changed the design
+
+**Ten nearest by straight line is not ten nearest by road.** Against the real
+OSRM matrix in `bench/fixtures/`, of each stop's true ten nearest by road:
+
+| haversine's top | recovers |
+|---|---|
+| 10 | **73.4%** |
+| 15 | 90.5% |
+| 20 | **96.5%** |
+| 30 | 99.4% |
+
+The brief specified K≈10. At K=10 a quarter of the search's own neighbour list
+is missing. `CANDIDATE_PADDING = 2` is where the curve flattens.
+
+**The 8 m/s straight-line constant is optimistic.** Median on that instance is
+**6.69 m/s**, p90 4.09. Every estimate this codebase has ever made was ~20% too
+fast — the dangerous direction, because an underestimated arc is a shortcut the
+solver takes. Unfetched cells are now priced from the arcs actually fetched, at
+the upper quartile. An overestimate costs a missed improvement; an underestimate
+causes a chosen mistake.
+
+### What it costs and what it buys
+
+`npm run bench:matrix`, no network — the cover is a pure function, and the
+fixture plays the provider so quality can be scored against the true matrix.
+
+| n | dense reqs | sparse reqs | dense cells | sparse cells |
+|---|---|---|---|---|
+| 107 | 2 | 2 | 11,449 | 10,595 |
+| 300 | 9 | **5** | 90,000 | 48,326 |
+| 600 | 36 | **11** | 360,000 | 86,582 |
+| 1000 | 100 | **17** | 1,000,000 | 141,384 |
+
+With the cache, at 300 stops: **5 requests cold, 0 to reopen, 2 to add a stop.**
+
+Quality, scored against the true matrix: dense 12,239 s, sparse + estimates
+12,279 s — **+0.33%**, inside the engine's own run-to-run noise, with 868 cells
+guessed.
+
+### 🟡 Where the brief's target was not reachable, and what shipped instead
+
+> *"Matrix API calls for a 300-stop route drop by an order of magnitude"*
+
+They drop 1.8× at 300 stops, and 5.9× at 1,000. A rectangular matrix API cannot
+be asked for an arbitrary sparse pattern, so covering n·K arcs costs
+n·(K + boundary) cells, and OSRM charges by the request rather than the cell —
+which means the right move is to FILL each 10,000-cell request rather than to
+minimise cells. The order of magnitude at 300 stops comes from the cache
+instead: zero requests to reopen, which is the case a driver actually meets
+several times a day. What genuinely changed is the exponent: the fetch is
+linear in n now, which is the only reason 1,000 stops is possible at all.
+
+### The cap: 1,000, and it is no longer the API that binds
+
+The three things that made 300 a wall are gone — bands name only their own
+coordinates, requests are linear, and route drawing chunks (450 waypoints is
+8,181 URL chars; above that the last step of the pipeline used to 414). What
+binds now is memory: every worker gets its own copy of the dense grid, because
+transferring a buffer neuters it, and a distance objective has two grids.
+
+    600 stops    2.9 MB × 4 workers ≈ 12 MB
+  1,000 stops    8.0 MB × 4 workers ≈ 32 MB
+  1,500 stops   18.0 MB × 4 workers ≈ 72 MB
+
+1,000 is where that is still defensible on a phone, and it lands near the
+network cost too: ~17 requests plus three route chunks, so about half a minute
+cold and nothing at all warm. The cap moved from the network adapter into the
+planner, because a fully cached route makes no requests and would sail past a
+limit expressed in them.
+
+### Offline
+
+The solve no longer needs a network: a band that cannot be fetched is a band we
+estimate, so a driver in a dead zone who wants to reorder four stops gets a
+route instead of an error. A cancelled solve is explicitly not that.
+
+Reachability is measured rather than asked. `navigator.onLine` answers "is an
+interface up", which a van in a tunnel and a laptop behind a captive portal both
+say yes to; it is one input of two, and what settles it is the outcome of real
+requests reported by the routing service. Two consecutive failures before
+declaring an outage, because these are shared demo servers that answer a 500 on
+a good connection.
+
+The pill says one of three things and never animates: red "Not saved" (the only
+state the driver can act on), amber "Offline — saved on this device" (the second
+clause is the important half), or a neutral persistent "Saved 09:42".
+
+### Verified
+
+- **695 TypeScript tests**, including: the haversine-vs-road recall measured
+  against the real fixture rather than asserted; every covering proved to leave
+  no needed pair unfetched; reopening a route costing zero requests; adding one
+  stop costing one; a dead network degrading rather than throwing; a cancelled
+  one still throwing.
+- Live probes of both providers' cell caps, URL ceilings, CORS headers and
+  preflights, recorded above.
+- `npm run bench:matrix` for the request counts and the +0.33% quality figure.
+- Lint, `tsc -b` and the full suite green on every commit.
+
+### Deferred
+
+- 🟡 **The Geoapify matrix adapter is researched, not built.** Their
+  `/v1/routematrix` accepts our existing key from our origin (verified, 200),
+  bills `Max(S,T)·Min(S,T,10)` — so a dense n×n is 10n credits, and 3,000/day
+  free is exactly one 300-stop solve — takes POST with no URL ceiling, and
+  permits permanent storage. That is one solve a day, so it is not a primary,
+  and OSRM is free and 35× faster than the fallback. Worth an afternoon if the
+  demo server ever goes away for good.
+- 🟡 **No coordinate-hash cache key.** The brief asked for one so two routes
+  over the same stops could share arcs. The per-route uuid-keyed cache already
+  delivers the definition of done, and a second lookup path is a second way for
+  a cache to be wrong about which stop a row is. Skipped deliberately.
+- 🟡 **Valhalla cannot draw.** `route()` is unimplemented — it returns a
+  precision-6 encoded polyline, which is a decoder's worth of code to draw a
+  line the app already draws straight and labels `estimated`. If OSRM goes down
+  the order is still right; only the polyline degrades.
+- 🟡 **No real-device runs, still.** Same as M10 and M11. The memory arithmetic
+  behind the 1,000-stop cap in particular is arithmetic, not a measurement on a
+  phone.
+- 🔴 **On-device road routing remains out of scope** per the brief. The provider
+  seam is shaped so a local engine could slot in as another `MatrixProvider`
+  with its own limits — `maxCells: Infinity, minRequestGapMs: 0` — and nothing
+  above `lib/routing/` would change.
+
+### What the next session needs to know
+
+1. **`limits` is part of the provider interface on purpose.** Fetching a matrix
+   is not one request, it is a covering of the pairs we need by rectangles the
+   provider will accept, and `cover.ts` cannot plan that against a function that
+   hides everything behind "fetch me a matrix".
+2. **The mask is what makes estimates safe.** One packed bit per cell says
+   "a provider said this". A cache that could not tell a fetched cell from a
+   guessed one would harden this solve's estimates into next solve's facts, and
+   nothing downstream would ever ask again. A cached row with NO mask is read as
+   entirely real, which is true — nothing but a dense fetch ever wrote to that
+   store before M12.
+3. **The refinement is free and it corrected nothing on the bench instance.**
+   The route response already carries the true duration of every leg it drew,
+   and those legs are the arcs the solver chose — which are near-neighbour arcs,
+   which are exactly what the cover fetched. It is a safety net for the case
+   where the search picks a long arc, not a routine correction.
+4. **`matrixLayout` is exported so both ends agree on what row 7 is.** The cache
+   is now an INPUT, so a row has to be named before the solve rather than after
+   it. Do not re-implement the endpoint de-duplication rule anywhere else.
+5. **A band's destinations deliberately exclude its own sources.** Adding each
+   member as a destination buys the intra-band arcs for nothing, and turns
+   "forty stops all need one new column" into a forty-by-forty request.
+6. **The bench needs no network and should stay that way.** `bench:matrix` uses
+   the committed fixture as the provider, which is what lets it score the sparse
+   answer against the true matrix rather than against itself.
