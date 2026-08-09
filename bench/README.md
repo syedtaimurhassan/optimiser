@@ -86,14 +86,50 @@ load-bearing and documented in [`lib/tsplib.mjs`](lib/tsplib.mjs):
 Instances are fetched on demand and never committed — TSPLIB publishes no
 licence, and downloading is not redistributing.
 
-## VRPTW is parsed but not run
+## Time windows
 
-[`lib/vrptw.mjs`](lib/vrptw.mjs) reads Solomon and Gehring-Homberger instances
-and records SINTEF's best-known values, and **nothing scores against them yet**.
-Those benchmarks have a hierarchical objective — minimise vehicles first, then
-distance — and carry time windows and capacity. Our engine is single-vehicle and
-M9 ignores both constraints, so a gap number today would be an answer to a
-different question. M11 turns it on.
+Two harnesses, asking two different questions.
+
+**`npm run bench:tsptw` — the absolute number.** The
+[TSPTW instance library](https://lopez-ibanez.eu/tsptw-instances) is the same
+problem we actually solve: one vehicle, a start, a sequence, time windows,
+minimise travel. 370 cached instances across five sets, most with a **proven
+optimum**, so the gap is an absolute claim rather than a comparison. Run
+`npm run bench:tsptw:fetch` first.
+
+The report leads with FEASIBILITY, not cost, because a cheap route that misses a
+window is not a better route — it is a wrong answer. The gap is computed over the
+feasible runs only. An engine that ignores windows shows a lovely negative gap
+and 0% feasible, which is exactly how it should look.
+
+Three conventions in [`lib/tsptw.mjs`](lib/tsptw.mjs) are load-bearing, and each
+one produces a plausible wrong number if you get it wrong: **service time is
+baked into the matrix** (the diagonal is non-zero — there is no separate service
+array), **waiting for a window to open is free**, and **the return leg to the
+depot is scored** against the depot's own window. So `bench:tsptw:fetch` finishes
+by re-evaluating all 370 published best-known PERMUTATIONS and refuses to succeed
+unless our cost and violation count equal theirs. The harness is checked against
+the library before the library is used to check an engine.
+
+**`npm run bench:solomon` — the shape check.** Solomon and Gehring-Homberger are
+scored on vehicles first, then distance, with capacity; a single-vehicle engine
+cannot compete on that objective at all, which is why M9 parked them. So instead
+of relaxing their objective, this asks a question we can answer honestly: take
+each ROUTE of SINTEF's published best-known solution, fix its customer set — the
+fleet term and capacity are then satisfied by construction — and re-solve it as a
+TSPTW sub-instance. Given the customers a state-of-the-art VRPTW solver assigned
+to this vehicle, can we order them at least as well as it did?
+
+Because our cost and theirs come from the same function over the same customers,
+any disagreement about Solomon's rounding conventions cancels exactly. The script
+still verifies itself first: summing our own evaluation of every published route
+must reproduce SINTEF's published vehicle count and distance (c101 → 10 vehicles,
+828.94, zero violations) before any engine is run.
+
+Everything crossing into an engine is scaled to fixed point ×100, because the
+port takes `Int32Array` and both libraries are real-valued. The engine optimises
+the rounded copy and is graded on the real one — it can only lose from the
+rounding, never gain.
 
 ## Adding an engine
 
@@ -127,7 +163,11 @@ which Vite statically replaces — production builds tree-shake it away entirely
 | `tsplib.mjs` | Gap to proven optimum, per engine |
 | `fetch-tsplib.mjs` | Caches TSPLIB instances + the optima table |
 | `lib/tsplib.mjs` | TSPLIB parser, distance functions, closed-tour transform |
-| `lib/vrptw.mjs` | Solomon / Gehring-Homberger parser — parked for M11 |
+| `tsptw.mjs` | Time windows: feasibility, then gap to proven optimum |
+| `fetch-tsptw.mjs` | Caches the TSPTW library and self-checks the referee against 370 published solutions |
+| `lib/tsptw.mjs` | TSPTW parser, open-path transform, and the referee (transcribed from the authors' checker) |
+| `solomon-routes.mjs` | Re-sequences each route of SINTEF's published best-known solutions |
+| `lib/vrptw.mjs` | Solomon / Gehring-Homberger parser, solution reader, and Solomon-convention scorer |
 | `lib/objective.mjs` | The referee: scoring + structural validation |
 | `lib/instances.mjs` | Instance generators + matrix construction |
 | `lib/server.mjs` | Header-less static server |

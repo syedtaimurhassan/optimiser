@@ -29,6 +29,12 @@ dist-seamcheck
 # the library publishes no licence, and downloading is not redistributing.
 bench/fixtures/tsplib/
 
+# Same rule for the TSPTW library and the Solomon instances and solutions:
+# fetched by `npm run bench:tsptw:fetch` and `npm run bench:solomon`, cached,
+# never redistributed from here.
+bench/fixtures/tsptw/
+bench/fixtures/solomon/
+
 # Rust build output. The BUILT .wasm artefacts are committed (see
 # src/lib/compute/wasm/) so that `npm run build` works on a machine with no Rust
 # toolchain; only the intermediates are ignored.

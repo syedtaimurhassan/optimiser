@@ -1,0 +1,581 @@
+{
+  "generatedAt": "2026-08-09T12:26:45.421Z",
+  "budgetMs": 3000,
+  "seed": 1,
+  "engines": [
+    "wasm"
+  ],
+  "rows": [
+    {
+      "set": "Dumas",
+      "instance": "n20w100.001.txt",
+      "n": 21,
+      "published": 237,
+      "proven": true,
+      "engines": {
+        "wasm": {
+          "tourCost": 191,
+          "gap": -19.409,
+          "violations": 11,
+          "lateness": 1628,
+          "worstLate": {
+            "node": 9,
+            "lateBy": 347,
+            "arrival": 380
+          },
+          "wallMs": 18,
+          "engineClaimedFeasible": true,
+          "disagrees": "engine claims feasible=true, referee counts 11 violations"
+        }
+      }
+    },
+    {
+      "set": "Dumas",
+      "instance": "n40w20.005.txt",
+      "n": 41,
+      "published": 499,
+      "proven": true,
+      "engines": {
+        "wasm": {
+          "tourCost": 247,
+          "gap": -50.501,
+          "violations": 38,
+          "lateness": 10302,
+          "worstLate": {
+            "node": 5,
+            "lateBy": 578,
+            "arrival": 609
+          },
+          "wallMs": 189,
+          "engineClaimedFeasible": true,
+          "disagrees": "engine claims feasible=true, referee counts 38 violations"
+        }
+      }
+    },
+    {
+      "set": "Dumas",
+      "instance": "n60w60.003.txt",
+      "n": 61,
+      "published": 485,
+      "proven": true,
+      "engines": {
+        "wasm": {
+          "tourCost": 290,
+          "gap": -40.206,
+          "violations": 54,
+          "lateness": 17861,
+          "worstLate": {
+            "node": 43,
+            "lateBy": 699,
+            "arrival": 719
+          },
+          "wallMs": 427,
+          "engineClaimedFeasible": true,
+          "disagrees": "engine claims feasible=true, referee counts 54 violations"
+        }
+      }
+    },
+    {
+      "set": "Dumas",
+      "instance": "n100w40.002.txt",
+      "n": 101,
+      "published": 653,
+      "proven": true,
+      "engines": {
+        "wasm": {
+          "tourCost": 382,
+          "gap": -41.501,
+          "violations": 96,
+          "lateness": 56204,
+          "worstLate": {
+            "node": 9,
+            "lateBy": 1060,
+            "arrival": 1071
+          },
+          "wallMs": 877,
+          "engineClaimedFeasible": true,
+          "disagrees": "engine claims feasible=true, referee counts 96 violations"
+        }
+      }
+    },
+    {
+      "set": "Dumas",
+      "instance": "n200w40.005.txt",
+      "n": 201,
+      "published": 1037,
+      "proven": true,
+      "engines": {
+        "wasm": {
+          "tourCost": 489,
+          "gap": -52.845,
+          "violations": 195,
+          "lateness": 189059,
+          "worstLate": {
+            "node": 81,
+            "lateBy": 1405,
+            "arrival": 1519
+          },
+          "wallMs": 1683,
+          "engineClaimedFeasible": true,
+          "disagrees": "engine claims feasible=true, referee counts 195 violations"
+        }
+      }
+    },
+    {
+      "set": "GendreauDumasExtended",
+      "instance": "n20w120.001.txt",
+      "n": 21,
+      "published": 267,
+      "proven": true,
+      "engines": {
+        "wasm": {
+          "tourCost": 198,
+          "gap": -25.843,
+          "violations": 19,
+          "lateness": 3583,
+          "worstLate": {
+            "node": 16,
+            "lateBy": 349,
+            "arrival": 412
+          },
+          "wallMs": 255,
+          "engineClaimedFeasible": true,
+          "disagrees": "engine claims feasible=true, referee counts 19 violations"
+        }
+      }
+    },
+    {
+      "set": "GendreauDumasExtended",
+      "instance": "n40w140.003.txt",
+      "n": 41,
+      "published": 398,
+      "proven": true,
+      "engines": {
+        "wasm": {
+          "tourCost": 257,
+          "gap": -35.427,
+          "violations": 35,
+          "lateness": 9101,
+          "worstLate": {
+            "node": 24,
+            "lateBy": 399,
+            "arrival": 579
+          },
+          "wallMs": 679,
+          "engineClaimedFeasible": true,
+          "disagrees": "engine claims feasible=true, referee counts 35 violations"
+        }
+      }
+    },
+    {
+      "set": "GendreauDumasExtended",
+      "instance": "n60w180.001.txt",
+      "n": 61,
+      "published": 411,
+      "proven": true,
+      "engines": {
+        "wasm": {
+          "tourCost": 290,
+          "gap": -29.44,
+          "violations": 41,
+          "lateness": 10398,
+          "worstLate": {
+            "node": 8,
+            "lateBy": 611,
+            "arrival": 726
+          },
+          "wallMs": 745,
+          "engineClaimedFeasible": true,
+          "disagrees": "engine claims feasible=true, referee counts 41 violations"
+        }
+      }
+    },
+    {
+      "set": "GendreauDumasExtended",
+      "instance": "n80w180.003.txt",
+      "n": 81,
+      "published": 524,
+      "proven": true,
+      "engines": {
+        "wasm": {
+          "tourCost": 332,
+          "gap": -36.641,
+          "violations": 76,
+          "lateness": 37815,
+          "worstLate": {
+            "node": 25,
+            "lateBy": 894,
+            "arrival": 958
+          },
+          "wallMs": 720,
+          "engineClaimedFeasible": true,
+          "disagrees": "engine claims feasible=true, referee counts 76 violations"
+        }
+      }
+    },
+    {
+      "set": "GendreauDumasExtended",
+      "instance": "n100w80.005.txt",
+      "n": 101,
+      "published": 603,
+      "proven": true,
+      "engines": {
+        "wasm": {
+          "tourCost": 371,
+          "gap": -38.474,
+          "violations": 96,
+          "lateness": 50444,
+          "worstLate": {
+            "node": 78,
+            "lateBy": 875,
+            "arrival": 942
+          },
+          "wallMs": 909,
+          "engineClaimedFeasible": true,
+          "disagrees": "engine claims feasible=true, referee counts 96 violations"
+        }
+      }
+    },
+    {
+      "set": "OhlmannThomas",
+      "instance": "n150w120.001.txt",
+      "n": 151,
+      "published": 734,
+      "proven": true,
+      "engines": {
+        "wasm": {
+          "tourCost": 434,
+          "gap": -40.872,
+          "violations": 146,
+          "lateness": 99655,
+          "worstLate": {
+            "node": 99,
+            "lateBy": 1259,
+            "arrival": 1324
+          },
+          "wallMs": 1153,
+          "engineClaimedFeasible": true,
+          "disagrees": "engine claims feasible=true, referee counts 146 violations"
+        }
+      }
+    },
+    {
+      "set": "OhlmannThomas",
+      "instance": "n150w140.002.txt",
+      "n": 151,
+      "published": 755,
+      "proven": true,
+      "engines": {
+        "wasm": {
+          "tourCost": 457,
+          "gap": -39.47,
+          "violations": 137,
+          "lateness": 97954,
+          "worstLate": {
+            "node": 120,
+            "lateBy": 1306,
+            "arrival": 1362
+          },
+          "wallMs": 1168,
+          "engineClaimedFeasible": true,
+          "disagrees": "engine claims feasible=true, referee counts 137 violations"
+        }
+      }
+    },
+    {
+      "set": "OhlmannThomas",
+      "instance": "n150w160.003.txt",
+      "n": 151,
+      "published": 608,
+      "proven": true,
+      "engines": {
+        "wasm": {
+          "tourCost": 437,
+          "gap": -28.125,
+          "violations": 134,
+          "lateness": 92888,
+          "worstLate": {
+            "node": 86,
+            "lateBy": 1220,
+            "arrival": 1278
+          },
+          "wallMs": 1137,
+          "engineClaimedFeasible": true,
+          "disagrees": "engine claims feasible=true, referee counts 134 violations"
+        }
+      }
+    },
+    {
+      "set": "OhlmannThomas",
+      "instance": "n200w120.004.txt",
+      "n": 201,
+      "published": 777,
+      "proven": true,
+      "engines": {
+        "wasm": {
+          "tourCost": 484,
+          "gap": -37.709,
+          "violations": 194,
+          "lateness": 155021,
+          "worstLate": {
+            "node": 68,
+            "lateBy": 1400,
+            "arrival": 1467
+          },
+          "wallMs": 1636,
+          "engineClaimedFeasible": true,
+          "disagrees": "engine claims feasible=true, referee counts 194 violations"
+        }
+      }
+    },
+    {
+      "set": "OhlmannThomas",
+      "instance": "n200w140.005.txt",
+      "n": 201,
+      "published": 822,
+      "proven": true,
+      "engines": {
+        "wasm": {
+          "tourCost": 489,
+          "gap": -40.511,
+          "violations": 194,
+          "lateness": 169574,
+          "worstLate": {
+            "node": 81,
+            "lateBy": 1305,
+            "arrival": 1469
+          },
+          "wallMs": 1673,
+          "engineClaimedFeasible": true,
+          "disagrees": "engine claims feasible=true, referee counts 194 violations"
+        }
+      }
+    },
+    {
+      "set": "AFG",
+      "instance": "rbg010a.tw",
+      "n": 11,
+      "published": 671,
+      "proven": true,
+      "engines": {
+        "wasm": {
+          "tourCost": 627,
+          "gap": -6.557,
+          "violations": 6,
+          "lateness": 7158,
+          "worstLate": {
+            "node": 3,
+            "lateBy": 2400,
+            "arrival": 3850
+          },
+          "wallMs": 167,
+          "engineClaimedFeasible": true,
+          "disagrees": "engine claims feasible=true, referee counts 6 violations"
+        }
+      }
+    },
+    {
+      "set": "AFG",
+      "instance": "rbg021.4.tw",
+      "n": 20,
+      "published": 4525,
+      "proven": true,
+      "engines": {
+        "wasm": {
+          "tourCost": 4474,
+          "gap": -1.127,
+          "violations": 15,
+          "lateness": 22318,
+          "worstLate": {
+            "node": 2,
+            "lateBy": 3161,
+            "arrival": 6611
+          },
+          "wallMs": 203,
+          "engineClaimedFeasible": true,
+          "disagrees": "engine claims feasible=true, referee counts 15 violations"
+        }
+      }
+    },
+    {
+      "set": "AFG",
+      "instance": "rbg035a.tw",
+      "n": 36,
+      "published": 2144,
+      "proven": true,
+      "engines": {
+        "wasm": {
+          "tourCost": 2043,
+          "gap": -4.711,
+          "violations": 28,
+          "lateness": 56597,
+          "worstLate": {
+            "node": 4,
+            "lateBy": 3945,
+            "arrival": 4774
+          },
+          "wallMs": 247,
+          "engineClaimedFeasible": true,
+          "disagrees": "engine claims feasible=true, referee counts 28 violations"
+        }
+      }
+    },
+    {
+      "set": "AFG",
+      "instance": "rbg086a.tw",
+      "n": 87,
+      "published": 8400,
+      "proven": true,
+      "engines": {
+        "wasm": {
+          "tourCost": 7972,
+          "gap": -5.095,
+          "violations": 84,
+          "lateness": 745489,
+          "worstLate": {
+            "node": 8,
+            "lateBy": 19735,
+            "arrival": 23983
+          },
+          "wallMs": 849,
+          "engineClaimedFeasible": true,
+          "disagrees": "engine claims feasible=true, referee counts 84 violations"
+        }
+      }
+    },
+    {
+      "set": "AFG",
+      "instance": "rbg233.tw",
+      "n": 232,
+      "published": 14992,
+      "proven": true,
+      "engines": {
+        "wasm": {
+          "tourCost": 13675,
+          "gap": -8.785,
+          "violations": 225,
+          "lateness": 3890333,
+          "worstLate": {
+            "node": 10,
+            "lateBy": 32633,
+            "arrival": 34189
+          },
+          "wallMs": 2144,
+          "engineClaimedFeasible": true,
+          "disagrees": "engine claims feasible=true, referee counts 225 violations"
+        }
+      }
+    },
+    {
+      "set": "SolomonPotvinBengio",
+      "instance": "rc_206.1.txt",
+      "n": 4,
+      "published": 117.85,
+      "proven": true,
+      "engines": {
+        "wasm": {
+          "tourCost": 117.85,
+          "gap": 0,
+          "violations": 0,
+          "lateness": 0,
+          "worstLate": null,
+          "wallMs": 20,
+          "engineClaimedFeasible": true,
+          "disagrees": null
+        }
+      }
+    },
+    {
+      "set": "SolomonPotvinBengio",
+      "instance": "rc_204.3.txt",
+      "n": 24,
+      "published": 455.03,
+      "proven": true,
+      "engines": {
+        "wasm": {
+          "tourCost": 439.28,
+          "gap": -3.461,
+          "violations": 3,
+          "lateness": 761.86,
+          "worstLate": {
+            "node": 12,
+            "lateBy": 383.995,
+            "arrival": 670.995
+          },
+          "wallMs": 233,
+          "engineClaimedFeasible": true,
+          "disagrees": "engine claims feasible=true, referee counts 3 violations"
+        }
+      }
+    },
+    {
+      "set": "SolomonPotvinBengio",
+      "instance": "rc_208.2.txt",
+      "n": 29,
+      "published": 533.78,
+      "proven": true,
+      "engines": {
+        "wasm": {
+          "tourCost": 523.48,
+          "gap": -1.93,
+          "violations": 14,
+          "lateness": 3065.57,
+          "worstLate": {
+            "node": 19,
+            "lateBy": 398.34220000000005,
+            "arrival": 928.3422
+          },
+          "wallMs": 203,
+          "engineClaimedFeasible": true,
+          "disagrees": "engine claims feasible=true, referee counts 14 violations"
+        }
+      }
+    },
+    {
+      "set": "SolomonPotvinBengio",
+      "instance": "rc_207.1.txt",
+      "n": 34,
+      "published": 732.68,
+      "proven": true,
+      "engines": {
+        "wasm": {
+          "tourCost": 622.95,
+          "gap": -14.977,
+          "violations": 19,
+          "lateness": 3760.97,
+          "worstLate": {
+            "node": 4,
+            "lateBy": 453.24990000000014,
+            "arrival": 844.2499000000001
+          },
+          "wallMs": 232,
+          "engineClaimedFeasible": true,
+          "disagrees": "engine claims feasible=true, referee counts 19 violations"
+        }
+      }
+    },
+    {
+      "set": "SolomonPotvinBengio",
+      "instance": "rc_204.1.txt",
+      "n": 46,
+      "published": 878.64,
+      "proven": true,
+      "engines": {
+        "wasm": {
+          "tourCost": 804.03,
+          "gap": -8.492,
+          "violations": 23,
+          "lateness": 6296.01,
+          "worstLate": {
+            "node": 43,
+            "lateBy": 1151.4078000000004,
+            "arrival": 1285.4078000000004
+          },
+          "wallMs": 299,
+          "engineClaimedFeasible": true,
+          "disagrees": "engine claims feasible=true, referee counts 23 violations"
+        }
+      }
+    }
+  ]
+}

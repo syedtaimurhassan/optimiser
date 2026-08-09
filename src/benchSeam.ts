@@ -45,6 +45,18 @@ export interface BenchSolveOptions {
   /** Milliseconds after which the run is cancelled. Omit for no cancellation. */
   cancelAfterMs?: number
   seed?: number
+  /**
+   * Per-node time windows and service times, positionally aligned with the
+   * matrix. Omitted means unconstrained, which is every pre-M11 caller.
+   *
+   * Plain `number[]` rather than typed arrays because these cross into the page
+   * through `page.evaluate`, and structured clone is what Playwright gives us.
+   * The conversion to `Int32Array` happens here, on the inside, exactly as it
+   * does for the matrix.
+   */
+  twOpenSec?: number[]
+  twCloseSec?: number[]
+  serviceTimeSec?: number[]
 }
 
 export interface BenchSolveOutcome {
@@ -53,6 +65,16 @@ export interface BenchSolveOutcome {
   problems: string[]
   wallMs: number
   progressReports: number
+  /**
+   * What the ENGINE claims about time-window feasibility.
+   *
+   * Reported, never believed: the harness recomputes both in Node from the raw
+   * order. They are here so that a disagreement between the two is visible as a
+   * failure rather than invisible as a plausible number — an engine that thinks
+   * a late route is feasible is a much worse bug than one that routes badly.
+   */
+  feasible: boolean
+  timeWarpSec: number
   /** Only set when the run was cancelled. */
   aborted?: boolean
 }
@@ -146,12 +168,24 @@ const wasmHybrid = new WasmEngine('wasm-hybrid', { strategy: 'hybrid' })
 
 function buildRequest(
   matrix: number[][],
-  { startNode, endNode, k, timeBudgetMs, seed }: BenchSolveOptions,
+  {
+    startNode,
+    endNode,
+    k,
+    timeBudgetMs,
+    seed,
+    twOpenSec,
+    twCloseSec,
+    serviceTimeSec,
+  }: BenchSolveOptions,
 ): SolveRequest {
   const n = matrix.length
   const constraints = makeConstraints(n)
   if (startNode !== null) constraints.optional[startNode] = 0
   if (endNode !== null) constraints.optional[endNode] = 0
+  if (twOpenSec) constraints.twOpenSec.set(twOpenSec.slice(0, n))
+  if (twCloseSec) constraints.twCloseSec.set(twCloseSec.slice(0, n))
+  if (serviceTimeSec) constraints.serviceTimeSec.set(serviceTimeSec.slice(0, n))
   return {
     matrix: { n, durations: toSolveMatrix(matrix) },
     constraints,
@@ -165,7 +199,7 @@ function buildRequest(
 }
 
 window.__bench = {
-  version: 4,
+  version: 5,
   routesStore: useRoutesStore,
   uiStore: useUiStore,
   skipPenalty: SKIP_PENALTY,
@@ -221,6 +255,8 @@ window.__bench = {
         problems: validateOrder(request, visited),
         wallMs: performance.now() - startedAt,
         progressReports,
+        feasible: result.feasible,
+        timeWarpSec: result.timeWarpSec,
       }
     } catch (e) {
       const error = e as Error
@@ -231,6 +267,8 @@ window.__bench = {
           problems: [],
           wallMs: performance.now() - startedAt,
           progressReports,
+          feasible: false,
+          timeWarpSec: 0,
           aborted: true,
         }
       }

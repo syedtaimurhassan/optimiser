@@ -1,27 +1,33 @@
 /**
- * Solomon and Gehring-Homberger VRPTW instances — PARSED, NOT SCORED.
+ * Solomon and Gehring-Homberger VRPTW instances — scored ONE ROUTE AT A TIME.
  *
- * ── Why nothing here runs yet ─────────────────────────────────────────────
+ * ── What M9 deferred, and how M11 resolved it ─────────────────────────────
  *
- * Because a gap number we could produce today would be fiction, and it is worth
- * being precise about why rather than leaving a TODO.
+ * M9 parked this file with a precise complaint: these benchmarks have a
+ * HIERARCHICAL objective — minimise the number of vehicles first, then total
+ * distance — plus vehicle capacity. Our engine is single-vehicle, so it cannot
+ * compete on the first term at all, and a gap computed with the fleet term and
+ * capacity relaxed answers a different question. That complaint was right and
+ * still is.
  *
- * These benchmarks have a HIERARCHICAL objective: minimise the number of
- * vehicles first, then total distance. A solution using one fewer vehicle beats
- * any solution using more, whatever the distance. Our engine is single-vehicle,
- * so the first term of the published objective is not something it can compete
- * on at all.
+ * The way out is to stop asking the benchmark's question and start asking ours.
+ * SINTEF publishes the best-known SOLUTIONS, not merely their costs — each one a
+ * list of routes, each route a set of customers one vehicle serves in one order.
+ * Fix that customer set and every difficulty M9 named disappears: the fleet is
+ * one vehicle by construction, capacity is satisfied by construction (a
+ * best-known solution obeys it), and what remains is exactly the problem this
+ * engine exists to solve — sequence these stops, meet these windows, minimise
+ * travel.
  *
- * On top of that they carry two constraints M9's port declares and ignores:
- * time windows (M11) and vehicle capacity (unscheduled). Solving them with both
- * relaxed does not produce a worse answer to the same question — it produces an
- * answer to a different one, and comparing it to a published best-known would
- * be comparing a route that is allowed to arrive at midnight against one that
- * is not.
+ * So each published route becomes a TSPTW sub-instance, and the question is:
+ * given the customers a state-of-the-art VRPTW solver assigned to this vehicle,
+ * can we order them at least as well as it did? That is a fair fight, it uses
+ * the geometry the milestone brief asked about, and — because our cost and
+ * theirs are computed by the same function over the same customers — any
+ * disagreement about Solomon's rounding conventions cancels out exactly.
  *
- * So this file exists to be READY. The parser is written and tested, the
- * best-known table is recorded with its source, and M11 can start measuring the
- * day time windows exist instead of starting by writing a parser.
+ * The absolute gaps live in `bench/tsptw.mjs`, against a library of
+ * single-vehicle instances with proven optima. This file is the shape check.
  *
  * ── Where the numbers live ────────────────────────────────────────────────
  *
@@ -132,4 +138,125 @@ export const SOLOMON_BEST_KNOWN = {
 export function compareVrptw(a, b) {
   if (a.vehicles !== b.vehicles) return a.vehicles - b.vehicles
   return a.distance - b.distance
+}
+
+// ─────────────────────────────────── published solutions, as sub-instances
+
+/**
+ * Parse a SINTEF best-known solution file.
+ *
+ *   Instance name : c101
+ *   …
+ *   Route  1 : 81 78 76 71 70 73 77 79 80
+ *
+ * Customer numbers are 1-based and exclude the depot at both ends.
+ */
+export function parseSintefSolution(text) {
+  const routes = []
+  let name = 'unnamed'
+  for (const line of text.split('\n')) {
+    const named = /^Instance name\s*:\s*(\S+)/i.exec(line)
+    if (named) {
+      name = named[1]
+      continue
+    }
+    const route = /^Route\s*\d+\s*:\s*(.*)$/i.exec(line.trim())
+    if (!route) continue
+    const customers = route[1]
+      .trim()
+      .split(/\s+/)
+      .map(Number)
+      .filter((c) => Number.isFinite(c) && c > 0)
+    if (customers.length > 0) routes.push(customers)
+  }
+  return { name, routes }
+}
+
+/**
+ * One published route, as the open path with pinned ends our engine solves.
+ *
+ * Nodes are `[depot, ...customers, depot twin]`. Two conventions matter:
+ *
+ *   1. SERVICE TIME IS FOLDED INTO THE ARCS, `d[i][j] = dist(i,j) + service(i)`,
+ *      which is what makes the clock correct without the engine needing a
+ *      separate service array. It also adds a CONSTANT to the objective —
+ *      every customer is visited exactly once — so it cannot change which
+ *      ordering is best. The reported cost is recomputed from distance alone.
+ *   2. Values are scaled to fixed point, because the port takes `Int32Array`
+ *      and Solomon coordinates are real. The engine optimises the rounded copy
+ *      and is graded on the real one.
+ */
+export function routeAsOpenPath({ customers }, route, scale = 100) {
+  const nodes = [0, ...route]
+  const size = nodes.length + 1
+  const at = (k) => customers[nodes[k]]
+  const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y)
+
+  const matrix = Array.from({ length: size }, () => new Array(size).fill(0))
+  for (let i = 0; i < nodes.length; i++) {
+    for (let j = 0; j < nodes.length; j++) {
+      if (i === j) continue
+      matrix[i][j] = Math.round((dist(at(i), at(j)) + at(i).serviceTime) * scale)
+    }
+    // Returning to the depot: same cost as the arc into node 0.
+    matrix[i][size - 1] = Math.round((dist(at(i), customers[0]) + at(i).serviceTime) * scale)
+    matrix[size - 1][i] = 9_999_999
+  }
+  matrix[0][size - 1] = 9_999_999
+  matrix[size - 1][0] = 9_999_999
+
+  const twOpenSec = nodes.map((c) => Math.round(customers[c].readyTime * scale))
+  const twCloseSec = nodes.map((c) => Math.round(customers[c].dueDate * scale))
+  twOpenSec.push(Math.round(customers[0].readyTime * scale))
+  twCloseSec.push(Math.round(customers[0].dueDate * scale))
+
+  return {
+    nodes,
+    n: size,
+    matrix,
+    twOpenSec,
+    twCloseSec,
+    serviceTimeSec: new Array(size).fill(0),
+    startNode: 0,
+    endNode: size - 1,
+    k: size - 2,
+  }
+}
+
+/**
+ * Score a sequence of customers under Solomon's own conventions.
+ *
+ * Arrive, wait for the window to open if early, serve, drive on. Lateness is a
+ * violation rather than something to be absorbed — this is the referee, not the
+ * search, and the search's time-warp relaxation has no place in it.
+ *
+ * `distance` excludes service time; that is what SINTEF's published totals are.
+ */
+export function evaluateSolomonRoute({ customers }, sequence) {
+  const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y)
+  let clock = 0
+  let distance = 0
+  let violations = 0
+  let lateness = 0
+  let worst = null
+  let prev = 0
+
+  const step = (index) => {
+    const leg = dist(customers[prev], customers[index])
+    distance += leg
+    const arrival = clock + leg
+    if (arrival > customers[index].dueDate) {
+      violations++
+      const late = arrival - customers[index].dueDate
+      lateness += late
+      if (!worst || late > worst.lateBy) worst = { customer: index, lateBy: late, arrival }
+    }
+    clock = Math.max(arrival, customers[index].readyTime) + customers[index].serviceTime
+    prev = index
+  }
+
+  for (const index of sequence) step(index)
+  step(0)
+
+  return { distance, makespan: clock, violations, lateness, worst }
 }

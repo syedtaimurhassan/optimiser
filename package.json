@@ -37,7 +37,12 @@
     "test:watch": "node --test --watch 'src/**/*.test.ts'",
     "bench:tsplib:fetch": "node bench/fetch-tsplib.mjs",
     "prebench:tsplib": "npm run bench:build",
-    "bench:tsplib": "node bench/tsplib.mjs"
+    "bench:tsplib": "node bench/tsplib.mjs",
+    "bench:tsptw:fetch": "node bench/fetch-tsptw.mjs",
+    "prebench:tsptw": "npm run bench:build",
+    "bench:tsptw": "node bench/tsptw.mjs",
+    "prebench:solomon": "npm run bench:build",
+    "bench:solomon": "node bench/solomon-routes.mjs"
   },
   "dependencies": {
     "@tanstack/react-virtual": "^3.14.9",
