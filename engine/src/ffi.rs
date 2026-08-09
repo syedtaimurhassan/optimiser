@@ -109,11 +109,16 @@ pub unsafe extern "C" fn engine_dealloc(ptr: *mut u8, bytes: u32) {
 /// `cost` in place to fold in its arc penalties; a schedule read from that would
 /// drift further from the truth with every penalty and do it invisibly.
 ///
+/// `pin` is one byte per node — 0 anywhere, 1 first, 2 last — or null for "no
+/// stop is pinned". A pinned stop is forced mandatory: a stop that must be
+/// visited first and may also be skipped has no coherent position.
+///
 /// # Safety
 /// `cost` must point to `n * n` readable `i32`s, `optional` to `n` readable
 /// `u8`s, and `seed_order` either to `seed_order_len` readable `i32`s or be
-/// null. When non-null, `time` must point to `n * n` readable `i32`s and
-/// `service`, `tw_open` and `tw_close` to `n` each. None of them is retained.
+/// null. When non-null, `time` must point to `n * n` readable `i32`s,
+/// `service`, `tw_open` and `tw_close` to `n` each, and `pin` to `n` `u8`s.
+/// None of them is retained.
 #[no_mangle]
 #[allow(clippy::too_many_arguments)]
 pub unsafe extern "C" fn engine_create(
@@ -133,6 +138,7 @@ pub unsafe extern "C" fn engine_create(
     tw_open: *const i32,
     tw_close: *const i32,
     depart_at: i32,
+    pin: *const u8,
 ) -> *mut Driver {
     let n = n as usize;
     if n < 2 || cost.is_null() || optional.is_null() {
@@ -185,7 +191,13 @@ pub unsafe extern "C" fn engine_create(
         ))
     };
 
-    let problem = Problem::with_time(
+    let pins = if pin.is_null() {
+        vec![crate::problem::PIN_AUTO; n]
+    } else {
+        unsafe { std::slice::from_raw_parts(pin, n) }.to_vec()
+    };
+
+    let problem = Problem::build(
         Matrix::new(n, cells),
         optional,
         if select_k < 0 {
@@ -197,6 +209,7 @@ pub unsafe extern "C" fn engine_create(
         if start < 0 { None } else { Some(start as usize) },
         if end < 0 { None } else { Some(end as usize) },
         schedule,
+        pins,
     );
 
     let strategy = if flags & FLAG_HYBRID != 0 {
@@ -368,6 +381,7 @@ mod tests {
                 std::ptr::null(),
                 std::ptr::null(),
                 0,
+                std::ptr::null(),
             );
             assert!(!driver.is_null());
 
@@ -434,6 +448,7 @@ mod tests {
                 std::ptr::null(),
                 std::ptr::null(),
                 0,
+                std::ptr::null(),
             )
         }
     }
@@ -505,6 +520,7 @@ mod tests {
                 tw_open.as_ptr(),
                 tw_close.as_ptr(),
                 0,
+                std::ptr::null(),
             );
             assert!(!driver.is_null());
             for _ in 0..100_000 {

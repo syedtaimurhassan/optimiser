@@ -60,6 +60,7 @@ interface EngineExports {
     twOpen: number,
     twClose: number,
     departAt: number,
+    pin: number,
   ) => number
   engine_destroy: (driver: number) => void
   engine_step: (driver: number, budget: number) => number
@@ -199,6 +200,8 @@ export class WasmEngineModule {
     twOpenSec?: Int32Array
     twCloseSec?: Int32Array
     departAtSec?: number
+    /** One byte per node: 0 anywhere, 1 first, 2 last. Omit for no pins. */
+    pin?: Uint8Array
   }): WasmDriver {
     const costPtr = this.write(input.cost)
     const optionalPtr = this.write(input.optional)
@@ -209,6 +212,8 @@ export class WasmEngineModule {
     const servicePtr = timed ? this.write(input.serviceTimeSec!) : 0
     const twOpenPtr = timed ? this.write(input.twOpenSec!) : 0
     const twClosePtr = timed ? this.write(input.twCloseSec!) : 0
+    const pinned = Boolean(input.pin?.some((p) => p !== 0))
+    const pinPtr = pinned ? this.write(input.pin!) : 0
 
     const driver = this.exports.engine_create(
       input.n,
@@ -227,6 +232,7 @@ export class WasmEngineModule {
       twOpenPtr,
       twClosePtr,
       input.departAtSec ?? 0,
+      pinPtr,
     )
 
     this.free(costPtr, input.cost.byteLength)
@@ -238,6 +244,7 @@ export class WasmEngineModule {
       this.free(twOpenPtr, input.twOpenSec!.byteLength)
       this.free(twClosePtr, input.twCloseSec!.byteLength)
     }
+    if (pinPtr !== 0) this.free(pinPtr, input.pin!.byteLength)
 
     if (driver === 0) {
       throw new Error('the solver engine rejected the request as malformed')

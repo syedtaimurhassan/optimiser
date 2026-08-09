@@ -45,7 +45,7 @@
 //! end is modelled as a virtual neighbour whose arcs all cost zero. `arc_in` and
 //! `arc_out` are the only two places that know this.
 
-use crate::problem::{Problem, TimeData};
+use crate::problem::{Problem, TimeData, PIN_FIRST, PIN_LAST};
 use crate::segtree::RangeLabels;
 
 /// Vidal's four-label subsequence summary — **declared for M11, unused in M10.**
@@ -605,23 +605,111 @@ impl Tour {
         }
     }
 
+    /// The span of positions a move may rearrange, for the zone holding `p`.
+    ///
+    /// Inclusive at both ends, and `None` when the zone is empty or `p` is a
+    /// pinned depot. See the `pin` field on `Problem` for the three zones and
+    /// why crossing between them is forbidden rather than merely expensive.
+    ///
+    /// With nothing pinned — the overwhelmingly common case — there is one zone
+    /// and this returns exactly what `lo`/`hi` always did.
+    pub fn zone(&self, problem: &Problem, p: usize) -> Option<(usize, usize)> {
+        if problem.first_count == 0 && problem.last_count == 0 {
+            let (lo, hi) = (self.lo(problem), self.hi(problem));
+            return if p >= lo && p <= hi && lo <= hi {
+                Some((lo, hi))
+            } else {
+                None
+            };
+        }
+
+        let s = usize::from(problem.start.is_some());
+        let e = usize::from(problem.end.is_some());
+        let first_end = s + problem.first_count;
+        let last_start = self.len.saturating_sub(e + problem.last_count);
+        let auto_end = last_start;
+
+        let span = if p < s {
+            return None; // the pinned start
+        } else if p < first_end {
+            (s, first_end - 1)
+        } else if p < auto_end {
+            (first_end, auto_end - 1)
+        } else if p < self.len.saturating_sub(e) {
+            (last_start, self.len - e - 1)
+        } else {
+            return None; // the pinned end
+        };
+        if span.0 > span.1 {
+            None
+        } else {
+            Some(span)
+        }
+    }
+
     /// Lowest gap index an insertion may use.
+    ///
+    /// ── Scanned, not counted ──────────────────────────────────────────────
+    ///
+    /// `problem.first_count` is how many nodes are pinned first in the PROBLEM;
+    /// this needs how many are in the ROUTE, and during construction those
+    /// differ. Using the total would push the first insertions past positions
+    /// that do not exist yet.
+    ///
+    /// The scan is over the leading pinned run only, which is one or two stops
+    /// in every real use, and is skipped entirely when nothing is pinned.
     #[inline]
     pub fn lo_gap(&self, problem: &Problem) -> usize {
-        if problem.start.is_none() {
-            0
-        } else {
-            1
+        let start = usize::from(problem.start.is_some());
+        if problem.first_count == 0 {
+            return start;
         }
+        let mut at = start;
+        while at < self.len && problem.pin[self.order[at] as usize] == PIN_FIRST {
+            at += 1;
+        }
+        at
     }
 
     /// Highest gap index an insertion may use, for a route of length `len`.
     #[inline]
     pub fn hi_gap(&self, problem: &Problem, len: usize) -> usize {
-        if problem.end.is_none() {
-            len
+        let mut at = len.saturating_sub(usize::from(problem.end.is_some()));
+        if problem.last_count == 0 {
+            return at;
+        }
+        while at > 0 && problem.pin[self.order[at - 1] as usize] == PIN_LAST {
+            at -= 1;
+        }
+        at
+    }
+
+    /// Positions of the unpinned middle zone, inclusive, or None when empty.
+    ///
+    /// The only stretch a perturbation may shuffle: a double bridge that reached
+    /// into the first block would move a stop the driver pinned there.
+    pub fn middle(&self, problem: &Problem) -> Option<(usize, usize)> {
+        let lo = self.lo_gap(problem);
+        let hi = self.hi_gap(problem, self.len);
+        if lo >= hi {
+            None
         } else {
-            len.saturating_sub(1)
+            Some((lo, hi - 1))
+        }
+    }
+
+    /// Gaps an absent node may occupy, given its pin class. Inclusive.
+    ///
+    /// An unpinned stop goes in the middle. A pinned one goes inside its own
+    /// block, which is what makes several stops marked First an ordering
+    /// question among themselves rather than a contradiction.
+    pub fn gap_range(&self, problem: &Problem, node: usize) -> (usize, usize) {
+        let start = usize::from(problem.start.is_some());
+        let end = usize::from(problem.end.is_some());
+        match problem.pin[node] {
+            PIN_FIRST => (start, self.lo_gap(problem)),
+            PIN_LAST => (self.hi_gap(problem, self.len), self.len.saturating_sub(end)),
+            _ => (self.lo_gap(problem), self.hi_gap(problem, self.len)),
         }
     }
 
@@ -800,8 +888,7 @@ impl Tour {
     /// `Insertion`.
     pub fn best_insertion(&self, problem: &Problem, node: usize, tw_penalty: i64) -> Insertion {
         let m = &problem.matrix;
-        let lo = self.lo_gap(problem);
-        let hi = self.hi_gap(problem, self.len);
+        let (lo, hi) = self.gap_range(problem, node);
         let warp_now = self.time_warp(problem);
         let timed = problem.windows_bind() && tw_penalty != 0;
 

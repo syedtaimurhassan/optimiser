@@ -7,9 +7,12 @@ import {
   arcSum,
   arrivalsFor,
   capacityFor,
+  effectiveOptional,
   makeConstraints,
   objectiveValue,
+  ORDER_AUTO,
   resolveEndpoints,
+  resolvePins,
   toResult,
   toSolveMatrix,
   validateOrder,
@@ -64,28 +67,60 @@ describe('arcSum', () => {
 })
 
 describe('resolveEndpoints', () => {
-  test('reads pins out of the order array', () => {
+  /**
+   * The depot pins and the stop pins are different things, and M11 stopped
+   * conflating them.
+   *
+   * Until then this function promoted a stop marked First into the route's START
+   * and threw if the route already had one — so a driver who set a start
+   * location and then marked a parcel First got "Two different stops are pinned
+   * to the start" for a request that makes perfect sense. The start is where the
+   * van sets off from; First is the earliest delivery, which comes after it.
+   */
+  test('ignores stop-level pins entirely', () => {
     const req = request()
     req.constraints.order[2] = ORDER_FIRST
     req.constraints.order[3] = ORDER_LAST
-    assert.deepEqual(resolveEndpoints(req), { start: 2, end: 3 })
+    assert.deepEqual(resolveEndpoints(req), { start: null, end: null })
   })
 
-  test('the endpoints field agrees with a matching pin', () => {
-    const req = request({ endpoints: { start: 1, end: null } })
-    req.constraints.order[1] = ORDER_FIRST
-    assert.deepEqual(resolveEndpoints(req), { start: 1, end: null })
-  })
-
-  test('throws when two different nodes claim the start', () => {
+  test('a start location and a stop marked First can coexist', () => {
     const req = request({ endpoints: { start: 0, end: null } })
     req.constraints.order[2] = ORDER_FIRST
-    assert.throws(() => resolveEndpoints(req), /pinned to the start/)
+    assert.deepEqual(resolveEndpoints(req), { start: 0, end: null })
+    assert.equal(resolvePins(req)[2], ORDER_FIRST)
   })
 
   test('throws when one node is pinned to both ends', () => {
     const req = request({ endpoints: { start: 1, end: 1 } })
     assert.throws(() => resolveEndpoints(req), /both the start and the end/)
+  })
+})
+
+describe('resolvePins', () => {
+  test('several stops may be marked First', () => {
+    const req = request()
+    req.constraints.order[1] = ORDER_FIRST
+    req.constraints.order[2] = ORDER_FIRST
+    const pins = resolvePins(req)
+    assert.equal(pins[1], ORDER_FIRST)
+    assert.equal(pins[2], ORDER_FIRST)
+  })
+
+  test('a depot endpoint is never itself pinned — it is already at its end', () => {
+    const req = request({ endpoints: { start: 0, end: 3 } })
+    req.constraints.order[0] = ORDER_FIRST
+    req.constraints.order[3] = ORDER_LAST
+    const pins = resolvePins(req)
+    assert.equal(pins[0], ORDER_AUTO)
+    assert.equal(pins[3], ORDER_AUTO)
+  })
+
+  test('a pinned stop is mandatory however the caller flagged it', () => {
+    const req = request()
+    req.constraints.order[2] = ORDER_LAST
+    req.constraints.optional[2] = 1
+    assert.equal(effectiveOptional(req)[2], 0)
   })
 })
 

@@ -113,7 +113,46 @@ pub struct Problem {
     pub end: Option<usize>,
     /// Present only when the caller has a schedule to honour. See `TimeData`.
     pub time: Option<TimeData>,
+    /*
+      ── First and Last, as BLOCKS rather than as endpoints ────────────────
+
+      `start` and `end` are the depot: where the van leaves from and returns
+      to. "First" and "Last" on a STOP mean something different — the earliest
+      and latest a delivery may be made, immediately after the depot and
+      immediately before it. Conflating the two makes a route that has both a
+      start location and a stop marked First unsolvable, which is a thing the
+      edit form lets a driver ask for.
+
+      So the route has up to three zones:
+
+          [ start ][ first block ][ anything ][ last block ][ end ]
+
+      and a move may rearrange positions within a zone but never across one.
+      Enforced in candidate GENERATION rather than by generating a move and
+      rejecting it, because a rejected move still costs a delta evaluation and
+      the rejection is on the hot path.
+
+      Several stops may be marked First; they form a block and are freely
+      ordered among themselves, which is the only reading that does not have to
+      refuse the request.
+
+      A pinned stop is mandatory. It has to be: a stop that must be visited
+      first and may also be skipped has no coherent position, and the K cap
+      would otherwise be able to delete the constraint.
+    */
+    pub pin: Vec<u8>,
+    /// How many nodes carry `PIN_FIRST`. Always present in the route.
+    pub first_count: usize,
+    /// How many nodes carry `PIN_LAST`.
+    pub last_count: usize,
 }
+
+/// The optimiser may put this node anywhere.
+pub const PIN_AUTO: u8 = 0;
+/// Immediately after the start, before every unpinned stop.
+pub const PIN_FIRST: u8 = 1;
+/// Immediately before the end, after every unpinned stop.
+pub const PIN_LAST: u8 = 2;
 
 impl Problem {
     pub fn new(
@@ -127,12 +166,7 @@ impl Problem {
         Problem::with_time(matrix, optional, select_k, skip_penalty, start, end, None)
     }
 
-    /// The same problem, with a schedule attached.
-    ///
-    /// A separate constructor rather than an extra argument on `new`, because
-    /// the overwhelming majority of call sites — every test of the geometry, and
-    /// every solve from a driver who has set no windows — have no schedule, and
-    /// threading a `None` through all of them would say nothing.
+    /// The same problem, with a schedule attached and nothing pinned.
     #[allow(clippy::too_many_arguments)]
     pub fn with_time(
         matrix: Matrix,
@@ -143,7 +177,49 @@ impl Problem {
         end: Option<usize>,
         time: Option<TimeData>,
     ) -> Self {
+        let n = matrix.n;
+        Problem::build(
+            matrix,
+            optional,
+            select_k,
+            skip_penalty,
+            start,
+            end,
+            time,
+            vec![PIN_AUTO; n],
+        )
+    }
+
+    /// Everything. The other constructors are this one with defaults.
+    ///
+    /// Separate constructors rather than one long argument list, because the
+    /// overwhelming majority of call sites — every test of the geometry, and
+    /// every solve from a driver who has set neither windows nor pins — want the
+    /// defaults, and threading empty values through all of them would say
+    /// nothing.
+    #[allow(clippy::too_many_arguments)]
+    pub fn build(
+        matrix: Matrix,
+        mut optional: Vec<u8>,
+        select_k: Option<usize>,
+        skip_penalty: i64,
+        start: Option<usize>,
+        end: Option<usize>,
+        time: Option<TimeData>,
+        pin: Vec<u8>,
+    ) -> Self {
         assert_eq!(optional.len(), matrix.n, "one optional flag per node");
+        assert_eq!(pin.len(), matrix.n, "one pin flag per node");
+        // A pinned stop is mandatory — see the field comment. Forced rather than
+        // rejected, so that a caller whose two flags disagree gets the safe
+        // reading instead of a failed solve.
+        for node in 0..matrix.n {
+            if pin[node] != PIN_AUTO {
+                optional[node] = 0;
+            }
+        }
+        let first_count = pin.iter().filter(|&&p| p == PIN_FIRST).count();
+        let last_count = pin.iter().filter(|&&p| p == PIN_LAST).count();
         if let Some(time) = &time {
             assert_eq!(time.time.n, matrix.n, "the time matrix must match the cost matrix");
         }
@@ -161,6 +237,9 @@ impl Problem {
             start,
             end,
             time,
+            pin,
+            first_count,
+            last_count,
         }
     }
 

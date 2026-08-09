@@ -242,8 +242,20 @@ impl LocalSearch {
             return false;
         }
         let p = p as usize;
-        let lo = tour.lo(problem);
-        let hi = tour.hi(problem);
+        /*
+          The zone, not the whole route.
+
+          A move may reorder positions within the first block, within the
+          unpinned middle, or within the last block, but never across a
+          boundary — that is what "First" and "Last" mean. Asking for the zone
+          here is candidate GENERATION: a move that would cross is never built,
+          rather than built and rejected, so a pinned route costs no more
+          evaluations than an unpinned one. With nothing pinned this is exactly
+          `(lo, hi)`.
+        */
+        let Some((lo, hi)) = tour.zone(problem, p) else {
+            return false;
+        };
         let warp_now = self.warp_now(problem, tour);
 
         // The penalised delta of reversing i..=j. The arc term is exact and
@@ -299,20 +311,22 @@ impl LocalSearch {
             return false;
         }
         let p = p as usize;
-        let lo = tour.lo(problem);
-        let hi = tour.hi(problem);
-        if p < lo {
+        // Same rule as 2-opt: the segment and the gap it lands in must be in one
+        // zone. Deriving the gap bounds from the zone rather than from
+        // `lo_gap`/`hi_gap` is what keeps a relocation inside a pinned block.
+        let Some((lo, hi)) = tour.zone(problem, p) else {
             return false;
-        }
+        };
         let warp_now = self.warp_now(problem, tour);
 
         for seg in 1..=MAX_SEGMENT {
             if p + seg - 1 > hi || tour.len < seg + 1 {
                 break;
             }
-            let shortened = tour.len - seg;
-            let lo_gap = tour.lo_gap(problem);
-            let hi_gap = tour.hi_gap(problem, shortened);
+            // In the shortened tour the zone loses `seg` positions, so its last
+            // legal gap moves down by the same amount.
+            let lo_gap = lo;
+            let hi_gap = hi + 1 - seg;
 
             for slot in 0..problem.candidates.width {
                 let c = problem.candidates.of(a)[slot] as usize;

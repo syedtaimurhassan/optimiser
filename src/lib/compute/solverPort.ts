@@ -272,37 +272,48 @@ export function toSolveMatrix(rows: readonly (readonly number[])[]): Int32Array 
 }
 
 /**
- * Reconcile `endpoints` with `constraints.order` into one answer.
+ * The DEPOT pins: where the van leaves from and returns to.
  *
- * `endpoints` wins where both speak, because it is what the app actually sets.
- * A genuine CONFLICT — two different nodes both claiming to be the start —
- * throws rather than picking one: silently dropping a pin would produce a route
- * that is subtly not the one that was asked for, and nothing downstream could
- * tell.
+ * ── What this used to do, and why it was wrong ────────────────────────────
+ *
+ * Until M11 this also scanned `constraints.order` and promoted a stop marked
+ * First into the route's start — and threw when the route already had one. That
+ * conflated two different things. The start is a place the van sets off from,
+ * often not a delivery at all; "First" on a stop means the earliest DELIVERY,
+ * which comes after the start. A driver who set a start location and then marked
+ * a parcel First was asking for something perfectly sensible and getting
+ * "Two different stops are pinned to the start".
+ *
+ * Stop-level pins are `resolvePins` below and are a property of the SEQUENCE,
+ * not of the endpoints. The two no longer interact.
  */
 export function resolveEndpoints(request: SolveRequest): SolveEndpoints {
-  const { order } = request.constraints
-  let start = request.endpoints.start
-  let end = request.endpoints.end
-
-  for (let i = 0; i < order.length; i++) {
-    if (order[i] === ORDER_FIRST) {
-      if (start !== null && start !== i) {
-        throw new Error(`Two different stops are pinned to the start (${start} and ${i}).`)
-      }
-      start = i
-    } else if (order[i] === ORDER_LAST) {
-      if (end !== null && end !== i) {
-        throw new Error(`Two different stops are pinned to the end (${end} and ${i}).`)
-      }
-      end = i
-    }
-  }
-
+  const { start, end } = request.endpoints
   if (start !== null && start === end) {
     throw new Error('The same stop is pinned to both the start and the end of the route.')
   }
   return { start, end }
+}
+
+/**
+ * Stop-level ordering pins, as the engine's one-byte-per-node form.
+ *
+ * `ORDER_FIRST` stops form a block immediately after the start, freely ordered
+ * among themselves; `ORDER_LAST` stops form a block immediately before the end.
+ * Several of each are legal — the edit form is per-stop, so a driver can mark
+ * three parcels First, and the only reading that does not have to refuse the
+ * request is "these three come before everything else".
+ *
+ * A depot endpoint is never itself pinned this way: it is already at the end it
+ * belongs to, and marking it would create a block of one that the engine would
+ * then try to place after itself.
+ */
+export function resolvePins(request: SolveRequest): Uint8Array {
+  const pins = Uint8Array.from(request.constraints.order)
+  const { start, end } = resolveEndpoints(request)
+  if (start !== null) pins[start] = ORDER_AUTO
+  if (end !== null) pins[end] = ORDER_AUTO
+  return pins
 }
 
 /**
@@ -319,6 +330,13 @@ export function effectiveOptional(request: SolveRequest): Uint8Array {
   const { start, end } = resolveEndpoints(request)
   if (start !== null) optional[start] = 0
   if (end !== null) optional[end] = 0
+  // A pinned stop is mandatory. A stop that must be visited first and may also
+  // be skipped has no coherent position, and leaving it optional would let the
+  // K cap silently delete the ordering constraint.
+  const pins = resolvePins(request)
+  for (let i = 0; i < pins.length; i++) {
+    if (pins[i] !== ORDER_AUTO) optional[i] = 0
+  }
   return optional
 }
 
@@ -410,6 +428,31 @@ export function validateOrder(request: SolveRequest, order: ArrayLike<number>): 
   }
   if (end !== null && order[order.length - 1] !== end) {
     problems.push(`pinned end ${end} is not last (got ${order[order.length - 1]})`)
+  }
+
+  /*
+    The pin blocks.
+
+    Checked structurally rather than by trusting the engine, for the same reason
+    the K cap is: the pins are enforced in candidate generation, so a bug there
+    produces a route that quietly ignores the driver rather than an error. The
+    rule is that reading the pin class along the route gives FIRST*, AUTO*,
+    LAST* — the depot endpoints excepted, since they sit outside the blocks.
+  */
+  const pins = resolvePins(request)
+  let stage = 0
+  const stageNames = ['a First stop', 'an unpinned stop', 'a Last stop']
+  for (let i = 0; i < order.length; i++) {
+    const node = order[i]
+    if (node === start || node === end) continue
+    const stageOf = pins[node] === ORDER_FIRST ? 0 : pins[node] === ORDER_LAST ? 2 : 1
+    if (stageOf < stage) {
+      problems.push(
+        `ordering pin violated: ${stageNames[stageOf]} (node ${node}) comes after ${stageNames[stage]}`,
+      )
+      break
+    }
+    stage = stageOf
   }
 
   const cap = capacityFor(request)

@@ -607,12 +607,14 @@ impl Driver {
     /// walk straight back out of leaves the driver oscillating around one
     /// optimum instead of exploring.
     fn double_bridge(&mut self) -> bool {
-        let a_min = 1usize;
-        let c_max = if self.problem.end.is_none() {
-            self.tour.len
-        } else {
-            self.tour.len.saturating_sub(1)
+        // Confined to the unpinned middle. Reaching into the first or last block
+        // would move a stop the driver explicitly placed there, and the local
+        // search — which respects the zones — could not put it back.
+        let Some((mid_lo, mid_hi)) = self.tour.middle(&self.problem) else {
+            return false;
         };
+        let a_min = mid_lo.max(1);
+        let c_max = mid_hi + 1;
         if c_max < a_min + 3 {
             return false;
         }
@@ -732,6 +734,7 @@ impl Driver {
 mod tests {
     use super::*;
     use crate::matrix::Matrix;
+    use crate::problem::{PIN_AUTO, PIN_FIRST, PIN_LAST};
 
     fn problem_with(
         n: usize,
@@ -1029,6 +1032,115 @@ mod tests {
             steps += 1;
             assert!(steps < 100_000, "GLS never declared itself finished");
         }
+    }
+
+    /// First and Last must hold through a complete search, not merely through
+    /// construction.
+    ///
+    /// The pins are enforced in candidate generation, so a bug here does not
+    /// produce an error — it produces a route that quietly ignores the driver.
+    /// Several stops are pinned each way on purpose: one is the easy case, and a
+    /// BLOCK is where an off-by-one in the zone boundaries shows up.
+    #[test]
+    fn first_and_last_blocks_survive_the_whole_search() {
+        for seed in 1..8u32 {
+            let n = 24;
+            let mut rng = Rng::new(seed);
+            let mut cells = vec![0i32; n * n];
+            for i in 0..n {
+                for j in 0..n {
+                    if i != j {
+                        cells[i * n + j] = 1 + (rng.next_f64() * 10_000.0) as i32;
+                    }
+                }
+            }
+            // Nodes 1 and 2 first, 20 and 21 last, 0 and 23 the depots.
+            let mut pin = vec![PIN_AUTO; n];
+            pin[1] = PIN_FIRST;
+            pin[2] = PIN_FIRST;
+            pin[20] = PIN_LAST;
+            pin[21] = PIN_LAST;
+            let mut optional = vec![1u8; n];
+            optional[0] = 0;
+            optional[n - 1] = 0;
+
+            let problem = Problem::build(
+                Matrix::new(n, cells),
+                optional,
+                None,
+                10_000_000,
+                Some(0),
+                Some(n - 1),
+                None,
+                pin.clone(),
+            );
+            let (order, _) = solve(problem, seed);
+
+            assert_eq!(order[0], 0, "seed {seed}: start moved");
+            assert_eq!(*order.last().unwrap(), (n - 1) as i32, "seed {seed}: end moved");
+
+            let classes: Vec<u8> = order.iter().map(|&node| pin[node as usize]).collect();
+            // Positions 1 and 2 are the first block, in some order; 22 and 23
+            // counting from the end are the last block.
+            assert_eq!(
+                &classes[1..3],
+                &[PIN_FIRST, PIN_FIRST],
+                "seed {seed}: the first block is not at the front ({order:?})"
+            );
+            let tail = classes.len() - 3;
+            assert_eq!(
+                &classes[tail..classes.len() - 1],
+                &[PIN_LAST, PIN_LAST],
+                "seed {seed}: the last block is not at the back ({order:?})"
+            );
+            assert!(
+                classes[3..tail].iter().all(|&c| c == PIN_AUTO),
+                "seed {seed}: a pinned stop escaped into the middle ({order:?})"
+            );
+
+            let mut seen = order.clone();
+            seen.sort();
+            seen.dedup();
+            assert_eq!(seen.len(), order.len(), "seed {seed}: repeated node");
+        }
+    }
+
+    /// A pinned stop is mandatory even when the caller marked it optional and
+    /// the cap would otherwise have removed it. Without this the K cap can
+    /// silently delete an ordering constraint.
+    #[test]
+    fn pinning_a_stop_makes_it_mandatory() {
+        let n = 20;
+        let mut cells = vec![0i32; n * n];
+        let mut rng = Rng::new(3);
+        for i in 0..n {
+            for j in 0..n {
+                if i != j {
+                    cells[i * n + j] = 1 + (rng.next_f64() * 10_000.0) as i32;
+                }
+            }
+        }
+        let mut pin = vec![PIN_AUTO; n];
+        pin[5] = PIN_FIRST;
+        pin[6] = PIN_LAST;
+
+        let problem = Problem::build(
+            Matrix::new(n, cells),
+            // Everything optional, including the two pinned stops.
+            vec![1u8; n],
+            Some(4),
+            10_000_000,
+            None,
+            None,
+            None,
+            pin,
+        );
+        assert!(!problem.is_optional(5));
+        assert!(!problem.is_optional(6));
+
+        let (order, _) = solve(problem, 3);
+        assert_eq!(order[0], 5, "the first-pinned stop is missing or misplaced");
+        assert_eq!(*order.last().unwrap(), 6, "the last-pinned stop is missing or misplaced");
     }
 
     #[test]

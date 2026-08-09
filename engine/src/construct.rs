@@ -6,7 +6,7 @@
 //! curve therefore makes the insertions cheaper and more sensible without being
 //! able to produce a route the cost matrix disagrees with.
 
-use crate::problem::Problem;
+use crate::problem::{Problem, PIN_FIRST, PIN_LAST};
 use crate::rng::Rng;
 use crate::tour::Tour;
 
@@ -54,8 +54,33 @@ pub fn construct(
         }
     }
 
-    // Stable, so the seed order survives within each class.
-    offered.sort_by_key(|&node| problem.optional[node as usize]);
+    /*
+      Offer order decides which class of node lands where.
+
+      Sorted by (zone, optional): the first block, then mandatory unpinned, then
+      optional unpinned, then the last block. Stable, so the seed order survives
+      within each class.
+
+      Zone first, because `insert_all` places each node in the cheapest gap ITS
+      OWN zone allows, and a zone's boundary depends on how many pinned nodes are
+      already in the route. Offering a last-block stop before the unpinned ones
+      would have it inserted into a route whose last block has not been built
+      yet, which is not wrong so much as pointless — it would be shuffled into
+      place immediately afterwards.
+
+      Mandatory before optional for the reason M10 gives: they are going in
+      regardless, and inserting them into a fuller route is more expensive and no
+      better.
+    */
+    offered.sort_by_key(|&node| {
+        let node = node as usize;
+        let zone = match problem.pin[node] {
+            PIN_FIRST => 0,
+            PIN_LAST => 2,
+            _ => 1,
+        };
+        (zone, problem.optional[node])
+    });
 
     insert_all(problem, tour, &offered, tw_penalty);
 }

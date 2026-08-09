@@ -6,6 +6,7 @@ import {
   costMatrixFor,
   effectiveOptional,
   resolveEndpoints,
+  resolvePins,
   toResult,
   type SolveProgress,
   type SolveRequest,
@@ -208,6 +209,7 @@ export class WasmEngine implements SolverEngine {
       twOpenSec: scheduled ? twOpenSec : undefined,
       twCloseSec: scheduled ? twCloseSec : undefined,
       departAtSec: request.departAtSec ?? DEFAULT_DEPART_SEC,
+      pin: resolvePins(request),
     })
 
     const startedAt = Date.now()
