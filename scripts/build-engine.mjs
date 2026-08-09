@@ -33,9 +33,11 @@
  *      allocation fails up front, before a single byte is used.
  */
 import { execFileSync } from 'node:child_process'
-import { copyFileSync, existsSync, mkdirSync, readFileSync, statSync } from 'node:fs'
+import { copyFileSync, existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
+import { createHash } from 'node:crypto'
 import { fileURLToPath } from 'node:url'
 import { dirname, join, resolve } from 'node:path'
+import { sourceFingerprint, MANIFEST } from './engine-fingerprint.mjs'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const ROOT = resolve(HERE, '..')
@@ -278,7 +280,45 @@ function main() {
     }
     process.exit(1)
   }
+
+  // Record what these were built from, so `npm test` can tell whether the
+  // committed binaries still match the committed source. See engine-fingerprint.mjs.
+  let rustc = 'unknown'
+  try {
+    const env = { ...process.env, PATH: `${dirname(CARGO)}:${process.env.PATH ?? ''}` }
+    rustc = execFileSync(CARGO, ['--version'], { encoding: 'utf8', env }).trim()
+  } catch {
+    /* the version is documentation, not a gate */
+  }
+
+  writeFileSync(
+    MANIFEST,
+    `${JSON.stringify(
+      {
+        note: 'Written by scripts/build-engine.mjs. Checked by wasmArtefact.test.ts.',
+        builtAt: new Date().toISOString(),
+        toolchain: rustc,
+        source: sourceFingerprint(),
+        artefacts: Object.fromEntries(
+          builds.map((spec) => {
+            const path = join(OUT, spec.out)
+            return [
+              spec.out,
+              {
+                bytes: statSync(path).size,
+                sha256: createHash('sha256').update(readFileSync(path)).digest('hex'),
+              },
+            ]
+          }),
+        ),
+      },
+      null,
+      2,
+    )}\n`,
+  )
+
   console.log('✓ both artefacts import nothing and declare a bounded memory')
+  console.log('✓ manifest written')
 }
 
 main()
