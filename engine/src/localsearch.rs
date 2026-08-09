@@ -97,6 +97,32 @@ impl LocalSearch {
         None
     }
 
+    /// Re-examine one node and its neighbours on the next descent.
+    ///
+    /// Guided local search uses this instead of `reset`: after penalising an
+    /// arc, the only part of the route whose evaluation changed is the handful
+    /// of nodes around that arc. Waking the whole tour would throw away the
+    /// don't-look bits every iteration and turn each descent back into a full
+    /// O(n · K) sweep, which is most of what makes GLS affordable.
+    pub fn wake_external(&mut self, tour: &Tour, node: usize) {
+        self.wake(tour, node);
+        /*
+          The selection pass is owed again.
+
+          `run` clears this flag when it reaches a local optimum, and only
+          `reset` sets it. GLS never calls `reset` — that is the point of waking
+          two nodes instead of the whole tour — so without this line the search
+          runs exactly ONE add/drop/swap pass in its entire life, at the end of
+          the opening descent, and then never reconsiders which stops to visit
+          however much the penalties change.
+
+          Invisible whenever the cap does not bind, because then there is
+          nothing to select. Exactly wrong on the instances where the choice of
+          stops IS the problem.
+        */
+        self.selection_pending = true;
+    }
+
     /// Wake a node and its tour neighbours — the ones a move just invalidated.
     fn wake(&mut self, tour: &Tour, node: usize) {
         self.push(node as i32);

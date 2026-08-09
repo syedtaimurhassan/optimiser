@@ -34,12 +34,20 @@
 
 use std::alloc::{alloc, dealloc, Layout};
 
-use crate::driver::Driver;
+use crate::driver::{Driver, Strategy};
 use crate::matrix::Matrix;
 use crate::problem::Problem;
 
 /// i32 and u8 buffers both satisfy this, and it is what `Vec<i32>` would use.
 const ALIGN: usize = 4;
+
+/// `flags` bit 0: search the landscape with guided local search instead of
+/// perturbing the route with iterated local search.
+pub const FLAG_GLS: u32 = 1;
+
+/// `flags` bit 1: iterated local search, then guided local search once ILS has
+/// run out of ideas. Takes precedence over `FLAG_GLS`.
+pub const FLAG_HYBRID: u32 = 2;
 
 /// Reserve `bytes` of linear memory and return a pointer to it.
 ///
@@ -85,7 +93,7 @@ pub unsafe extern "C" fn engine_dealloc(ptr: *mut u8, bytes: u32) {
 /// about what a route is worth.
 ///
 /// `select_k` negative means "no cap". `start` and `end` negative mean "free".
-/// `flags` is reserved for engine variants; bit 0 selects guided local search.
+/// `flags` bit 0 (`FLAG_GLS`) selects guided local search; the default is ILS.
 ///
 /// # Safety
 /// `cost` must point to `n * n` readable `i32`s, `optional` to `n` readable
@@ -106,7 +114,6 @@ pub unsafe extern "C" fn engine_create(
     seed_order_len: u32,
     flags: u32,
 ) -> *mut Driver {
-    let _ = flags;
     let n = n as usize;
     if n < 2 || cost.is_null() || optional.is_null() {
         return std::ptr::null_mut();
@@ -149,7 +156,17 @@ pub unsafe extern "C" fn engine_create(
         if end < 0 { None } else { Some(end as usize) },
     );
 
-    Box::into_raw(Box::new(Driver::new(problem, seed, seed_order)))
+    let strategy = if flags & FLAG_HYBRID != 0 {
+        Strategy::IlsThenGls
+    } else if flags & FLAG_GLS != 0 {
+        Strategy::Gls
+    } else {
+        Strategy::Ils
+    };
+
+    Box::into_raw(Box::new(Driver::with_strategy(
+        problem, seed, seed_order, strategy,
+    )))
 }
 
 /// Release an engine.

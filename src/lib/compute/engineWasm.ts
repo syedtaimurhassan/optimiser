@@ -72,9 +72,32 @@ const yieldToEventLoop: () => Promise<void> =
         })
     : () => new Promise((resolve) => setTimeout(resolve, 0))
 
+/**
+ * `flags` bit 0 in `engine_create` — guided local search instead of iterated
+ * local search. Kept next to the option that sets it so the two cannot drift.
+ */
+const FLAG_GLS = 1
+const FLAG_HYBRID = 2
+
+const STRATEGY_FLAGS: Record<'ils' | 'gls' | 'hybrid', number> = {
+  ils: 0,
+  gls: FLAG_GLS,
+  hybrid: FLAG_HYBRID,
+}
+
 export interface WasmEngineOptions {
   /** Force an artefact instead of probing for SIMD. The bench compares both. */
   variant?: EngineVariant
+  /**
+   * Which escape from a local optimum.
+   *
+   * `ils` perturbs the ROUTE — double bridge, ruin-and-recreate, restarts.
+   * `gls` perturbs the LANDSCAPE, raising the price of arcs the search keeps
+   * choosing until the local optimum stops being one. Both are implemented so
+   * the benchmark can settle which is better rather than the question being
+   * decided by whichever was written first.
+   */
+  strategy?: 'ils' | 'gls' | 'hybrid'
   /**
    * Supply the artefact directly instead of fetching it.
    *
@@ -162,6 +185,7 @@ export class WasmEngine implements SolverEngine {
       end: end ?? -1,
       seed: (request.seed ?? 0x9e3779b9) >>> 0,
       seedOrder: request.seedOrder,
+      flags: STRATEGY_FLAGS[this.options.strategy ?? 'ils'],
     })
 
     const startedAt = Date.now()

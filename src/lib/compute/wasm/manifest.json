@@ -1,16 +1,16 @@
 {
   "note": "Written by scripts/build-engine.mjs. Checked by wasmArtefact.test.ts.",
-  "builtAt": "2026-08-09T11:04:55.739Z",
+  "builtAt": "2026-08-09T11:45:47.001Z",
   "toolchain": "cargo 1.97.1 (c980f4866 2026-06-30)",
-  "source": "d90f91241000325abf3e6739e059efcef58174f7226166b28ef37868b0a858e4",
+  "source": "452ef41ae0474cafa7114389bbe2890c64f15c7d5f912044ed39c45f12aba8c3",
   "artefacts": {
     "engine.wasm": {
-      "bytes": 46580,
-      "sha256": "f87e54270be8debe911846d35d5c8c43468211f32b1a4f5337153738b79927bb"
+      "bytes": 49867,
+      "sha256": "12ccc464e7ddb642db31166fd1eb4bc0489cca06ebc85330d39edb7c16e640d3"
     },
     "engine-simd.wasm": {
-      "bytes": 48272,
-      "sha256": "8565d92a79b28bdfb0fadfee6f56ec500a55ee3a623b755a08aa1de81f75ae2c"
+      "bytes": 51792,
+      "sha256": "c3cc3307866a1007ca95a4a32117ecf066732c4ded2e848ca41cb17b09380cc6"
     }
   }
 }

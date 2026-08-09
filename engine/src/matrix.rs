@@ -52,6 +52,21 @@ impl Matrix {
         unsafe { *self.cells.get_unchecked(i * self.n + j) }
     }
 
+    /// Add to one cell, saturating.
+    ///
+    /// The ONLY mutation this type allows, and it exists for exactly one caller:
+    /// guided local search, which raises the price of an arc it wants the search
+    /// to stop choosing. Folding the penalty into the matrix rather than adding
+    /// it at every lookup is what keeps the inner loop at one memory read — a
+    /// separate penalty array consulted per arc would double the random access
+    /// on the hottest path in the crate to save 2 MB we are not short of.
+    #[inline]
+    pub fn add_at(&mut self, i: usize, j: usize, delta: i32) {
+        debug_assert!(i < self.n && j < self.n);
+        let cell = &mut self.cells[i * self.n + j];
+        *cell = cell.saturating_add(delta);
+    }
+
     /// The cheaper of the two directions between `i` and `j`.
     #[inline(always)]
     pub fn symmetric_at(&self, i: usize, j: usize) -> i32 {
