@@ -25,14 +25,14 @@ interface Tile {
   id: SearchTileId
   label: string
   icon: ReactNode
-  /** Scan and Voice land in M13; the tiles are present and say so. */
+  /** Voice lands with the rest of M13; Scan is live. */
   comingSoon?: boolean
 }
 
 const TILES: Tile[] = [
   { id: 'map', label: 'Map', icon: <PinIcon className="h-5 w-5" /> },
   { id: 'paste', label: 'Paste', icon: <ClipboardIcon className="h-5 w-5" /> },
-  { id: 'scan', label: 'Scan', icon: <ScanIcon className="h-5 w-5" />, comingSoon: true },
+  { id: 'scan', label: 'Scan', icon: <ScanIcon className="h-5 w-5" /> },
   { id: 'voice', label: 'Voice', icon: <MicIcon className="h-5 w-5" />, comingSoon: true },
 ]
 

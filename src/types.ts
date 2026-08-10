@@ -98,6 +98,20 @@ export interface AddressedStop extends LatLng {
   /** Keys into the IndexedDB photos store. Never inline blobs — see lib/persistence/db.ts. */
   photoRefs?: string[]
 
+  /**
+   * Barcode payloads the driver has linked to this stop.
+   *
+   * A carrier's tracking barcode means nothing to us on its own — it is not an
+   * address, an id, or anything we can look up. Linking one makes it mean this
+   * stop, and thereafter scanning the box lands on this card. Which is the
+   * whole point of `stopId` being immutable: the link survives every
+   * reoptimisation, because neither end of it is a position.
+   *
+   * An array because one delivery can be several parcels, and a driver holding
+   * the third box should get the same card as the first.
+   */
+  barcodes?: string[]
+
   status: StopStatus
   statusHistory: StatusChange[]
 

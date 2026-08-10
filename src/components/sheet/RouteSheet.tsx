@@ -37,6 +37,9 @@ import { EmptyRouteState } from './EmptyRouteState'
 import { CopyStopsSheet } from '../routes/CopyStopsSheet'
 import { RouteMenuSheet } from '../routes/RouteMenuSheet'
 import { ImportStopsSheet } from '../search/ImportStopsSheet'
+import { ScannerSheet } from '../scan/ScannerSheet'
+import { ScanMatchSheet } from '../scan/ScanMatchSheet'
+import { matchScan, type ScanMatch } from '../../lib/scan'
 import { copySourceRoutes } from '../../lib/copyStops'
 import { useAddStops } from '../../hooks/useAddStops'
 import { StopPages } from '../stop/StopPages'
@@ -121,6 +124,9 @@ export function RouteSheet({ pages, pageIndex, reviewing, provisional }: RouteSh
   const addStops = useRoutesStore((s) => s.addStops)
   const allRoutes = useRoutesStore((s) => s.routes)
   const [copyOpen, setCopyOpen] = useState(false)
+  const [scannerOpen, setScannerOpen] = useState(false)
+  /** A scan that needs the driver to decide something. Null the rest of the time. */
+  const [scanQuestion, setScanQuestion] = useState<ScanMatch | null>(null)
   const [importOpen, setImportOpen] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
   const [applyOpen, setApplyOpen] = useState(false)
@@ -680,6 +686,7 @@ export function RouteSheet({ pages, pageIndex, reviewing, provisional }: RouteSh
             }}
             onTile={(tile) => {
               if (tile === 'paste') void addFromClipboard()
+              if (tile === 'scan') setScannerOpen(true)
               if (tile === 'map') {
                 // Get out of the way first: the pin flow is about looking at
                 // the map, and a sheet at `full` covers all of it.
@@ -776,6 +783,59 @@ export function RouteSheet({ pages, pageIndex, reviewing, provisional }: RouteSh
       />
 
       <ImportStopsSheet open={importOpen} onClose={() => setImportOpen(false)} />
+
+      {/*
+        Scan a parcel, land on its stop.
+
+        The match runs against the STAGED route rather than the committed one,
+        so a stop added a moment ago and not yet applied is still findable —
+        a driver who has just scanned a box in should be able to scan it again
+        and be taken to it.
+      */}
+      <ScannerSheet
+        open={scannerOpen}
+        onClose={() => setScannerOpen(false)}
+        title="Scan a parcel"
+        hint="Point at the label to find its stop"
+        onScan={(result) => {
+          setScannerOpen(false)
+          const match = matchScan(result.text, view.stops)
+          if (match.kind === 'stop') {
+            setSearchOpen(false)
+            setSearchQuery('')
+            navigate(`/route/${route.id}/stop/${match.stopId}`)
+            return
+          }
+          if (match.kind === 'coordinates') {
+            // A barcode that names a place, which is what a job-sheet QR does.
+            addStops([match.point])
+            return
+          }
+          setScanQuestion(match)
+        }}
+      />
+
+      <ScanMatchSheet
+        open={scanQuestion !== null}
+        onClose={() => setScanQuestion(null)}
+        text={scanQuestion && 'text' in scanQuestion ? scanQuestion.text : ''}
+        candidates={
+          scanQuestion?.kind === 'ambiguous'
+            ? scanQuestion.stopIds
+                .map((id) => view.stops.find((s) => s.id === id))
+                .filter((s) => s !== undefined)
+            : []
+        }
+        onPickStop={(stopId) => {
+          setSearchOpen(false)
+          setSearchQuery('')
+          navigate(`/route/${route.id}/stop/${stopId}`)
+        }}
+        onSearch={(text) => {
+          setSearchOpen(true)
+          setSearchQuery(text)
+        }}
+      />
 
       {/* The route's own menu. The overflow button used to open the legacy
           setup panel directly; that panel is now one item inside this —
