@@ -25,7 +25,7 @@ import {
   type StopIdMode,
 } from '../lib/stopIds'
 import { indexedDbStorage } from '../lib/persistence/zustandStorage'
-import { ROUTES_PERSIST_KEY } from '../lib/persistence/db'
+import { ROUTES_PERSIST_KEY, sweepOrphanPhotos } from '../lib/persistence/db'
 import { bootPersistence } from '../lib/persistence/boot'
 import { toISODate, weekdayName } from '../lib/routeGrouping'
 import {
@@ -1076,11 +1076,36 @@ export function hydrateRoutesStore(): Promise<void> {
         // default the create-route flow offers.
         else state.createRoute()
       }
+
+      // Reclaim photos nothing points at any more. After hydration, because
+      // "what is still referenced" is not knowable until the routes are in
+      // memory — and fire-and-forget, because a driver opening the app must
+      // never wait on housekeeping. See db.ts for why this is a sweep.
+      void sweepOrphanPhotos(livePhotoRefs(useRoutesStore.getState().routes)).catch(() => {})
     })().catch((e) => {
       console.error('[routes] hydration failed; continuing with an empty store', e)
     })
   }
   return hydrationPromise
+}
+
+/**
+ * Every photo ref any stop still holds, staged additions included.
+ *
+ * A staged add is a whole stop living in the change set rather than on the
+ * route, so a photo taken on one is referenced by something `route.stops`
+ * does not contain. Missing them here would delete a photo the driver took
+ * ninety seconds ago.
+ */
+function livePhotoRefs(routes: Record<string, Route>): Set<string> {
+  const refs = new Set<string>()
+  for (const route of Object.values(routes)) {
+    for (const stop of route.stops) for (const ref of stop.photoRefs ?? []) refs.add(ref)
+    for (const change of route.pending?.changes ?? []) {
+      if (change.kind === 'add') for (const ref of change.stop.photoRefs ?? []) refs.add(ref)
+    }
+  }
+  return refs
 }
 
 // ───────────────────────────────────────────────────────────── selectors

@@ -244,6 +244,34 @@ export async function deletePhoto(ref: string): Promise<void> {
   await db.delete('photos', ref)
 }
 
+export async function getPhotoRefs(): Promise<string[]> {
+  const db = await getDb()
+  return db.getAllKeys('photos')
+}
+
+/**
+ * Delete every stored photo no stop points at any more.
+ *
+ * A sweep rather than a cascade, and deliberately so. Photos are dropped by
+ * five different paths — removing a stop, removing it in bulk, discarding a
+ * staged add that had one, clearing the stops, deleting the route — and a
+ * cascade on each is five chances to miss one and leak a megabyte. A sweep
+ * cannot miss a path, and cannot delete a photo that is still referenced,
+ * because it is defined by what IS referenced rather than by what was removed.
+ *
+ * The cost is that an orphan survives until the next launch. The photo budget
+ * bounds how much that can ever be.
+ */
+export async function sweepOrphanPhotos(liveRefs: ReadonlySet<string>): Promise<number> {
+  const db = await getDb()
+  const stored = await db.getAllKeys('photos')
+  const orphans = stored.filter((ref) => !liveRefs.has(ref))
+  if (orphans.length === 0) return 0
+  const tx = db.transaction('photos', 'readwrite')
+  await Promise.all([...orphans.map((ref) => tx.store.delete(ref)), tx.done])
+  return orphans.length
+}
+
 // --------------------------------------------------------------- geocache
 
 export async function getGeocache(key: string): Promise<GeocacheRow | undefined> {

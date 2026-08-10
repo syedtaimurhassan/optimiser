@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useId, useState } from 'react'
 import type { AddressedStop, OrderConstraint, Route, StopKind } from '../../types'
 import { addressKey, matchesDefault } from '../../lib/addressDefaults'
 import { colorNameFor, titleFor } from '../../lib/routeList'
@@ -27,6 +27,7 @@ import {
 import { GroupChipRow } from './GroupChipRow'
 import { describeServiceTime, describeWindow } from '../../lib/stopSettings'
 import { DurationPicker, TextPicker, TimeWindowPicker } from './PickerSheets'
+import { PhotoStrip } from './PhotoStrip'
 
 /**
  * Edit stop.
@@ -64,6 +65,8 @@ type Picker = 'notes' | 'access' | 'finder' | 'window' | 'service' | null
 
 export function EditStopSheet({ route, stop, onClose, onDuplicate, onRemove }: EditStopSheetProps) {
   const [picker, setPicker] = useState<Picker>(null)
+  /** Ties the toolbar's camera label to the strip's file input. */
+  const photoInputId = useId()
   const updateStop = useRoutesStore((s) => s.updateStop)
   const ensureGroup = useRoutesStore((s) => s.ensureGroup)
   const saveAddressDefault = useRoutesStore((s) => s.saveAddressDefault)
@@ -188,16 +191,20 @@ export function EditStopSheet({ route, stop, onClose, onDuplicate, onRemove }: E
             >
               <KeyIcon className="h-5 w-5" />
             </button>
-            <button
-              type="button"
-              disabled
-              aria-label="Add a photo (coming soon)"
+            {/* A label rather than a button: it drives the strip's own file
+                input, so the toolbar and the strip cannot disagree about the
+                budget or about where a photo goes. */}
+            <label
+              htmlFor={photoInputId}
+              aria-label="Add a photo"
               data-testid="edit-photo"
-              className="flex h-touch w-touch shrink-0 items-center justify-center rounded-pill text-on-surface-variant disabled:opacity-40"
+              className="flex h-touch w-touch shrink-0 cursor-pointer items-center justify-center rounded-pill text-on-surface-variant"
             >
               <CameraPlusIcon className="h-5 w-5" />
-            </button>
+            </label>
           </div>
+
+          <PhotoStrip stop={stop} allStops={route.stops} addInputId={photoInputId} />
 
           {/* The settings list. Each control is matched to the shape of its
               data: an exclusive pair is segmented, a small integer is a
