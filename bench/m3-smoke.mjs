@@ -11,7 +11,7 @@
  *   node bench/m3-smoke.mjs            (expects a build in dist-bench)
  *   node bench/m3-smoke.mjs --headed
  */
-import { chromium } from 'playwright'
+import { launchChromium } from './lib/launch.mjs'
 import { fileURLToPath } from 'node:url'
 import { dirname, join, resolve } from 'node:path'
 import { startServer } from './lib/server.mjs'
@@ -110,7 +110,7 @@ async function drawerSections(page) {
 }
 
 async function main() {
-  const browser = await chromium.launch({ headless: !HEADED })
+  const browser = await launchChromium({ headless: !HEADED })
   const server = await startServer({ root: DIST })
 
   const context = await browser.newContext({ viewport: PHONE })

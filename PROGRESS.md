@@ -2455,6 +2455,14 @@ Two the brief did not anticipate:
 
 ### Verified
 
+- **`npm run smoke:m13` — 32 checks in a real browser against the PRODUCTION
+  build**, which is the configuration the plugin change altered: it boots with
+  no page or console errors, the manifest and both icons resolve, a service
+  worker registers and controls the second load, **the app opens with the
+  network switched off**, the OCR flag and the navigation-app choice survive a
+  reload, all four tiles are enabled with no "Coming soon" left, and the
+  barcode decoder is not fetched until the scanner opens, comes from our own
+  origin as `application/wasm`, and reaches no CDN.
 - **762 TypeScript tests** (695 → 762), including the leg-chaining property
   (every consecutive pair covered exactly once), the token-not-substring rule
   that keeps `D7` from matching `AD73`, the iOS canvas ceiling arithmetic, and
@@ -2464,14 +2472,26 @@ Two the brief did not anticipate:
 
 ### 🟡 Deferred and not done
 
-- 🔴 **No real-device runs. Again — same as M10, M11 and M12.** Everything in
-  this milestone is a claim about a phone. `DEVICE-TEST-M13.md` is the script;
-  the M1 diagnostics screenshots from both phones are still owed, and the
-  milestone's definition of done is not met until they exist.
-- 🔴 **The smoke suite cannot run here.** `npm run smoke` fails in this
-  environment on unmodified `main` — headless Chromium crashes on the map
-  before the app boots. So no browser-level verification happened at all, for
-  any commit, including the build-config change. Worth fixing before M14.
+- 🔴 **No real-device runs. Again — same as M10, M11 and M12.** The browser
+  checks below cover boot, installability, offline, persistence and the
+  decoder's provenance; they cannot cover a camera, a GPU, or the four install
+  contexts. `DEVICE-TEST-M13.md` is the script, the diagnostics screenshots
+  from both phones are still owed, and the definition of done is not met until
+  they exist.
+- 🟢 **Fixed: the smoke harness now runs.** The crash was never the app.
+  Chromium's renderer is a child process and this sandbox kills it the instant
+  it starts — no console output, no page error, before a single asset is
+  fetched, which looks exactly like an app that will not boot. A trivial
+  `setContent` page renders fine, and every GPU, headless-mode and process flag
+  crashes identically except `--single-process`, which passes. Opt in with
+  `SMOKE_CHROME_ARGS="--no-sandbox --single-process"`; `bench/lib/launch.mjs`
+  reads it and every suite goes through it.
+
+  With that: **`smoke:m13` 32/32**, **`m5-smoke` 58/58**, and m1-smoke's whole
+  migration section 15/15 before it hits a `--single-process` limitation on its
+  second browser context. `m8-smoke` has 3 failures around decimal stop IDs
+  which are **pre-existing** — verified by running it against c746d57, where
+  the same three fail plus three more.
 - 🟡 **OCR is unmeasured.** The flag is off because the arithmetic says the
   WASM path is seconds per image, not because anyone timed it. The sheet
   reports provider and elapsed time precisely so the device test produces that

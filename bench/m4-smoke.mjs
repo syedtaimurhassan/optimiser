@@ -14,7 +14,7 @@
  *   node bench/m4-smoke.mjs            (expects a build in dist-bench)
  *   node bench/m4-smoke.mjs --headed
  */
-import { chromium } from 'playwright'
+import { launchChromium } from './lib/launch.mjs'
 import { fileURLToPath } from 'node:url'
 import { dirname, join, resolve } from 'node:path'
 import { startServer } from './lib/server.mjs'
@@ -248,7 +248,7 @@ async function frameAll(page, zoom = 13.4) {
 }
 
 async function main() {
-  const browser = await chromium.launch({ headless: !HEADED })
+  const browser = await launchChromium({ headless: !HEADED })
   const server = await startServer({ root: DIST })
   const context = await browser.newContext({ viewport: PHONE })
   const page = await context.newPage()

@@ -46,7 +46,9 @@
     "bench:solomon": "node bench/solomon-routes.mjs",
     "bench:matrix": "node --experimental-strip-types bench/m12-matrix.mjs",
     "ocr:models": "node scripts/fetch-ocr-models.mjs",
-    "icons": "node scripts/make-icons.mjs"
+    "icons": "node scripts/make-icons.mjs",
+    "presmoke:m13": "npm run build",
+    "smoke:m13": "node bench/m13-smoke.mjs"
   },
   "dependencies": {
     "@tanstack/react-virtual": "^3.14.9",

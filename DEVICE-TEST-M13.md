@@ -1,9 +1,17 @@
 # M13 device test
 
-Everything in M13 is a claim about a phone, and none of it can be settled here:
-the smoke harness crashes headless Chromium on the map before the app boots —
-on unmodified `main` as much as on this branch — so browser verification for
-this milestone is entirely manual.
+Most of M13 is a claim about a phone. What could be settled in a browser now
+has been — `npm run smoke:m13` runs 32 checks against the production build and
+passes — so this script covers what automation genuinely cannot reach: a real
+camera, a real GPU, two real operating systems, and the four install contexts.
+
+Verified automatically, so you do not need to re-check it by hand: the app
+boots clean, the manifest and icons resolve, the service worker registers and
+the app opens with the network off, the settings persist, all four tiles are
+live, and the barcode decoder loads lazily from our own origin rather than a
+CDN. What automation could NOT do is drive a live camera — `getUserMedia`
+never settles in a single-process renderer — so every camera row below is
+still yours.
 
 Two devices, four contexts. **Install the app on both phones first**, or half
 the rows below cannot be reached at all.

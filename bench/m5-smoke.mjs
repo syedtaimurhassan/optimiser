@@ -15,7 +15,7 @@
  *   node bench/m5-smoke.mjs            (expects a build in dist-bench)
  *   node bench/m5-smoke.mjs --headed
  */
-import { chromium } from 'playwright'
+import { launchChromium } from './lib/launch.mjs'
 import { fileURLToPath } from 'node:url'
 import { dirname, join, resolve } from 'node:path'
 import { startServer } from './lib/server.mjs'
@@ -220,7 +220,7 @@ const slowDrag = (client, opts) => touchDrag(client, { ...opts, steps: 30, holdM
 
 async function main() {
   const server = await startServer({ root: DIST })
-  const browser = await chromium.launch({ headless: !HEADED })
+  const browser = await launchChromium({ headless: !HEADED })
   const context = await browser.newContext({
     viewport: PHONE,
     hasTouch: true,
