@@ -37,10 +37,28 @@ export default defineConfig({
   // resolve assets correctly, i.e. https://<user>.github.io/<repo>/
   // Repo is https://github.com/syedtaimurhassan/optimiser -> base '/optimiser/'.
   base: '/optimiser/',
-  // wasm() lets Vite import .wasm as ES modules (needed by or-tools-wasm);
-  // topLevelAwait() supports the top-level `await` those WASM modules use.
-  // React/Tailwind stay first; wasm + TLA run after.
-  plugins: [react(), tailwindcss(), wasm(), topLevelAwait(), coiServiceWorkerForBench()],
+  // wasm() lets Vite import .wasm as ES modules and topLevelAwait() rewrites
+  // the top-level `await` those modules use. BOTH ARE BENCH-ONLY, and that is
+  // a measurement rather than a tidy-up.
+  //
+  // Nothing in the production app imports a .wasm as a module: the solver
+  // engine goes through `new URL(...)` + `WebAssembly.instantiateStreaming`,
+  // which is plain Vite asset handling. Only `or-tools-wasm` — dev and bench
+  // only since M9 — ever needed either plugin.
+  //
+  // Left on, they are not free. `topLevelAwait` rewrites every module in any
+  // graph containing a TLA module into an async wrapper, and the wrappers are
+  // charged per module rather than once. M13's barcode decoder is such a
+  // module, and adding it to the graph inflated the MAIN chunk by 381 kB —
+  // for a library that is dynamically imported and whose own chunk is 63 kB.
+  // Scoping the plugins to bench builds gives that back and costs the shipped
+  // app nothing: es2022 supports top-level await natively.
+  plugins: [
+    react(),
+    tailwindcss(),
+    ...(IS_BENCH ? [wasm(), topLevelAwait()] : []),
+    coiServiceWorkerForBench(),
+  ],
   // Compile-time constant for dev/bench-only routes.
   //
   // `import.meta.env.VITE_BENCH_SEAM` is NOT usable for this: Vite only inlines
