@@ -2359,3 +2359,148 @@ clause is the important half), or a neutral persistent "Saved 09:42".
 6. **The bench needs no network and should stay that way.** `bench:matrix` uses
    the committed fixture as the provider, which is what lets it score the sparse
    answer against the true matrix rather than against itself.
+
+## M13 — Use what the phone offers, and degrade honestly where it doesn't
+
+Ten commits. The M6 "coming soon" tiles are all live, and the milestone found
+one shipped bug and one shipped cost that had nothing to do with the brief.
+
+### 🔴 The bug the brief predicted, and it was worse than described
+
+`lib/googleMaps.ts` exported `MAX_WAYPOINTS_PER_URL = 9` and called it "the
+conservative, documented value". Google's own documentation:
+
+> "up to three waypoints supported on mobile browsers, and a maximum of nine
+> waypoints supported otherwise"
+
+A PWA is a mobile browser. **Every hand-off this app ever produced from a route
+with more than three intermediate stops was over Google's limit.**
+
+The brief said "re-chunk to ≤3". The other two apps are worse and the brief did
+not know it: **Waze has no waypoint parameter at all** (`ll`, `q`, `navigate`,
+`z`, `favorite`, and the avoid flags — that is the whole surface) and **Apple
+Maps documents no multi-stop parameter**. So the cap is a property of the app,
+it is zero for two of the three, and a cap of zero falls out of the existing
+chunker as one link per hop. Three apps, one code path.
+
+### 🟡 The 680 kB nobody was carrying on purpose
+
+Adding the barcode decoder inflated the MAIN chunk by 381 kB, for a library
+that is dynamically imported and whose own chunk is 43 kB. That made no sense,
+so I measured it rather than shrugging.
+
+`vite-plugin-top-level-await` rewrites **every module in any graph containing
+one TLA module** into an async wrapper, charged per module. With ~2,000 modules
+that is most of a megabyte of boilerplate — and the tell was the ratio, 680 kB
+raw for 73 kB gzipped, which is one wrapper repeated.
+
+Both it and `vite-plugin-wasm` were added in M1 for or-tools-wasm. M9 removed
+OR-Tools from production and nothing replaced them as a consumer: the engine
+loads through `new URL` + `instantiateStreaming`, and no file under `src/` has
+a top-level await. Scoped to bench builds:
+
+    index.js   2,245 kB → 1,565 kB     (gzip 510 → 437)
+
+M13 therefore ships every feature below AND a smaller bundle than it started
+with — 1,596 kB with the scanner, photos, voice, driving mode and OCR in it.
+
+### What shipped
+
+| Task | State |
+|---|---|
+| Support matrix | `M13-RESEARCH.md`, 13 capabilities × 4 contexts, cited |
+| Barcode | Native where capable, ZXing-C++ WASM elsewhere |
+| Photos | Capture, compress, view, delete, budget, boot sweep |
+| OCR | PaddleOCR on ONNX Runtime Web, **flag off by default** |
+| Voice | Live everywhere, explained where it cannot work |
+| Nav hand-off | Three apps, correct chunking, remembered choice |
+| Driving mode | Wake lock, Web Share, connection hint |
+| PWA | Manifest, generated icons, offline app-shell worker |
+
+### The four expectations, checked
+
+All four held. BarcodeDetector absent on iOS; Vibration contested (caniuse says
+no, MDN's compat data has an open report saying yes — `haptics.ts` already
+feature-detected, so we never had to take a side); Web Speech a **hard failure**
+in an installed iOS app, not merely unreliable; Background Sync Chromium-only.
+
+Two the brief did not anticipate:
+
+1. **Android's Web Speech streams audio to Google** unless an on-device pack is
+   installed. For an app that advertises "100% client-side" that is a
+   disclosure the UI owes the driver, so the sheet says which one is happening.
+2. **This repo could not be installed on either platform.** No manifest, no
+   icons, no service worker. Two of the four columns in the research matrix
+   were unreachable until commit 9.
+
+### Decisions worth keeping
+
+- **`nativeIsSufficient`, not `'BarcodeDetector' in window`.** Android's
+  implementation is backed by a Play Services module that can be absent,
+  leaving a constructor that reads nothing. An empty format list is reported as
+  EMPTY, distinct from absent, because both mean "use WASM" and only one of
+  them looks like support.
+- **Ambiguity is a question.** Two stops can share a `stopId` after "Reset Stop
+  IDs" — types.ts says so — so a scan matching two stops shows both addresses
+  instead of picking the first, which would be wrong half the time it happened.
+- **Photo deletion is a sweep, not a cascade.** Five paths drop a photo; a
+  cascade on each is five chances to leak. One sweep at boot, defined by what
+  is still referenced, cannot miss a path. Staged stops count as live.
+- **Every unsupported capability opens and explains itself.** The voice tile on
+  an installed iPhone is the case this rule exists for: a greyed control is
+  indistinguishable from a bug.
+- **Two CDN defaults were overridden.** `barcode-detector` defaults its wasm to
+  jsDelivr and `ppu-paddle-ocr` defaults its models to GitHub's media host.
+  Both would break in a stairwell, which is where this app is used.
+
+### Verified
+
+- **762 TypeScript tests** (695 → 762), including the leg-chaining property
+  (every consecutive pair covered exactly once), the token-not-substring rule
+  that keeps `D7` from matching `AD73`, the iOS canvas ceiling arithmetic, and
+  every unusable voice case having both a reason and a fallback.
+- Lint, `tsc -b` and the full suite green on every commit.
+- Bundle measured before and after every commit that could move it.
+
+### 🟡 Deferred and not done
+
+- 🔴 **No real-device runs. Again — same as M10, M11 and M12.** Everything in
+  this milestone is a claim about a phone. `DEVICE-TEST-M13.md` is the script;
+  the M1 diagnostics screenshots from both phones are still owed, and the
+  milestone's definition of done is not met until they exist.
+- 🔴 **The smoke suite cannot run here.** `npm run smoke` fails in this
+  environment on unmodified `main` — headless Chromium crashes on the map
+  before the app boots. So no browser-level verification happened at all, for
+  any commit, including the build-config change. Worth fixing before M14.
+- 🟡 **OCR is unmeasured.** The flag is off because the arithmetic says the
+  WASM path is seconds per image, not because anyone timed it. The sheet
+  reports provider and elapsed time precisely so the device test produces that
+  number.
+- 🟡 **PDF manifests via pdf.js were not built.** A fourth dependency, and it
+  needs the OCR numbers first.
+- 🟡 **Barcode linking has no UI yet.** `barcodes?: string[]` is on the model
+  and the matcher prefers it over a label, but nothing writes to it — so that
+  branch is tested and unreachable.
+- 🟡 **Device Orientation heading was cut.** `useGeolocation` already surfaces
+  a GPS heading; a compass adds an iOS permission dance for a marginal win.
+- 🔴 **Background geolocation remains impossible**, as instructed. The
+  Geolocation API is not exposed to service workers and `watchPosition` stops
+  when the page is backgrounded. The wake lock is the nearest honest
+  substitute and is the reason it is in this milestone.
+
+### What the next session needs to know
+
+1. **The nav cap is per-app, not global.** Do not reintroduce a single
+   waypoint constant. Waze and Apple take one destination; only Google takes
+   waypoints, and only three of them on a phone.
+2. **Do not reintroduce cross-origin isolation for OCR.** ONNX Runtime's
+   threaded backend wants it, M9 deleted it for good reasons, and there is a
+   known ORT bug where inference breaks in Safari when COI is active.
+3. **`npm run ocr:models` must run before a deploy that wants OCR.** The models
+   are gitignored. A deploy without them reports "models not installed" rather
+   than failing inside WebAssembly.
+4. **ONNX Runtime's wasm is Vite's to emit.** Do not copy it into `public/` —
+   the first attempt shipped the same 26 MB binary twice.
+5. **The service worker does not `skipWaiting`.** That is deliberate: taking
+   over immediately swaps the asset map under a running page, which then asks
+   for the previous build's lazy chunks. Updates apply on the next fresh open.
