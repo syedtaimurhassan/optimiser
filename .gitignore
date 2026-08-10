@@ -40,3 +40,6 @@ bench/fixtures/solomon/
 # toolchain; only the intermediates are ignored.
 engine/target/
 engine/target-simd/
+
+# OCR runtime assets, fetched by `npm run ocr:models` rather than committed.
+public/models/

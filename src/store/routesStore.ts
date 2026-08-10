@@ -71,6 +71,16 @@ interface RoutesState {
    */
   navApp: NavApp | null
   /**
+   * Text recognition, off until a driver turns it on.
+   *
+   * Not a preference so much as an admission: without WebGPU the OCR path is
+   * single-threaded WebAssembly and takes seconds per image, because the
+   * threaded backend needs cross-origin isolation this app deliberately does
+   * not have. Shipping it on by default would make the app feel broken on the
+   * devices that can least afford it. See lib/ocr/engine.ts.
+   */
+  ocrEnabled: boolean
+  /**
    * Per-ADDRESS settings, remembered across routes and across days.
    *
    * Global rather than route-scoped on purpose — see lib/addressDefaults.ts.
@@ -124,6 +134,7 @@ interface RoutesState {
   resetStopIdsForActive: () => void
   setStopIdMode: (mode: StopIdMode) => void
   setNavApp: (app: NavApp) => void
+  setOcrEnabled: (enabled: boolean) => void
 
   // ── Sticky per-address settings ──
   /** Remember this stop's settings for its address. Returns the key, or null. */
@@ -373,6 +384,7 @@ export const useRoutesStore = create<RoutesState>()(
       favorites: [],
       stopIdMode: 'letterBlock',
       navApp: null,
+      ocrEnabled: false,
       addressDefaults: {},
 
       // ── Route CRUD ──
@@ -754,6 +766,7 @@ export const useRoutesStore = create<RoutesState>()(
 
       setStopIdMode: (mode) => set({ stopIdMode: mode }),
       setNavApp: (navApp) => set({ navApp }),
+      setOcrEnabled: (ocrEnabled) => set({ ocrEnabled }),
 
       // ── Sticky per-address settings ──
 
@@ -1050,6 +1063,7 @@ export const useRoutesStore = create<RoutesState>()(
         // Additive too, and null until the driver picks — see stopIdMode's
         // precedent: a blob written before M13 simply has no `navApp` key.
         navApp: s.navApp,
+        ocrEnabled: s.ocrEnabled,
         // Additive, so no version bump: a blob written before M7 simply has no
         // `addressDefaults` key, and zustand's shallow merge leaves the initial
         // {} in place.

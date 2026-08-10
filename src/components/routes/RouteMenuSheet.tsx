@@ -23,6 +23,8 @@ import { PrintableRoute } from '../print/PrintableRoute'
 import { NavAppSheet } from '../nav/NavAppSheet'
 import { NAV_APP_LABEL } from '../../lib/googleMaps'
 import { routeShareText } from '../../lib/printRoute'
+import { ScanTextSheet } from '../ocr/ScanTextSheet'
+import { useAddStops } from '../../hooks/useAddStops'
 
 /**
  * The route's own menu — the sheet's overflow.
@@ -61,6 +63,7 @@ type Overlay = 'copy' | 'import' | 'remove' | null
 export function RouteMenuSheet({ open, route, onClose }: RouteMenuSheetProps) {
   const [overlay, setOverlay] = useState<Overlay>(null)
   const [navPickerOpen, setNavPickerOpen] = useState(false)
+  const [ocrOpen, setOcrOpen] = useState(false)
   /** What the share attempt did, when it did something worth saying. */
   const [shareNote, setShareNote] = useState<string | null>(null)
   const [confirmReset, setConfirmReset] = useState(false)
@@ -70,7 +73,9 @@ export function RouteMenuSheet({ open, route, onClose }: RouteMenuSheetProps) {
   const allRoutes = useRoutesStore((s) => s.routes)
   const resetStopIds = useRoutesStore((s) => s.resetStopIdsForActive)
   const setSetupOpen = useUiStore((s) => s.setSetupOpen)
+  const { addFromAddresses } = useAddStops()
   const navApp = useRoutesStore((s) => s.navApp)
+  const ocrEnabled = useRoutesStore((s) => s.ocrEnabled)
 
   const soon = (label: string, icon: React.ReactNode, testId: string) => ({
     label,
@@ -137,7 +142,23 @@ export function RouteMenuSheet({ open, route, onClose }: RouteMenuSheetProps) {
               ],
               // ── bulk in, bulk out ──
               [
-                soon('Scan route manifest', <ScanIcon className="h-5 w-5" />, 'menu-scan'),
+                ocrEnabled
+                  ? {
+                      label: 'Scan route manifest',
+                      icon: <ScanIcon className="h-5 w-5" />,
+                      onSelect: () => setOcrOpen(true),
+                      testId: 'menu-scan',
+                    }
+                  : {
+                      // Off by default, and the hint says which switch to
+                      // find rather than leaving a grey row with no cause.
+                      label: 'Scan route manifest',
+                      icon: <ScanIcon className="h-5 w-5" />,
+                      hint: 'In Settings',
+                      disabled: true,
+                      onSelect: () => {},
+                      testId: 'menu-scan',
+                    },
                 {
                   label: 'Import route manifest…',
                   icon: <ClipboardIcon className="h-5 w-5" />,
@@ -198,6 +219,16 @@ export function RouteMenuSheet({ open, route, onClose }: RouteMenuSheetProps) {
       />
 
       <NavAppSheet open={navPickerOpen} onClose={() => setNavPickerOpen(false)} />
+
+      <ScanTextSheet
+        open={ocrOpen}
+        onClose={() => setOcrOpen(false)}
+        mode="manifest"
+        onConfirm={(texts) => {
+          onClose()
+          void addFromAddresses(texts)
+        }}
+      />
 
       {shareNote && (
         <p role="status" className="px-4 pb-2 text-meta text-on-surface-variant">

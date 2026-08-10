@@ -44,14 +44,18 @@
     "bench:tsptw:nocoi": "rm -rf dist-bench-nocoi && cp -R dist-bench dist-bench-nocoi && node bench/strip-coi.mjs dist-bench-nocoi && node bench/tsptw.mjs --dist=dist-bench-nocoi --no-coi --out=tsptw-nocoi.json",
     "prebench:solomon": "npm run bench:build",
     "bench:solomon": "node bench/solomon-routes.mjs",
-    "bench:matrix": "node --experimental-strip-types bench/m12-matrix.mjs"
+    "bench:matrix": "node --experimental-strip-types bench/m12-matrix.mjs",
+    "ocr:models": "node scripts/fetch-ocr-models.mjs",
+    "icons": "node scripts/make-icons.mjs"
   },
   "dependencies": {
     "@tanstack/react-virtual": "^3.14.9",
     "barcode-detector": "^3.2.1",
     "idb": "^8.0.3",
     "maplibre-gl": "5.24.0",
+    "onnxruntime-web": "^1.27.0",
     "papaparse": "^5.5.4",
+    "ppu-paddle-ocr": "^6.4.0",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
     "wouter": "^3.10.0",
