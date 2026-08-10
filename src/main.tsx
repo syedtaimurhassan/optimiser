@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client'
 import './index.css'
 import App from './App.tsx'
 import { startSyncWatchers } from './store/syncStore.ts'
+import { registerServiceWorker } from './pwa/registerSw.ts'
 
 // Benchmark seam, bench builds only. VITE_BENCH_SEAM is statically replaced at
 // build time, so a production build leaves a dead branch that is tree-shaken
@@ -32,6 +33,12 @@ window.addEventListener('unhandledrejection', (e) => {
  * that screen unmounted.
  */
 startSyncWatchers()
+
+/**
+ * The offline shell. Registered after the app is up rather than before it, and
+ * never in dev — see pwa/registerSw.ts.
+ */
+registerServiceWorker()
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

@@ -3,8 +3,23 @@
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>optimiser</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>Route Optimiser</title>
+    <meta name="description" content="Plan and drive a delivery round. Everything is computed on your device." />
+
+    <!-- Installability. Without a manifest the app cannot be installed on
+         Android at all, and "Add to Home Screen" on iOS produces a shortcut
+         that opens in Safari rather than a standalone app — which is why two
+         of the four columns in M13-RESEARCH.md were untestable until now. -->
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <meta name="theme-color" content="#1a5fd4" />
+
+    <!-- iOS reads the manifest's `display` since 15.4, but still wants its own
+         icon, and the status-bar style is Apple-only either way. -->
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="Optimiser" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <!-- coi-serviceworker used to be loaded here, to make the page
          crossOriginIsolated on a static host so OR-Tools' threaded WebAssembly
          could use SharedArrayBuffer. It cost every visitor a forced reload on
