@@ -25,7 +25,14 @@ interface Tile {
   id: SearchTileId
   label: string
   icon: ReactNode
-  /** Voice lands with the rest of M13; Scan is live. */
+  /**
+   * Kept, though nothing sets it any more: M13 made all four live.
+   *
+   * Voice in particular is deliberately NOT marked unavailable on the devices
+   * that cannot do it. The tile opens, and the sheet behind it explains why
+   * and offers the alternative — which is the difference between a limitation
+   * and a bug, and it is a runtime question this table cannot answer.
+   */
   comingSoon?: boolean
 }
 
@@ -33,7 +40,7 @@ const TILES: Tile[] = [
   { id: 'map', label: 'Map', icon: <PinIcon className="h-5 w-5" /> },
   { id: 'paste', label: 'Paste', icon: <ClipboardIcon className="h-5 w-5" /> },
   { id: 'scan', label: 'Scan', icon: <ScanIcon className="h-5 w-5" /> },
-  { id: 'voice', label: 'Voice', icon: <MicIcon className="h-5 w-5" />, comingSoon: true },
+  { id: 'voice', label: 'Voice', icon: <MicIcon className="h-5 w-5" /> },
 ]
 
 export function SearchTiles({

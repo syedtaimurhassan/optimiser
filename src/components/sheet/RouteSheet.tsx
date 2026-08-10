@@ -38,6 +38,7 @@ import { CopyStopsSheet } from '../routes/CopyStopsSheet'
 import { RouteMenuSheet } from '../routes/RouteMenuSheet'
 import { ImportStopsSheet } from '../search/ImportStopsSheet'
 import { ScannerSheet } from '../scan/ScannerSheet'
+import { VoiceSheet } from '../voice/VoiceSheet'
 import { ScanMatchSheet } from '../scan/ScanMatchSheet'
 import { matchScan, type ScanMatch } from '../../lib/scan'
 import { copySourceRoutes } from '../../lib/copyStops'
@@ -125,6 +126,7 @@ export function RouteSheet({ pages, pageIndex, reviewing, provisional }: RouteSh
   const allRoutes = useRoutesStore((s) => s.routes)
   const [copyOpen, setCopyOpen] = useState(false)
   const [scannerOpen, setScannerOpen] = useState(false)
+  const [voiceOpen, setVoiceOpen] = useState(false)
   /** A scan that needs the driver to decide something. Null the rest of the time. */
   const [scanQuestion, setScanQuestion] = useState<ScanMatch | null>(null)
   const [importOpen, setImportOpen] = useState(false)
@@ -687,6 +689,7 @@ export function RouteSheet({ pages, pageIndex, reviewing, provisional }: RouteSh
             onTile={(tile) => {
               if (tile === 'paste') void addFromClipboard()
               if (tile === 'scan') setScannerOpen(true)
+              if (tile === 'voice') setVoiceOpen(true)
               if (tile === 'map') {
                 // Get out of the way first: the pin flow is about looking at
                 // the map, and a sheet at `full` covers all of it.
@@ -812,6 +815,19 @@ export function RouteSheet({ pages, pageIndex, reviewing, provisional }: RouteSh
             return
           }
           setScanQuestion(match)
+        }}
+      />
+
+      {/* Dictate into the search field. On a device that cannot, the sheet
+          opens anyway and says why — a tile that does nothing is worse than
+          a tile that explains itself. */}
+      <VoiceSheet
+        open={voiceOpen}
+        onClose={() => setVoiceOpen(false)}
+        onText={(text) => {
+          setVoiceOpen(false)
+          setSearchOpen(true)
+          setSearchQuery(text)
         }}
       />
 
