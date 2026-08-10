@@ -22,6 +22,7 @@ import { RemoveStopsSheet } from './RemoveStopsSheet'
 import { PrintableRoute } from '../print/PrintableRoute'
 import { NavAppSheet } from '../nav/NavAppSheet'
 import { NAV_APP_LABEL } from '../../lib/googleMaps'
+import { routeShareText } from '../../lib/printRoute'
 
 /**
  * The route's own menu — the sheet's overflow.
@@ -60,6 +61,8 @@ type Overlay = 'copy' | 'import' | 'remove' | null
 export function RouteMenuSheet({ open, route, onClose }: RouteMenuSheetProps) {
   const [overlay, setOverlay] = useState<Overlay>(null)
   const [navPickerOpen, setNavPickerOpen] = useState(false)
+  /** What the share attempt did, when it did something worth saying. */
+  const [shareNote, setShareNote] = useState<string | null>(null)
   const [confirmReset, setConfirmReset] = useState(false)
   const [printing, setPrinting] = useState(false)
 
@@ -95,7 +98,12 @@ export function RouteMenuSheet({ open, route, onClose }: RouteMenuSheetProps) {
                   onSelect: () => setNavPickerOpen(true),
                   testId: 'menu-nav-app',
                 },
-                soon('Share route copy', <ShareIcon className="h-5 w-5" />, 'menu-share'),
+                {
+                  label: 'Share route copy',
+                  icon: <ShareIcon className="h-5 w-5" />,
+                  onSelect: () => void shareRoute(route, setShareNote),
+                  testId: 'menu-share',
+                },
                 soon('Transfer stops', <TransferIcon className="h-5 w-5" />, 'menu-transfer'),
                 {
                   label: 'Copy stops…',
@@ -191,8 +199,41 @@ export function RouteMenuSheet({ open, route, onClose }: RouteMenuSheetProps) {
 
       <NavAppSheet open={navPickerOpen} onClose={() => setNavPickerOpen(false)} />
 
+      {shareNote && (
+        <p role="status" className="px-4 pb-2 text-meta text-on-surface-variant">
+          {shareNote}
+        </p>
+      )}
+
       {/* Mounted only while printing: 300 table rows are 300 table rows. */}
       {printing && <PrintableRoute route={route} onDone={() => setPrinting(false)} />}
     </>
   )
+}
+
+/**
+ * Hand the route to whatever the OS offers, or to the clipboard.
+ *
+ * Web Share is the only one of M13's capabilities that is present on all four
+ * target contexts, so the fallback exists for desktop rather than for a phone.
+ * An abort is the driver changing their mind and says nothing — a toast that
+ * announces "cancelled" is the app arguing with a decision.
+ */
+async function shareRoute(route: Route, note: (text: string | null) => void): Promise<void> {
+  const text = routeShareText(route)
+  try {
+    if (navigator.share) {
+      await navigator.share({ title: route.name, text })
+      note(null)
+      return
+    }
+    await navigator.clipboard.writeText(text)
+    note('Route copied to the clipboard.')
+  } catch (e) {
+    if (e instanceof DOMException && e.name === 'AbortError') {
+      note(null)
+      return
+    }
+    note('Could not share the route.')
+  }
 }

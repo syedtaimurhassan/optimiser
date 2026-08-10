@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useSyncStore } from '../store/syncStore'
 import { useRoutesStore } from '../store/routesStore'
+import { connectionHint } from '../lib/net/reachability'
 
 /**
  * The quiet answer to "is my work safe".
@@ -49,6 +50,11 @@ export function SyncPill() {
   }, [])
 
   const estimated = activeRouteId !== null && estimatedRoutes.has(activeRouteId)
+  // A label, never a decision — see lib/net/reachability.ts. Read on each
+  // render rather than subscribed to: the pill already re-renders every
+  // minute, and a connection-change listener for one adjective is not a
+  // trade worth making.
+  const hint = connectionHint()
 
   let tone = 'border-slate-200 bg-white/95 text-on-surface-variant'
   let label: string
@@ -63,6 +69,11 @@ export function SyncPill() {
       : 'Offline — saved on this device'
   } else if (estimated) {
     label = 'Estimated times — reoptimise to refresh'
+  } else if (hint) {
+    // Online, saved, but the radio says this will be slow. Worth one clause,
+    // because the alternative is a driver watching a spinner and concluding
+    // the app has hung. Never red: nothing here needs acting on.
+    label = `${savedAt ? `Saved ${clock(savedAt)}` : 'Saved'} — slow connection`
   } else {
     label = savedAt ? `Saved ${clock(savedAt)}` : 'Saved on this device'
   }

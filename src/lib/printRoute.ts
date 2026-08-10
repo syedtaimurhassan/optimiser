@@ -89,3 +89,24 @@ function detailLine(stop: Route['stops'][number]): string {
   if (stop.notes?.trim()) parts.push(stop.notes.trim())
   return parts.join(' · ')
 }
+
+/**
+ * The route as plain text, for Web Share or the clipboard.
+ *
+ * Built on `printModel` rather than beside it, because "what survives being
+ * carried around a van" is the same question whether the answer is printed or
+ * pasted into a message — and two independent answers would drift.
+ *
+ * Plain text, not a link. There is no server to host a route on, so a shared
+ * copy is the content itself; anything else would be a URL to nothing.
+ */
+export function routeShareText(route: Route): string {
+  const model = printModel(route)
+  const lines = [`${model.routeName} — ${model.dateISO}`, model.summary, '']
+  for (const row of model.rows) {
+    const mark = row.mark ? `${row.mark} ` : ''
+    const detail = row.detail ? `\n     ${row.detail}` : ''
+    lines.push(`${row.seq}. ${mark}[${row.stopId}] ${row.title}, ${row.subtitle}${detail}`)
+  }
+  return lines.join('\n')
+}

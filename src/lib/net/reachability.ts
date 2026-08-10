@@ -26,6 +26,30 @@
  * it runs under `node --test`.
  */
 
+/**
+ * A hint about the connection, for LABELLING ONLY.
+ *
+ * Deliberately not an input to the decision above. The Network Information API
+ * describes the radio, not whether anything answers — a van parked under a
+ * strong 4G cell whose backhaul is down reports '4g' — and it exists in no
+ * WebKit browser at all, so half our target devices would be labelled by one
+ * rule and half by another if it ever decided anything.
+ *
+ * What it is good for is the second sentence: telling a driver whose requests
+ * are merely SLOW that the app is working rather than stuck.
+ */
+export type ConnectionHint = 'slow' | 'saveData' | null
+
+export function connectionHint(): ConnectionHint {
+  if (typeof navigator === 'undefined') return null
+  const conn = (navigator as { connection?: { effectiveType?: string; saveData?: boolean } })
+    .connection
+  if (!conn) return null
+  if (conn.saveData) return 'saveData'
+  if (conn.effectiveType === '2g' || conn.effectiveType === 'slow-2g') return 'slow'
+  return null
+}
+
 export interface Reachability {
   online: boolean
   /** Outcome of a REAL request. The strongest signal there is. */

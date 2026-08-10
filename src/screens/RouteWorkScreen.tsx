@@ -18,6 +18,7 @@ import { useUiStore } from '../store/uiStore'
 import { buildStopPages, pageIndexById } from '../lib/stopPages'
 import { stagedRoute } from '../lib/staging'
 import { useProvisionalRoute } from '../hooks/useProvisionalRoute'
+import { useWakeLock } from '../hooks/useWakeLock'
 
 /**
  * The route working screen: map + controls, for the route named in the URL.
@@ -48,6 +49,18 @@ export function RouteWorkScreen() {
   // resolve this URL's stop against the wrong route.
   const route = useRoutesStore((s) => s.routes[routeId] ?? null)
   const exists = route !== null
+
+  /**
+   * Hold the screen awake while this route is being driven.
+   *
+   * Scoped to `active` rather than to the screen: a driver reviewing tomorrow's
+   * round on the sofa has not asked us to burn their battery. It is also the
+   * only thing keeping live position tracking alive at all — background
+   * geolocation is impossible on the web, so a foregrounded page IS the
+   * feature. See hooks/useWakeLock.ts.
+   */
+  useWakeLock(route?.status === 'active')
+
   const activeRouteId = useRoutesStore((s) => s.activeRouteId)
   const setActiveRoute = useRoutesStore((s) => s.setActiveRoute)
   const setSelectedStopId = useUiStore((s) => s.setSelectedStopId)
