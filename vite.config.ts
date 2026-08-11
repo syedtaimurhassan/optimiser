@@ -1,8 +1,11 @@
+import { rmSync } from 'node:fs'
+import { join } from 'node:path'
 import { defineConfig, type Plugin } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import wasm from 'vite-plugin-wasm'
 import topLevelAwait from 'vite-plugin-top-level-await'
+import { precacheManifest } from './plugins/precache'
 
 /** Bench builds only. */
 const IS_BENCH = process.env.VITE_BENCH_SEAM === '1'
@@ -27,6 +30,37 @@ function coiServiceWorkerForBench(): Plugin {
         '</head>',
         '  <script src="/optimiser/coi-serviceworker.js"></script>\n  </head>',
       )
+    },
+  }
+}
+
+/**
+ * Keep the dead COOP/COEP worker out of what we deploy.
+ *
+ * `public/coi-serviceworker.js` is copied verbatim into every build, and since
+ * M9 nothing in production loads it — `bench:verify-seam` fails the build if
+ * anything ever does. It stays in `public/` because the bench build's OR-Tools
+ * oracle genuinely needs it, and gets removed from the production output here.
+ *
+ * Not tidiness. A service worker script sitting at a stable URL is a loaded
+ * gun: it calls `skipWaiting()` and `clients.claim()` on install and registers
+ * itself at the directory it is served from, which is EXACTLY the scope our
+ * own worker uses. Anything that re-registered it — a stale cached document, a
+ * bookmark, a copy-pasted snippet — would take that scope over and start
+ * answering with COOP/COEP headers, which is how an offline shell turns into a
+ * cross-origin isolation failure nobody asked for.
+ */
+function dropCoiFromProduction(): Plugin {
+  let outDir = 'dist'
+  return {
+    name: 'drop-coi-from-production',
+    apply: 'build',
+    configResolved(config) {
+      outDir = config.build.outDir
+    },
+    closeBundle() {
+      if (IS_BENCH) return
+      rmSync(join(outDir, 'coi-serviceworker.js'), { force: true })
     },
   }
 }
@@ -58,6 +92,8 @@ export default defineConfig({
     tailwindcss(),
     ...(IS_BENCH ? [wasm(), topLevelAwait()] : []),
     coiServiceWorkerForBench(),
+    dropCoiFromProduction(),
+    precacheManifest(),
   ],
   // Compile-time constant for dev/bench-only routes.
   //
