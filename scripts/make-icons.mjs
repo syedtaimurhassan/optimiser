@@ -12,13 +12,26 @@
  *
  * Everything here is pixels and zlib, both of which node already has.
  *
- * ── Maskable ─────────────────────────────────────────────────────────────
+ * ── Maskable, and why there are now TWO families ─────────────────────────
  *
  * Android crops an installed icon to whatever shape the launcher uses — circle,
  * squircle, teardrop. A `maskable` icon promises that nothing important sits
  * outside the inner 80% circle, so the background is full-bleed and the glyph
  * is kept well inside that safe zone. An icon that ignores this gets its
  * corners eaten, which is how you end up with a logo missing a leg.
+ *
+ * M13 shipped ONE family, declared `"purpose": "any maskable"`. That is a
+ * documented anti-pattern rather than a shortcut: the two purposes want
+ * different amounts of padding, and a platform that honours `any` renders the
+ * safe-zone padding as dead space — the glyph shows up conspicuously smaller
+ * than every other icon on the shelf. Chrome's own maskable-icon audit says to
+ * declare them separately.
+ *
+ * So the geometry is identical and only the SCALE differs:
+ *   - maskable  — glyph inside the inner 80% circle, room for the crop.
+ *   - any       — same glyph, ~25% larger, filling the square it is drawn in.
+ * `GLYPH_SCALE` is the whole difference, and `circumradius()` below asserts
+ * each variant actually fits the promise its purpose makes.
  */
 import { deflateSync } from 'node:zlib'
 import { writeFileSync, mkdirSync } from 'node:fs'
@@ -99,83 +112,139 @@ function distanceToSegment(px, py, x1, y1, x2, y2) {
 }
 
 /**
- * A route: three stops joined by two legs, which is the smallest drawing that
- * still reads as "a sequence of places" at 48 pixels on a home screen.
+ * The glyph, in fractions of the icon: a route of three stops joined by two
+ * legs, which is the smallest drawing that still reads as "a sequence of
+ * places" at 48 pixels on a home screen.
+ *
+ * Expressed once, at scale 1.0 = the maskable size, and scaled about its own
+ * centre for the other variants.
  */
-function drawIcon(size, { rounded }) {
-  const rgb = new Uint8Array(size * size * 3)
-  const s = (n) => n * size // fractions of the icon
+const STOPS = [
+  [0.3, 0.68],
+  [0.5, 0.36],
+  [0.72, 0.6],
+]
+const LINE_WIDTH = 0.055
+const DOT_RADIUS = 0.085
+/** Centre of the glyph's bounding box — what scaling pivots around. */
+const CENTRE = [0.51, 0.52]
 
-  // Glyph geometry, inside the maskable safe zone (the inner 80% circle).
-  const stops = [
-    [s(0.3), s(0.68)],
-    [s(0.5), s(0.36)],
-    [s(0.72), s(0.6)],
-  ]
-  const lineWidth = s(0.055)
-  const dotRadius = s(0.085)
-  const corner = s(0.22)
+/** Scale a fraction-space point about CENTRE. */
+const scalePoint = ([x, y], k) => [CENTRE[0] + (x - CENTRE[0]) * k, CENTRE[1] + (y - CENTRE[1]) * k]
+
+/**
+ * How far the drawn glyph reaches from the icon's centre, as a fraction of the
+ * icon's width. This is the number each `purpose` makes a promise about, so it
+ * is computed rather than eyeballed — see the assertions at the bottom.
+ */
+function circumradius(k) {
+  let max = 0
+  for (const stop of STOPS) {
+    const [x, y] = scalePoint(stop, k)
+    max = Math.max(max, Math.hypot(x - 0.5, y - 0.5) + DOT_RADIUS * k)
+  }
+  return max
+}
+
+function drawIcon(size, { glyphScale }) {
+  const rgb = new Uint8Array(size * size * 3)
+  const s = (n) => n * size
+
+  const stops = STOPS.map((p) => scalePoint(p, glyphScale).map(s))
+  const lineWidth = s(LINE_WIDTH * glyphScale)
+  const dotRadius = s(DOT_RADIUS * glyphScale)
 
   for (let y = 0; y < size; y++) {
     for (let x = 0; x < size; x++) {
       const px = x + 0.5
       const py = y + 0.5
 
-      // Background. `rounded` is for the non-maskable icon, which is shown
-      // as-is and would otherwise be a hard square.
-      let inside = true
-      if (rounded) {
-        const cx = Math.min(Math.max(px, corner), size - corner)
-        const cy = Math.min(Math.max(py, corner), size - corner)
-        inside = Math.hypot(px - cx, py - cy) <= corner
-      }
+      // Full bleed, always. Every consumer of these files either masks the
+      // icon itself (Android launchers, iOS) or shows the square as-is, and
+      // there is no alpha channel here to round a corner INTO — the M13
+      // version painted the corners white, which is invisible on a light
+      // surface and a white notch on a dark one.
+      let colour = BG
 
-      let colour = inside ? BG : null
-
-      if (inside) {
-        let onGlyph = false
-        for (let i = 0; i < stops.length - 1 && !onGlyph; i++) {
-          const [x1, y1] = stops[i]
-          const [x2, y2] = stops[i + 1]
-          if (distanceToSegment(px, py, x1, y1, x2, y2) <= lineWidth / 2) onGlyph = true
-        }
-        for (const [sx, sy] of stops) {
-          if (Math.hypot(px - sx, py - sy) <= dotRadius) onGlyph = true
-        }
-        if (onGlyph) colour = FG
+      let onGlyph = false
+      for (let i = 0; i < stops.length - 1 && !onGlyph; i++) {
+        const [x1, y1] = stops[i]
+        const [x2, y2] = stops[i + 1]
+        if (distanceToSegment(px, py, x1, y1, x2, y2) <= lineWidth / 2) onGlyph = true
       }
+      for (const [sx, sy] of stops) {
+        if (Math.hypot(px - sx, py - sy) <= dotRadius) onGlyph = true
+      }
+      if (onGlyph) colour = FG
 
       const o = (y * size + x) * 3
-      if (colour) {
-        rgb[o] = colour[0]
-        rgb[o + 1] = colour[1]
-        rgb[o + 2] = colour[2]
-      } else {
-        // Outside the rounded corner: white, since there is no alpha channel
-        // and the only place this icon is shown is against a light surface.
-        rgb[o] = 0xff
-        rgb[o + 1] = 0xff
-        rgb[o + 2] = 0xff
-      }
+      rgb[o] = colour[0]
+      rgb[o + 1] = colour[1]
+      rgb[o + 2] = colour[2]
     }
   }
 
   return rgb
 }
 
+/**
+ * The three scales, and the promise each one has to keep.
+ *
+ *  MASKABLE — must fit the inner 80% circle, i.e. circumradius <= 0.40.
+ *  ANY      — must fit the square it is drawn in, i.e. circumradius <= 0.50,
+ *             and should be visibly bigger than the maskable one or there was
+ *             no point declaring them separately.
+ *  APPLE    — iOS applies its own superellipse mask and does not read the
+ *             manifest's `purpose` at all. The squircle cuts the corners but
+ *             little else, so this sits between the two.
+ */
+const MASKABLE = 1.0
+const ANY = 1.25
+const APPLE = 1.1
+
 mkdirSync(OUT, { recursive: true })
 
 const files = [
-  // Maskable: full bleed, glyph inside the safe zone.
-  ['icon-192.png', 192, { rounded: false }],
-  ['icon-512.png', 512, { rounded: false }],
-  // iOS draws its own mask over apple-touch-icon and does not read the
-  // manifest's `purpose`, so this one is square and full bleed too.
-  ['apple-touch-icon.png', 180, { rounded: false }],
+  // purpose: any — shown as-is, so it fills its square.
+  ['icon-192.png', 192, ANY],
+  ['icon-512.png', 512, ANY],
+  // purpose: maskable — full bleed, glyph inside the safe zone.
+  ['icon-maskable-192.png', 192, MASKABLE],
+  ['icon-maskable-512.png', 512, MASKABLE],
+  // iOS masks this itself and never reads the manifest.
+  ['apple-touch-icon.png', 180, APPLE],
 ]
 
-for (const [name, size, options] of files) {
-  const png = encodePng(drawIcon(size, options), size)
+for (const [name, size, glyphScale] of files) {
+  const png = encodePng(drawIcon(size, { glyphScale }), size)
   writeFileSync(join(OUT, name), png)
-  console.log(`${name.padEnd(22)} ${size}x${size}  ${(png.length / 1024).toFixed(1)} kB`)
+  console.log(`${name.padEnd(24)} ${size}x${size}  ${(png.length / 1024).toFixed(1)} kB`)
 }
+
+/**
+ * Assert the geometry rather than trusting it.
+ *
+ * A maskable icon that overflows its safe zone does not fail loudly — it just
+ * gets a corner shaved off on some launchers and not others, which is the kind
+ * of defect that survives to production because nobody owns the device that
+ * shows it.
+ */
+const checks = [
+  ['maskable fits the inner 80% circle', circumradius(MASKABLE) <= 0.4],
+  ['any fits its square', circumradius(ANY) <= 0.5],
+  ['apple-touch fits inside the squircle', circumradius(APPLE) <= 0.45],
+  ['any is visibly larger than maskable', circumradius(ANY) > circumradius(MASKABLE) * 1.15],
+]
+
+let failed = false
+for (const [what, ok] of checks) {
+  if (!ok) {
+    console.error(`  ! ${what}`)
+    failed = true
+  }
+}
+console.log(
+  `\ncircumradius  maskable ${circumradius(MASKABLE).toFixed(3)}  ` +
+    `any ${circumradius(ANY).toFixed(3)}  apple ${circumradius(APPLE).toFixed(3)}`,
+)
+if (failed) process.exit(1)
