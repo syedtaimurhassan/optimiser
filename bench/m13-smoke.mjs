@@ -12,16 +12,9 @@
  * does not affect. It also needs the service worker and the manifest, neither
  * of which a bench build is about.
  *
- * ── --single-process is not a workaround for a bug in the app ─────────────
- *
- * Chromium's renderer is a child process, and in a sandboxed shell that child
- * is killed the moment it starts — every launch flag combination crashes at
- * the same point, before the app has fetched a single asset, and a trivial
- * `setContent` page renders fine. Running the renderer in-process avoids the
- * child entirely and the app boots normally.
- *
- * This is why m1-smoke and friends currently fail here: they were written for
- * an unsandboxed machine. On one, drop the flag.
+ * Launch flags are decided by `lib/launch.mjs`, which probes whether this host
+ * lets a renderer child process live and falls back to an in-process renderer
+ * when it does not. Nothing here needs configuring.
  */
 import { fileURLToPath } from 'node:url'
 import { dirname, join, resolve } from 'node:path'
@@ -33,12 +26,6 @@ const HERE = dirname(fileURLToPath(import.meta.url))
 const ROOT = resolve(HERE, '..')
 const DIST = join(ROOT, process.argv.find((a) => a.startsWith('--dist='))?.split('=')[1] ?? 'dist')
 const HEADED = process.argv.includes('--headed')
-
-/** In-process renderer; see the note above. */
-const LAUNCH_ARGS = [
-  '--no-sandbox',
-  '--single-process',
-]
 
 const PHONE = { width: 390, height: 844 }
 
@@ -54,7 +41,7 @@ const check = (name, pass, detail = '') => {
 }
 
 async function main() {
-  const browser = await launchChromium({ headless: !HEADED, args: LAUNCH_ARGS })
+  const browser = await launchChromium({ headless: !HEADED })
   const server = await startServer({ root: DIST })
 
   const context = await browser.newContext({

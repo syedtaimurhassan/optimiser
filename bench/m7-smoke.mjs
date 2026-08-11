@@ -901,7 +901,10 @@ async function main() {
     }
   })
 
-  check('all nine items are present', menu.items.length === 9, `${menu.items.length} items`)
+  // Nine when M7 wrote this; ten since M13 added "Navigation app", which is a
+  // setting and has nowhere better to live than beside the other ways a route
+  // leaves this app.
+  check('all ten items are present', menu.items.length === 10, `${menu.items.length} items`)
   check(
     'grouped into three sections plus the destructive one',
     menu.blocks === 4,
@@ -917,13 +920,22 @@ async function main() {
     menu.items.filter((t) => t.includes('…')).length === 5,
     menu.items.filter((t) => t.includes('…')).join(' | '),
   )
+  // M13 built two of the three: Share route copy now works (Web Share, with a
+  // clipboard fallback) and Scan route manifest is live whenever the OCR flag
+  // is on — disabled with an "In Settings" hint rather than a bare grey row
+  // when it is off, which is the state a fresh profile is in here. Transfer
+  // stops is still unbuilt and must still announce itself.
   check(
-    'the unbuilt items are announced and disabled, not missing',
-    await page.evaluate(() =>
-      ['menu-share', 'menu-transfer', 'menu-scan'].every(
-        (id) => document.querySelector(`[data-testid="${id}"]`)?.disabled === true,
-      ),
-    ),
+    'the built items are enabled and the unbuilt one still announces itself',
+    await page.evaluate(() => {
+      const q = (id) => document.querySelector(`[data-testid="${id}"]`)
+      return (
+        q('menu-share')?.disabled === false &&
+        q('menu-transfer')?.disabled === true &&
+        q('menu-scan')?.disabled === true &&
+        (q('menu-scan')?.innerText ?? '').includes('Settings')
+      )
+    }),
   )
 
   // Reset Stop IDs is wired, confirmed, and destructive by nature.

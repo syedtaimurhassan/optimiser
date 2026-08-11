@@ -6,6 +6,7 @@ import {
   voiceIsLocal,
   type VoiceSession,
 } from '../../lib/voice'
+import { probeOnDeviceSpeech } from '../../lib/device/capabilities'
 import { useDeviceStore } from '../../store/deviceStore'
 import { Sheet } from '../ui'
 import { MicIcon } from '../ui/icons'
@@ -29,7 +30,26 @@ export function VoiceSheet({
 }) {
   const capabilities = useDeviceStore((s) => s.capabilities)
   const availability = voiceAvailability(capabilities)
-  const local = voiceIsLocal(capabilities.speechOnDevice)
+
+  /**
+   * Asked here rather than at boot. `SpeechRecognition.available()` wakes
+   * Chromium's on-device speech machinery and can stall the renderer's
+   * network — it cost M13 a bisect. This screen is the only place the answer
+   * is used, and a user opened it, so this is where it belongs.
+   */
+  const [onDevice, setOnDevice] = useState<string | null>(null)
+  useEffect(() => {
+    if (!open || !availability.usable) return
+    let cancelled = false
+    void probeOnDeviceSpeech().then((r) => {
+      if (!cancelled) setOnDevice(r)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [open, availability.usable])
+
+  const local = voiceIsLocal(onDevice)
 
   const [heard, setHeard] = useState('')
   const [error, setError] = useState<string | null>(null)

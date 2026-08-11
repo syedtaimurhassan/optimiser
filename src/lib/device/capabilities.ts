@@ -98,7 +98,7 @@ export interface AsyncCapabilities {
    * where the API does not exist — which is everywhere else, and where
    * recognition therefore means "streamed to the vendor's servers".
    */
-  speechOnDevice: string | null
+  speechOnDevice: string | null | undefined
 }
 
 export type Capabilities = SyncCapabilities &
@@ -290,8 +290,10 @@ export function detectSync(): SyncCapabilities {
 async function requestPersistentStorage(): Promise<boolean> {
   try {
     if (!navigator.storage?.persist) return false
-    if (await navigator.storage.persisted?.()) return true
-    return await navigator.storage.persist()
+    if (await within(Promise.resolve(navigator.storage.persisted?.()), PROBE_TIMEOUT_MS, false)) {
+      return true
+    }
+    return await within(navigator.storage.persist(), PROBE_TIMEOUT_MS, false)
   } catch {
     return false
   }
@@ -308,6 +310,34 @@ async function estimateStorage(): Promise<AsyncCapabilities['storageEstimate']> 
 }
 
 /**
+ * A probe that cannot hang the app.
+ *
+ * Learned the hard way. `SpeechRecognition.available()` EXISTS in current
+ * Chromium and, with the on-device feature disabled behind a flag, returns a
+ * promise that never settles. `detectAsync` awaits all of its probes together,
+ * so one hung probe meant `ready` never became true — and everything gated on
+ * device readiness quietly stopped, with no error anywhere to explain it.
+ *
+ * A capability probe is an optimisation. None of them is worth a boot.
+ */
+async function within<T>(promise: Promise<T>, ms: number, fallback: T): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<T>((resolve) => {
+        timer = setTimeout(() => resolve(fallback), ms)
+      }),
+    ])
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
+/** Long enough for a real answer, short enough not to be felt. */
+const PROBE_TIMEOUT_MS = 1500
+
+/**
  * Ask the native detector what it can read.
  *
  * Deliberately tolerant of a throw: Android's implementation downloads its
@@ -319,13 +349,30 @@ async function nativeBarcodeFormats(): Promise<string[] | null> {
     const ctor = (globalThis as { BarcodeDetector?: { getSupportedFormats?: () => Promise<string[]> } })
       .BarcodeDetector
     if (typeof ctor?.getSupportedFormats !== 'function') return null
-    return await ctor.getSupportedFormats()
+    return await within(ctor.getSupportedFormats(), PROBE_TIMEOUT_MS, null)
   } catch {
     return null
   }
 }
 
-async function onDeviceSpeech(): Promise<string | null> {
+/**
+ * Whether speech can be recognised without sending audio anywhere.
+ *
+ * ── NOT called at boot, and that is a scar ────────────────────────────────
+ *
+ * `SpeechRecognition.available()` does not merely read a flag: it wakes
+ * Chromium's on-device speech machinery, which the M13 research already found
+ * was disabled behind a regression until 142.0.7403.0. Calling it during the
+ * capability probe stalled the renderer's network — the map's style request
+ * never completed, no symbol was ever placed, and NOTHING logged an error. It
+ * took a bisect to find, because every visible signal said the app was fine.
+ *
+ * Awaiting it with a timeout does not help: the damage is done by the call,
+ * not by the wait. So it is asked once, lazily, from the voice sheet — a user
+ * gesture, on a screen whose whole purpose is speech — and never on the path
+ * that has to render a map.
+ */
+export async function probeOnDeviceSpeech(): Promise<string | null> {
   try {
     const ctor = (globalThis as {
       SpeechRecognition?: { available?: (o: unknown) => Promise<string> }
@@ -333,18 +380,21 @@ async function onDeviceSpeech(): Promise<string | null> {
     })
     const available = ctor.SpeechRecognition?.available ?? ctor.webkitSpeechRecognition?.available
     if (typeof available !== 'function') return null
-    return await available({ langs: ['en-US'], processLocally: true })
+    return await within(
+      Promise.resolve(available({ langs: ['en-US'], processLocally: true })),
+      PROBE_TIMEOUT_MS,
+      null,
+    )
   } catch {
     return null
   }
 }
 
 export async function detectAsync(): Promise<AsyncCapabilities> {
-  const [storagePersisted, storageEstimate, barcodeFormats, speechOnDevice] = await Promise.all([
+  const [storagePersisted, storageEstimate, barcodeFormats] = await Promise.all([
     requestPersistentStorage(),
     estimateStorage(),
     nativeBarcodeFormats(),
-    onDeviceSpeech(),
   ])
   return {
     wasmSimd: wasmSimd(),
@@ -352,7 +402,9 @@ export async function detectAsync(): Promise<AsyncCapabilities> {
     storagePersisted,
     storageEstimate,
     barcodeFormats,
-    speechOnDevice,
+    // Deliberately absent: see probeOnDeviceSpeech. Undefined means "not
+    // asked yet", which is different from "asked, and the answer was no".
+    speechOnDevice: undefined,
   }
 }
 
@@ -426,7 +478,9 @@ export function formatReport(caps: Capabilities): string {
   )
   row('speechRecognition', caps.speechRecognition)
   row('speech usable here', speechUsable(caps))
-  row('speech on-device', caps.asyncResolved ? (caps.speechOnDevice ?? 'no — sent to vendor') : 'pending')
+  // Undefined here is honest rather than lazy: this one is probed from the
+  // voice sheet, not at boot, because asking at boot stalls the renderer.
+  row('speech on-device', caps.speechOnDevice ?? 'not probed (asked when dictating)')
   row('webShare', caps.webShare)
   row('wakeLock', caps.wakeLock)
   row('vibrate', caps.vibrate)

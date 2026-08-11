@@ -2470,6 +2470,28 @@ Two the brief did not anticipate:
 - Lint, `tsc -b` and the full suite green on every commit.
 - Bundle measured before and after every commit that could move it.
 
+### 🔴 The bug the browser found, which no test could have
+
+Running the suites did not just confirm the milestone — it caught a regression
+in it, and one with no visible symptom.
+
+`SpeechRecognition.available({ processLocally: true })` was being called from
+the boot-time capability probe. It does not read a flag: it wakes Chromium's
+on-device speech machinery, which M13's own research had already found was
+disabled behind a regression until 142.0.7403.0. Calling it **stalled the
+renderer's network** — the map's style request never completed, no symbol was
+ever placed, and the app logged nothing at all. `m4-smoke` went from 41/41 to
+26/39 and every visible signal still said the app was fine.
+
+Awaiting it with a timeout does not help: the damage is done by the call, not
+by the wait. So it is asked lazily, once, from the voice sheet — a user gesture
+on a screen whose whole purpose is speech — and never on the path that renders
+a map. A boot probe is an optimisation, and none is worth a boot.
+
+It took a bisect over eleven commits to find, twice: the first attempt used
+`git checkout <sha> -- .`, which leaves files from later commits behind and
+quietly contaminated the result.
+
 ### 🟡 Deferred and not done
 
 - 🔴 **No real-device runs. Again — same as M10, M11 and M12.** The browser
@@ -2487,11 +2509,23 @@ Two the brief did not anticipate:
   `SMOKE_CHROME_ARGS="--no-sandbox --single-process"`; `bench/lib/launch.mjs`
   reads it and every suite goes through it.
 
-  With that: **`smoke:m13` 32/32**, **`m5-smoke` 58/58**, and m1-smoke's whole
-  migration section 15/15 before it hits a `--single-process` limitation on its
-  second browser context. `m8-smoke` has 3 failures around decimal stop IDs
-  which are **pre-existing** — verified by running it against c746d57, where
-  the same three fail plus three more.
+  `--single-process` also allows exactly ONE browser context, which broke every
+  suite that opens one per scenario. `lib/launch.mjs` hands out a fresh
+  underlying browser for each context after the first, so callers keep writing
+  `browser.newContext()` and never learn.
+
+  | suite | result |
+  |---|---|
+  | m1-smoke | 42/42 |
+  | m3-smoke | 51/52 — the one failure is pre-existing |
+  | m4-smoke | 41/41 |
+  | m5-smoke | 58/58 |
+  | m7-smoke | 65/65 |
+  | m8-smoke | 22/28 — all six failures pre-existing |
+  | smoke:m13 | 32/32 |
+
+  Every failure above was checked against c746d57 before being called
+  pre-existing.
 - 🟡 **OCR is unmeasured.** The flag is off because the arithmetic says the
   WASM path is seconds per image, not because anyone timed it. The sheet
   reports provider and elapsed time precisely so the device test produces that
