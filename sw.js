@@ -75,7 +75,7 @@ const OURS = new Set([SHELL, ASSETS, HEAVY, TILES, WITNESS])
  * Paths are relative to the worker's scope so this file stays independent of
  * Vite's `base`, which differs between a local preview and GitHub Pages.
  */
-const PRECACHE = ["assets/engine-CoZ88vZ4.wasm","assets/engine-simd-CeQOIOsn.wasm","assets/index-Ba9hd1pj.css","assets/index-CIuhGCHM.js","assets/solveWorker-BF-8vz2h.js","favicon.svg","icons/apple-touch-icon.png","icons/icon-192.png","icons/icon-512.png","icons/icon-maskable-192.png","icons/icon-maskable-512.png","index.html","manifest.webmanifest"]
+const PRECACHE = ["assets/engine-CoZ88vZ4.wasm","assets/engine-simd-CeQOIOsn.wasm","assets/index-Ba9hd1pj.css","assets/index-D0EeKMvk.js","assets/solveWorker-BF-8vz2h.js","favicon.svg","icons/apple-touch-icon.png","icons/icon-192.png","icons/icon-512.png","icons/icon-maskable-192.png","icons/icon-maskable-512.png","index.html","manifest.webmanifest"]
 
 const scoped = (path) => new URL(path, self.registration.scope).toString()
 
