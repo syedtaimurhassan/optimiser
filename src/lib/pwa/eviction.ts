@@ -1,5 +1,3 @@
-import { getMeta, setMeta } from '../persistence/db.ts'
-
 /**
  * Did the browser throw the driver's data away?
  *
@@ -12,88 +10,100 @@ import { getMeta, setMeta } from '../persistence/db.ts'
  * complete wipe the app is, by construction, indistinguishable from a fresh
  * install, and any code claiming otherwise is lying.
  *
- * What IS detectable is a PARTIAL loss, and it is the common one in practice:
- * the Cache Storage shell survives while IndexedDB does not. That happens when
- * a quota error kills a database write, when an upgrade fails, or when a
- * driver clears "website data" through a path that does not take everything.
- * It is exactly the case that otherwise presents as a working app with an
- * empty route list — the failure mode this milestone exists to avoid, because
- * a driver who is shown an empty app assumes they are on the wrong device and
- * goes looking, rather than being told plainly that the data is gone.
+ * What IS detectable is a PARTIAL loss, and it is the common one: Cache
+ * Storage survives while IndexedDB does not. That happens when a quota error
+ * kills a database write, when an upgrade fails, or when storage is cleared
+ * through a path that does not take everything. It is exactly the case that
+ * otherwise presents as a working app with an empty route list — and a driver
+ * shown an empty app does not conclude "evicted", they conclude they are on
+ * the wrong phone and lose the morning looking.
  *
- * So: the shell cache is the "we have been here before" witness, and the meta
- * marker is the "and IndexedDB was intact" witness. One without the other is a
- * loss worth reporting.
+ * ── Why the witness is in Cache Storage and not IndexedDB ─────────────────
+ *
+ * This is the correction to the first attempt, and the M14 smoke test is what
+ * caught it. The witness was a row in IndexedDB's `meta` store, checked
+ * against the presence of a shell cache. Both halves were wrong:
+ *
+ *   - The shell cache is created on the FIRST visit, before any data has ever
+ *     existed. So "a shell cache exists" never meant "we had data before", and
+ *     every user with an empty route was told their data had been cleared on
+ *     their second launch.
+ *   - A witness inside IndexedDB is destroyed by the very event it exists to
+ *     report, so it could never have detected the case it was written for.
+ *
+ * The witness therefore lives in its own cache — a different storage bucket
+ * from the data, which is precisely what makes a partial loss visible — and is
+ * written only once there is something to lose.
  */
 
-/** Written once the app has real data. Its ABSENCE beside a shell cache is the signal. */
-const MARKER_KEY = 'pwa:knownGood'
+/** Its own cache, so clearing the shell or the tiles cannot disarm the check. */
+const WITNESS_CACHE = 'optimiser-witness'
+const WITNESS_URL = 'witness/had-data'
 
 /**
  * Pure decision, so the truth table is a test rather than a device session.
  *
- * The asymmetry is deliberate. A marker with no shell cache is NOT a loss —
- * that is simply a browser that dropped the caches (or a build where the
- * worker never registered), and the data it is about is still there.
+ * Deliberately says nothing about WHEN it is asked. The caller must ask at
+ * boot, before the driver has had a chance to empty a route themselves —
+ * emptying a round on purpose produces the same two values as an eviction, and
+ * only the timing tells them apart. `useDataLoss` owns that ordering.
  */
 export function isDataLoss({
-  hasShellCache,
-  hasMarker,
+  hasWitness,
+  hasData,
 }: {
-  hasShellCache: boolean
-  hasMarker: boolean
+  hasWitness: boolean
+  hasData: boolean
 }): boolean {
-  return hasShellCache && !hasMarker
+  return hasWitness && !hasData
 }
 
-/** True when a shell cache from some earlier visit is still around. */
-async function hasShellCache(): Promise<boolean> {
+async function witnessCache(): Promise<Cache | null> {
   try {
-    if (typeof caches === 'undefined') return false
-    return (await caches.keys()).some((n) => n.startsWith('optimiser-shell'))
+    if (typeof caches === 'undefined') return null
+    return await caches.open(WITNESS_CACHE)
+  } catch {
+    return null
+  }
+}
+
+/** True when an earlier session recorded that there was data worth keeping. */
+export async function hasWitness(): Promise<boolean> {
+  const cache = await witnessCache()
+  if (!cache) return false
+  try {
+    return (await cache.match(WITNESS_URL)) !== undefined
   } catch {
     return false
   }
 }
 
 /**
- * Record that IndexedDB currently holds data worth remembering.
+ * Record that there is now data worth keeping.
  *
- * Called after hydration, and only when there is something to lose. Writing it
- * unconditionally would set the marker on a first run and permanently disarm
- * the check.
+ * Only ever called when routes actually hold stops. Writing it unconditionally
+ * would set it on a first run and turn the check into a permanent false alarm.
  */
-export async function markKnownGood(): Promise<void> {
+export async function setWitness(): Promise<void> {
+  const cache = await witnessCache()
   try {
-    if ((await getMeta<number>(MARKER_KEY)) === undefined) await setMeta(MARKER_KEY, Date.now())
+    await cache?.put(WITNESS_URL, new Response(String(Date.now())))
   } catch {
-    // Best-effort. A marker we could not write is a check that does not fire,
+    // Best-effort. A witness we could not write is a check that does not fire,
     // which is the safe direction: it under-reports rather than crying wolf.
   }
 }
 
 /**
- * Whether data was lost since the last visit.
+ * Forget it — the driver emptied the app themselves, or has been told once.
  *
- * Deliberately quiet on every error path. This is a diagnostic; a diagnostic
- * that can break the boot is worse than no diagnostic.
+ * Without this, deliberately clearing every stop would look identical to an
+ * eviction on the next launch.
  */
-export async function detectDataLoss(): Promise<boolean> {
+export async function clearWitness(): Promise<void> {
+  const cache = await witnessCache()
   try {
-    const [shell, marker] = await Promise.all([
-      hasShellCache(),
-      getMeta<number>(MARKER_KEY).catch(() => undefined),
-    ])
-    return isDataLoss({ hasShellCache: shell, hasMarker: marker !== undefined })
-  } catch {
-    return false
-  }
-}
-
-/** Forget the marker, so a driver who has been told once is not told forever. */
-export async function clearDataLossMarker(): Promise<void> {
-  try {
-    await setMeta(MARKER_KEY, Date.now())
+    await cache?.delete(WITNESS_URL)
   } catch {
     // As above.
   }

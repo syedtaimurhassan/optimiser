@@ -56,8 +56,18 @@ const ASSETS = `optimiser-assets-${VERSION}`
 const HEAVY = 'optimiser-heavy'
 const TILES = 'optimiser-tiles'
 
+/**
+ * Not ours, and must survive us.
+ *
+ * lib/pwa/eviction.ts keeps its "there was data here" witness in a cache,
+ * because a witness stored in IndexedDB is destroyed by the very event it
+ * exists to report. This worker must therefore never sweep it up — deleting it
+ * on activate would disarm the eviction check on every single deploy, silently.
+ */
+const WITNESS = 'optimiser-witness'
+
 /** Caches this worker owns. Anything else under our origin is another era's. */
-const OURS = new Set([SHELL, ASSETS, HEAVY, TILES])
+const OURS = new Set([SHELL, ASSETS, HEAVY, TILES, WITNESS])
 
 /**
  * The shell, injected at build time by plugins/precache.ts.
@@ -146,7 +156,11 @@ self.addEventListener('activate', (event) => {
       // On an UPDATE the opposite holds, and claiming is exactly the
       // mid-session white screen the header warns about. So: only when we are
       // new here.
-      const firstInstall = !names.some((n) => n.startsWith('optimiser-'))
+      // Specifically a SHELL cache, not any cache of ours: the witness above
+      // can outlive a storage clear that took the shell with it, and treating
+      // that as "not a first install" would skip the claim that makes this
+      // session's lazy chunks cacheable.
+      const firstInstall = !names.some((n) => n.startsWith('optimiser-shell'))
 
       await Promise.all(names.filter((n) => n.startsWith('optimiser-') && !OURS.has(n)).map((n) => caches.delete(n)))
 

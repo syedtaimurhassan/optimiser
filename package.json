@@ -48,7 +48,9 @@
     "ocr:models": "node scripts/fetch-ocr-models.mjs",
     "icons": "node scripts/make-icons.mjs",
     "presmoke:m13": "npm run build",
-    "smoke:m13": "node bench/m13-smoke.mjs"
+    "smoke:m13": "node bench/m13-smoke.mjs",
+    "presmoke:m14": "npm run build",
+    "smoke:m14": "node bench/m14-smoke.mjs"
   },
   "dependencies": {
     "@tanstack/react-virtual": "^3.14.9",
