@@ -2558,3 +2558,220 @@ quietly contaminated the result.
 5. **The service worker does not `skipWaiting`.** That is deliberate: taking
    over immediately swaps the asset map under a running page, which then asks
    for the previous build's lazy chunks. Updates apply on the next fresh open.
+
+---
+
+## M14 — Installable, and honest about what the browser promises
+
+### What changed
+
+- **`plugins/precache.ts`** — derives the app shell from the bundle at build
+  time and injects it into the worker. Entry chunks plus the closure of their
+  STATIC imports; `import()` is not followed.
+- **`public/sw.js`** — precaches that shell on install, and splits caching into
+  four buckets with three different lifetimes.
+- **`public/manifest.webmanifest`** — an explicit `id`, a `start_url` that names
+  the hash route, and separate `any` / `maskable` icon entries.
+- **`scripts/make-icons.mjs`** — two icon families from one glyph and a scale
+  factor, with the geometry each `purpose` promises asserted rather than
+  eyeballed.
+- **`src/pwa/`** — registration, update detection, the captured install prompt,
+  and the eviction check.
+- **`src/lib/pwa/`** — the framework-free half: storage arithmetic, the install
+  policy, the data-loss truth table. 26 new unit tests.
+- **Settings** grows a Storage section and a permanently reachable install card.
+- **`bench/m14-smoke.mjs`** — 31 checks, including the real cold-offline
+  sequence.
+- **`coi-serviceworker` is gone from the production deploy.**
+
+### 🔴 The bug that had been shipping since M13
+
+Cold offline launch showed a white screen, and nothing in the source looked
+wrong. M13's worker precached `index.html` and relied on its fetch handler to
+collect the rest "on the way past".
+
+It cannot. A newly installed worker does not control the page that registered
+it, and registration happens on `load` — after every asset has already been
+fetched. So visit one cached the document and none of the JavaScript the
+document names. The offline launch then served that cached HTML, which asked
+for `/assets/index-*.js`, missed, hit a dead network and stopped. Offline
+began working on the **third** launch, and only if the second was online.
+
+Reading the code did not find this. Closing the page, cutting the network and
+opening a new one did, which is why that exact sequence is now a test.
+
+### The `coi-serviceworker` decision, argued with the data
+
+The brief asked for a recommendation between merging COOP/COEP into the Workbox
+worker, or dropping isolation entirely. It is (b), and it is not close:
+
+- **No tier-A engine has ever been built.** `registry.ts` returns `'A'` when
+  `crossOriginIsolated && sharedArrayBuffer && wasmSimd && wasmThreads`, but
+  `REGISTRY` contains no tier-A entry — so `selectEngine` always resolves down
+  to B and sets `degraded`. Isolation buys a badge claiming a tier we cannot
+  run. M9 said "M15 fills A"; M11 did not change that.
+- **M11 measured the shipped default with isolation off.**
+  `npm run bench:tsptw:nocoi` refuses to report unless `crossOriginIsolated` is
+  actually false, and printed `wasm-workers feasible 15/15 mean gap 0.27%` —
+  identical to the isolated run.
+- Production has not loaded it since M9, and `bench:verify-seam` already fails
+  the build if it ever does.
+
+So this was finishing a migration, not changing direction. The file stays in
+`public/` for the bench oracle and is deleted from the production output —
+because a service worker script at a stable URL calls `skipWaiting()` and
+`clients.claim()` and registers at the directory it is served from, which is
+exactly our scope.
+
+**The DoD item "no forced first-load reload" was already met.** There has been
+no reload to remove since M9.
+
+### 🔴 A correction to the brief, and it makes the feature better
+
+The brief says installed Home Screen apps are "exempt from Safari's 7-day
+script-writable-storage eviction". The real mechanism is one step longer.
+WebKit's storage policy says an origin is excluded from eviction if *"its
+storage is in persistent mode"*, and that WebKit *"grants a request based on
+heuristics like whether the website is opened as a Home Screen Web App"*.
+
+So the chain is **install → `persist()` is granted → persistent mode → exempt**,
+not install → exempt. That is better for us in three ways: it is checkable,
+it ties the install card to the storage row (Settings shows the actual outcome
+of `persist()` rather than assuming it), and it stops the copy promising
+something Apple has not promised. The UI says "far more likely", never
+"guaranteed", and `install.test.ts` asserts that wording.
+
+Also checked, because it is repeated widely and is wrong: the claim that the
+Home Screen exemption was *removed* traces to an iOS 17.4 EU **beta** that
+Apple reversed before shipping.
+
+### The size problem that shaped every other decision
+
+`dist/assets` is 30 MB. The shell is 1.96 MB of it.
+
+| precached (1.96 MB) | never precached (~40 MB) |
+|---|---|
+| `index.html`, entry chunk 1.6 MB, CSS 122 kB, both engine artefacts 2×92 kB, solver worker 20 kB, manifest + 5 icons | `ort-wasm-*.wasm` 26.8 MB, `models/ocr/*.ort` 12 MB, `zxing_reader` 1.07 MB, `ort.bundle` 396 kB |
+
+M13's blanket `/assets/` rule would have cached 27 MB the first time anyone
+opened OCR — a feature that is off by default. A denylist would work until the
+next big lazy feature landed and nobody updated it, so the shell is defined
+structurally instead: anything behind `import()` falls out by construction. The
+two files unreachable from that graph (engine WASM, solver worker) are matched
+by name, and **a pattern matching nothing fails the build** — an app that opens
+offline and then cannot solve is worse than one that does not open, because it
+looks like it works.
+
+### 🔴 The bug the smoke test caught on its first run
+
+The eviction check reported *"Your saved routes were cleared"* on a perfectly
+healthy second launch. Two mistakes, both invisible without a browser:
+
+- The witness was "a shell cache exists" — true from the **first** visit,
+  before any data has ever been saved. Every driver whose round was still empty
+  would have been told their data was cleared, the second time they opened the
+  app.
+- The other half of the witness was a row in IndexedDB, which is the store the
+  check exists to report the loss *of*. It is destroyed by the very event it
+  was meant to witness, so it could never have detected the case it was written
+  for.
+
+The witness now lives in its own Cache Storage entry — a different bucket from
+the data, which is exactly what makes a partial loss visible — and is written
+only once there are stops to lose. Two consequences were chased rather than
+left to be discovered: the worker's activate handler sweeps caches beginning
+`optimiser-` and would have deleted the witness on every deploy, and its
+first-install test now looks for a shell cache specifically.
+
+### What is knowable about eviction, and what is not
+
+A full-origin eviction takes every script-writable store at once. There is no
+marker that can survive to prove data was lost, so after a complete wipe the
+app is **by construction** indistinguishable from a fresh install. The check
+therefore targets the partial case only, and the docs say so rather than
+implying more coverage than exists.
+
+### Decisions worth keeping
+
+- **No SW-level caching for geocoding**, against the brief's suggestion of
+  stale-while-revalidate. `lib/geocoding/cache.ts` already does it in
+  IndexedDB with a 30-day TTL and NFC/coordinate-normalised keys. A URL-keyed
+  SW cache would miss all that normalisation and background-revalidate against
+  a public shared key — fighting the one job that file says matters most.
+- **Tiles are cache-first with no revalidation.** OpenFreeMap has no request
+  cap and permits commercial use, but every free tile service asks clients not
+  to bulk-download or prefetch. SWR would send a second request for every tile
+  already seen, which on a donation-funded server is the opposite of
+  respectful. Only what the map asked for while panning, bounded by a FIFO.
+- **The install invitation waits for data.** It appears in the routes drawer,
+  below the list, and only once a round has stops. Before that, installing
+  protects nothing and the card is asking for a commitment before the app has
+  done anything.
+- **A dismissal expires after 30 days** and stays reachable in Settings forever.
+  Permanent would mean one distracted tap removes the only thing standing
+  between the driver's routes and an eviction timer.
+- **`clients.claim()` only on a first install**, detected by the absence of a
+  shell cache. There is no stale asset map to swap on a first install, and it
+  is the only way anything loaded lazily in that first session gets cached. On
+  an update it is exactly the mid-session white screen we refuse to cause.
+
+### Verified
+
+- **`npm run smoke:m14` — 31/31**, against the production build, including:
+  load online → close the page → airplane mode → open a new page. The app
+  renders, a deep link resolves, and the data-loss banner is absent.
+- **`npm run smoke:m13` — 32/32**, unchanged.
+- **784 unit tests**, 26 of them new.
+- The shell is 1.96 MB and excludes every optional payload; asserted, not
+  assumed.
+- `lint` and `build` clean.
+
+### Deferred
+
+- 🔴 **No real-device runs.** Every claim about WebKit granting persistent mode
+  to Home Screen apps is from Apple's documentation, not from a phone.
+  `DEVICE-TEST-M14.md` is the protocol, and §4 (the 8-day survival test) is the
+  one that settles whether the install pitch is true. **Do not reword the pitch
+  until that test has run.**
+- 🟡 **Manifest `screenshots` were not added.** Chrome shows a richer install
+  dialog when they exist. It needs real screenshots from a real device, so it
+  waits for the device test.
+- 🟡 **The update toast has never been seen against two real deploys.** The
+  logic is exercised only by static assertion that the worker does not
+  `skipWaiting` unprompted.
+- 🟡 **Tile cache eviction is FIFO, not LRU.** A tile re-requested after a pan
+  keeps its original position and can be evicted while still on screen, costing
+  one refetch. A true LRU needs a side index of access times — a schema and a
+  write on every read, to save a request nobody notices.
+- 🟡 **`engineTs.test.ts` "the same seed gives the same route twice" is flaky
+  under full-suite load.** Passes 3/3 in isolation and failed once in a full
+  run. It compares two runs of a *time-budgeted* search, so under parallel CPU
+  load the two runs do different iteration counts and diverge. Pre-existing —
+  confirmed against a clean tree — and unrelated to M14, but it is a
+  determinism test that is not deterministic and should be given an iteration
+  budget instead.
+- The M13 deferrals stand unchanged.
+
+### What the next session needs to know
+
+1. **`plugins/precache.ts` fails the build if a `SHELL_EXTRAS` pattern matches
+   nothing.** If you rename or drop the engine artefacts or the solver worker,
+   fix the pattern — do not delete it. The scalar engine's pattern has a
+   negative lookahead for `simd-`; without it, deleting the scalar artefact
+   would leave both patterns satisfied by the SIMD one.
+2. **Do not add a second service worker.** One scope, one worker. If M15 ships
+   a tier-A engine and wants isolation back, merge COOP/COEP into `sw.js` —
+   and re-run `bench:tsptw:nocoi` first to check isolation is worth anything,
+   because in M11 it was worth 0.00%.
+3. **`optimiser-witness` is not the worker's cache to delete.** It is the
+   eviction check's, it lives in Cache Storage precisely because IndexedDB is
+   the thing being watched, and sweeping it disarms the check silently.
+4. **`manifest.id` must never change.** It is pinned to `/optimiser/`, which is
+   what the implicit M13 value was. Changing it orphans every existing install
+   rather than updating it.
+5. **The worker still does not `skipWaiting` on its own**, and the reload is
+   guarded by an `applying` flag — `controllerchange` fires for reasons other
+   than our own skipWaiting, and reloading on each is an infinite refresh loop
+   on a driver's phone.
+6. **`npm run smoke:m14` is the regression net for all of this.** It caught a
+   false-positive eviction banner that no unit test could have.
