@@ -3,8 +3,44 @@
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/optimiser/favicon.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>optimiser</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>Route Optimiser</title>
+    <meta name="description" content="Plan and drive a delivery round. Everything is computed on your device." />
+
+    <!-- Installability. Without a manifest the app cannot be installed on
+         Android at all, and "Add to Home Screen" on iOS produces a shortcut
+         that opens in Safari rather than a standalone app — which is why two
+         of the four columns in M13-RESEARCH.md were untestable until now.
+
+         A .webmanifest is strict JSON and cannot carry comments, so the three
+         decisions in it that are not self-evident are recorded here.
+
+         `id` is "/optimiser/" and is set EXPLICITLY. When it is omitted a
+         browser derives the app's identity from start_url — so M14 changing
+         start_url would have made every M13 install look like a different
+         app, orphaning it rather than updating it. Pinning `id` to what the
+         old implicit value was is what makes that change safe. It must not be
+         edited again.
+
+         `start_url` is "./#/" rather than ".". Both load, because M1 chose
+         hash routing and useHashLocation normalises an empty fragment to "/",
+         but the explicit form is the one src/routes.tsx documents and it does
+         not depend on that normalisation staying true.
+
+         The icons are declared as separate `any` and `maskable` entries
+         rather than one "any maskable". The two purposes want different
+         padding — maskable reserves the outer 20% for the launcher's crop —
+         so a single file honouring both renders noticeably shrunken wherever
+         `any` is used. See scripts/make-icons.mjs, which asserts the geometry. -->
+    <link rel="manifest" href="/optimiser/manifest.webmanifest" />
+    <meta name="theme-color" content="#1a5fd4" />
+
+    <!-- iOS reads the manifest's `display` since 15.4, but still wants its own
+         icon, and the status-bar style is Apple-only either way. -->
+    <link rel="apple-touch-icon" href="/optimiser/icons/apple-touch-icon.png" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="Optimiser" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <!-- coi-serviceworker used to be loaded here, to make the page
          crossOriginIsolated on a static host so OR-Tools' threaded WebAssembly
          could use SharedArrayBuffer. It cost every visitor a forced reload on
@@ -14,8 +50,8 @@
          download needs isolation any more. Bench builds still get the script —
          vite.config.ts injects it when VITE_BENCH_SEAM is set — because the
          OR-Tools oracle the benchmark grades against does still need it. -->
-    <script type="module" crossorigin src="/optimiser/assets/index-DnWtq-cL.js"></script>
-    <link rel="stylesheet" crossorigin href="/optimiser/assets/index-DZw91HQw.css">
+    <script type="module" crossorigin src="/optimiser/assets/index-CIuhGCHM.js"></script>
+    <link rel="stylesheet" crossorigin href="/optimiser/assets/index-Ba9hd1pj.css">
   </head>
   <body>
     <div id="root"></div>
