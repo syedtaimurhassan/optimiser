@@ -4,6 +4,7 @@ import { useUiStore } from '../../store/uiStore'
 import { groupRoutesByRecency, toISODate } from '../../lib/routeGrouping'
 import { FullWidthButton, Sheet } from '../ui'
 import { HelpIcon, PlusIcon, SettingsIcon } from '../ui/icons'
+import { InstallInvitation } from '../pwa/InstallInvitation'
 import { RouteListRow } from './RouteListRow'
 
 /**
@@ -111,6 +112,11 @@ export function RoutesDrawer() {
             </section>
           ))
         )}
+
+        {/* Inside the scroll region, after the list: it must never push the
+            "Create route" button around, and must never be between a driver
+            and the route they came here to open. */}
+        <InstallInvitation />
       </nav>
 
       {/* Bottom-anchored on purpose: this is the one control in the drawer

@@ -4,6 +4,7 @@ import './index.css'
 import App from './App.tsx'
 import { startSyncWatchers } from './store/syncStore.ts'
 import { registerServiceWorker } from './pwa/registerSw.ts'
+import { watchInstallPrompt } from './pwa/installPrompt.ts'
 
 // Benchmark seam, bench builds only. VITE_BENCH_SEAM is statically replaced at
 // build time, so a production build leaves a dead branch that is tree-shaken
@@ -39,6 +40,16 @@ startSyncWatchers()
  * never in dev — see pwa/registerSw.ts.
  */
 registerServiceWorker()
+
+/**
+ * Catch Chromium's install prompt.
+ *
+ * Before first paint, and not inside a component: `beforeinstallprompt` fires
+ * once, early, and only listeners attached at that moment ever see it. A hook
+ * attaching on mount would work for whatever happened to be on screen at load
+ * and silently fail for the Settings row a driver opens two minutes later.
+ */
+watchInstallPrompt()
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

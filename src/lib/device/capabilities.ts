@@ -287,7 +287,7 @@ export function detectSync(): SyncCapabilities {
  * Safari ties it to notification permission, so a `false` here is a normal
  * outcome and not an error.
  */
-async function requestPersistentStorage(): Promise<boolean> {
+export async function requestPersistentStorage(): Promise<boolean> {
   try {
     if (!navigator.storage?.persist) return false
     if (await within(Promise.resolve(navigator.storage.persisted?.()), PROBE_TIMEOUT_MS, false)) {
@@ -299,7 +299,7 @@ async function requestPersistentStorage(): Promise<boolean> {
   }
 }
 
-async function estimateStorage(): Promise<AsyncCapabilities['storageEstimate']> {
+export async function estimateStorage(): Promise<AsyncCapabilities['storageEstimate']> {
   try {
     if (!navigator.storage?.estimate) return null
     const { usage, quota } = await navigator.storage.estimate()

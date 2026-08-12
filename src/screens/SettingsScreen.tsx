@@ -1,6 +1,8 @@
 import { StubScreen } from './stubs'
 import { DiagnosticsPanel } from '../components/DiagnosticsPanel'
 import { NavAppSheet } from '../components/nav/NavAppSheet'
+import { InstallCard } from '../components/pwa/InstallCard'
+import { StorageSection } from '../components/settings/StorageSection'
 import { useRoutesStore } from '../store/routesStore'
 import { NAV_APP_LABEL } from '../lib/googleMaps'
 import { useState } from 'react'
@@ -14,6 +16,14 @@ import { useState } from 'react'
  * M13 adds the two switches that have nowhere else to live: which app a
  * Navigate tap opens, and whether text recognition is on. The second is off by
  * default and the row says why — see lib/ocr/engine.ts for the arithmetic.
+ *
+ * M14 adds storage and installation. Both are here rather than in the
+ * diagnostics panel because they are the two things a driver can actually DO
+ * something about — ask for their data to be protected, drop 40 MB of optional
+ * downloads, or install the app so the browser is willing to protect it in the
+ * first place. The install card is deliberately reachable from here forever,
+ * so a dismissal on the routes list is a "not now" rather than a decision the
+ * driver can never revisit.
  */
 export function SettingsScreen() {
   const navApp = useRoutesStore((s) => s.navApp)
@@ -53,6 +63,15 @@ export function SettingsScreen() {
             className="h-5 w-5 shrink-0"
           />
         </label>
+      </div>
+
+      <div className="mt-4 w-full space-y-4 text-left">
+        <StorageSection />
+
+        <section className="space-y-2">
+          <h2 className="px-1 text-label font-semibold text-on-surface-variant">App</h2>
+          <InstallCard context="settings" />
+        </section>
       </div>
 
       <NavAppSheet open={navPickerOpen} onClose={() => setNavPickerOpen(false)} />

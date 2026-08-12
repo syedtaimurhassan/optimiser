@@ -2,6 +2,8 @@ import { create } from 'zustand'
 import {
   detectSync,
   detectAsync,
+  estimateStorage,
+  requestPersistentStorage,
   type Capabilities,
 } from '../lib/device/capabilities'
 import { refreshActiveEngine } from '../lib/compute/active'
@@ -22,6 +24,16 @@ interface DeviceState {
   ready: boolean
   /** Kick off the async probes. Idempotent. */
   probe: () => Promise<void>
+  /**
+   * Re-ask about storage, and re-request protection.
+   *
+   * Separate from `probe` because `probe` is idempotent by design and this
+   * deliberately is not. Chromium grants persistence on engagement heuristics
+   * that change as the app is used, so a `false` at boot on day one can become
+   * a `true` on day three — and Settings is where someone goes to find out.
+   * Asking again is free and occasionally works.
+   */
+  refreshStorage: () => Promise<void>
 }
 
 /**
@@ -61,6 +73,23 @@ export const useDeviceStore = create<DeviceState>()((set, get) => ({
       })
     } catch {
       set({ ready: true })
+    }
+  },
+
+  refreshStorage: async () => {
+    try {
+      const [storagePersisted, storageEstimate] = await Promise.all([
+        requestPersistentStorage(),
+        estimateStorage(),
+      ])
+      set((s) => {
+        const capabilities: Capabilities = { ...s.capabilities, storagePersisted, storageEstimate }
+        // Persistence is one of the two inputs to `classify`, so a grant can
+        // legitimately move a device from `limited` to `full`.
+        return { capabilities, tier: classify(capabilities) }
+      })
+    } catch {
+      // Same rule as `probe`: a storage question is never worth a crash.
     }
   },
 }))

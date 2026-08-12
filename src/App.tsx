@@ -1,6 +1,8 @@
 import { useEffect } from 'react'
 import { AppRoutes } from './routes'
 import { ErrorBoundary } from './components/ErrorBoundary'
+import { DataLossBanner } from './components/pwa/DataLossBanner'
+import { UpdateToast } from './components/pwa/UpdateToast'
 import { useRouteStore } from './store/routeStore'
 import { useDeviceStore } from './store/deviceStore'
 import { useHydrated } from './hooks/useHydrated'
@@ -34,7 +36,19 @@ function App() {
 
   return (
     <ErrorBoundary name="root">
+      {/*
+        Both are app-wide rather than per-screen, and for the same reason: the
+        news they carry is not about the screen the driver happens to be on. An
+        update that landed while a stop was open is still an update, and data
+        cleared by the browser is still gone whichever route was being viewed.
+
+        Both sit INSIDE the boundary so a fault in either is caught rather than
+        taking the app down — and outside AppRoutes so neither remounts on
+        navigation, which would restart the data-loss probe on every tap.
+      */}
+      <DataLossBanner />
       <AppRoutes />
+      <UpdateToast />
     </ErrorBoundary>
   )
 }

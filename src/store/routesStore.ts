@@ -81,6 +81,15 @@ interface RoutesState {
    */
   ocrEnabled: boolean
   /**
+   * When the driver last said "not now" to the install invitation.
+   *
+   * A timestamp rather than a boolean because the dismissal expires — see
+   * `DISMISSAL_MS` in lib/pwa/install.ts. Forever would mean one distracted tap
+   * permanently removes the only thing standing between their routes and
+   * Safari's eviction timer; a session would mean nagging.
+   */
+  installDismissedAt: number | null
+  /**
    * Per-ADDRESS settings, remembered across routes and across days.
    *
    * Global rather than route-scoped on purpose — see lib/addressDefaults.ts.
@@ -135,6 +144,8 @@ interface RoutesState {
   setStopIdMode: (mode: StopIdMode) => void
   setNavApp: (app: NavApp) => void
   setOcrEnabled: (enabled: boolean) => void
+  /** Record a "not now" on the install invitation. */
+  dismissInstall: () => void
 
   // ── Sticky per-address settings ──
   /** Remember this stop's settings for its address. Returns the key, or null. */
@@ -385,6 +396,7 @@ export const useRoutesStore = create<RoutesState>()(
       stopIdMode: 'letterBlock',
       navApp: null,
       ocrEnabled: false,
+      installDismissedAt: null,
       addressDefaults: {},
 
       // ── Route CRUD ──
@@ -767,6 +779,7 @@ export const useRoutesStore = create<RoutesState>()(
       setStopIdMode: (mode) => set({ stopIdMode: mode }),
       setNavApp: (navApp) => set({ navApp }),
       setOcrEnabled: (ocrEnabled) => set({ ocrEnabled }),
+      dismissInstall: () => set({ installDismissedAt: Date.now() }),
 
       // ── Sticky per-address settings ──
 
@@ -1064,6 +1077,9 @@ export const useRoutesStore = create<RoutesState>()(
         // precedent: a blob written before M13 simply has no `navApp` key.
         navApp: s.navApp,
         ocrEnabled: s.ocrEnabled,
+        // Additive, like navApp before it: a blob written before M14 has no
+        // `installDismissedAt` key and the initial null survives the merge.
+        installDismissedAt: s.installDismissedAt,
         // Additive, so no version bump: a blob written before M7 simply has no
         // `addressDefaults` key, and zustand's shallow merge leaves the initial
         // {} in place.
