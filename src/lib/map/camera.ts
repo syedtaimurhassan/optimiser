@@ -17,6 +17,25 @@ export const CAMERA_DURATION_MS = 400
 /** Zoom used when focusing a single stop — close enough to read the street. */
 export const FOCUS_ZOOM = 16
 
+/** A map position. Where the map opens, and what gets remembered. */
+export interface Camera {
+  center: LatLng
+  zoom: number
+}
+
+/**
+ * Copenhagen, at a zoom that frames the city and its suburbs.
+ *
+ * The floor of the opening ladder — see lib/map/lastCamera.ts — and the reason
+ * there is no longer a world view anywhere. The map used to open at `zoom: 2`
+ * on a centre that was ALREADY these coordinates, so the only thing the zoom
+ * accomplished was hiding the right answer behind an ocean.
+ *
+ * A home region beats a world view even when it is the wrong region: a wrong
+ * city is one gesture from right, where zoom 2 is five.
+ */
+export const HOME: Camera = { center: { lat: 55.6761, lng: 12.5683 }, zoom: 11 }
+
 /**
  * Padding around a fitted bounds, in px.
  *

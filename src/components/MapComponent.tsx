@@ -4,6 +4,8 @@ import { useShallow } from 'zustand/react/shallow'
 import 'maplibre-gl/dist/maplibre-gl.css'
 import type { LatLng } from '../types'
 import { MapController } from '../lib/map/controller'
+import { initialCamera, rememberCamera } from '../lib/map/lastCamera'
+import { mayLocateWithoutAsking } from '../lib/device/geoPermission'
 import { buildStopFeatures, collectChipSpecs, lastHandledStop, nextStopId } from '../lib/map/features'
 import { buildStopPages, pageIndexById } from '../lib/stopPages'
 import { splitRouteGeometry } from '../lib/map/splitRoute'
@@ -101,6 +103,11 @@ export function MapComponent() {
     const instance = new MapController({
       container: containerRef.current,
       basemap: useUiStore.getState().basemap,
+      // Read synchronously, and that is the point: MapLibre takes its centre
+      // and zoom in the constructor, so anything awaited here would draw one
+      // frame in the wrong place and then jump. `preloadCamera` has already
+      // run during hydration, which the app blocks first paint on anyway.
+      initialCamera: initialCamera(),
       onStopClick: (stopId) => {
         // Tapping the marker of the stop already open closes its card, which
         // is the only way back to the route overview without hunting for empty
@@ -195,6 +202,70 @@ export function MapComponent() {
     framedRouteId.current = route.id
     controller.fitPoints(points)
   }, [controller, route, stops])
+
+  /**
+   * Remember where the driver left the map.
+   *
+   * `moveend` rather than `move`, so a drag costs one write instead of one per
+   * frame; `rememberCamera` debounces on top of that and writes to the `meta`
+   * store rather than the persisted routes blob. Both guards matter — see
+   * lib/map/lastCamera.ts.
+   */
+  useEffect(() => {
+    if (!controller) return
+    return controller.onMoveEnd(() => {
+      const { center, zoom } = controller.getCamera()
+      rememberCamera(center, zoom)
+    })
+  }, [controller])
+
+  /**
+   * Step 4 of the opening ladder: the driver's real position.
+   *
+   * Two conditions, both load-bearing.
+   *
+   * It only runs for someone who has ALREADY granted location. `useGeolocation`
+   * refuses to ask on mount on purpose — a prompt aimed at someone who has not
+   * asked for anything is rude, and a dismissed one on iOS is expensive to
+   * recover from — and `mayLocateWithoutAsking` reads the permission state
+   * without prompting, so that rule is kept rather than worked around. Safari
+   * has no such API, answers 'unknown', and simply keeps the restored view.
+   *
+   * And it loses to a framed route. If the round has stops, seeing the round
+   * is more useful than seeing yourself, so `framedRouteId` is checked twice:
+   * once before asking for a fix and once when it lands, because a fix can
+   * take seconds and a route can be framed in between.
+   */
+  const locateAttempted = useRef(false)
+  useEffect(() => {
+    if (!controller || locateAttempted.current) return
+    locateAttempted.current = true
+
+    let cancelled = false
+    void (async () => {
+      if (!(await mayLocateWithoutAsking())) return
+      if (cancelled || framedRouteId.current !== null) return
+
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          if (cancelled || framedRouteId.current !== null) return
+          controller.focusPoint({ lat: pos.coords.latitude, lng: pos.coords.longitude })
+        },
+        () => {
+          // Permission was granted and the fix still failed — indoors, no GPS,
+          // a cold radio. The restored view is already on screen and is a
+          // perfectly good answer, so there is nothing to report.
+        },
+        // A launch is not navigation: a fast approximate fix beats a precise
+        // one that arrives after the driver has started panning themselves.
+        { enableHighAccuracy: false, maximumAge: 60_000, timeout: 8_000 },
+      )
+    })()
+
+    return () => {
+      cancelled = true
+    }
+  }, [controller])
 
   // Selecting a stop moves the camera to it, and restarts the recenter cycle
   // so the next tap of the FAB widens out rather than resuming mid-cycle.

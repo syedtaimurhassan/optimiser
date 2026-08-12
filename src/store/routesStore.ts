@@ -27,6 +27,7 @@ import {
 import { indexedDbStorage } from '../lib/persistence/zustandStorage'
 import { ROUTES_PERSIST_KEY, sweepOrphanPhotos } from '../lib/persistence/db'
 import { bootPersistence } from '../lib/persistence/boot'
+import { preloadCamera } from '../lib/map/lastCamera'
 import { toISODate, weekdayName } from '../lib/routeGrouping'
 import {
   addressKey,
@@ -1096,7 +1097,12 @@ export function hydrateRoutesStore(): Promise<void> {
   if (!hydrationPromise) {
     hydrationPromise = (async () => {
       await bootPersistence()
-      await useRoutesStore.persist.rehydrate()
+      // Awaited alongside rehydration rather than after it, because the map
+      // reads the answer SYNCHRONOUSLY when MapLibre is constructed and the
+      // app already blocks first paint on this promise. Resolving it later
+      // would mean drawing one frame in the wrong place and then jumping.
+      // It never rejects, so it cannot delay or fail a boot.
+      await Promise.all([useRoutesStore.persist.rehydrate(), preloadCamera()])
       // A first run has no routes at all; the app needs one to be usable.
       const state = useRoutesStore.getState()
       if (!state.activeRouteId || !state.routes[state.activeRouteId]) {

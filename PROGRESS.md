@@ -2775,3 +2775,47 @@ implying more coverage than exists.
    on a driver's phone.
 6. **`npm run smoke:m14` is the regression net for all of this.** It caught a
    false-positive eviction banner that no unit test could have.
+
+### Addendum — the map opened on an ocean
+
+Post-M14, and small enough that it is an addendum rather than a milestone.
+
+`MapController` opened at `zoom: 2` on a centre that was **already** Copenhagen,
+so the only thing the zoom achieved was hiding the right answer behind an
+ocean. A route WITH stops was framed a moment later by `MapComponent`, which is
+why this survived so long: it only ever showed on an empty route — a first run,
+and every newly created route. Precisely when a driver has least idea what they
+are looking at.
+
+The replacement is the ladder every serious map app runs, in the small. Google
+describes the same shape in its launch-viewport work (US 2014/0218392):
+choose between the previous map and the current location using elapsed time and
+distance, rather than always doing one.
+
+1. The route has stops → frame them. **Unchanged**, and it still wins.
+2. A saved camera inside a 30-day window → where the driver left it.
+3. Otherwise → `HOME`: Copenhagen at zoom 11, a city rather than a planet.
+4. Asynchronously → the real position, **only if already permitted**.
+
+**Step 4 keeps a rule rather than working around it.** `useGeolocation` refuses
+to ask on mount on purpose — the tap is the consent, and a dismissed iOS prompt
+is expensive to recover from. `navigator.permissions.query` reports the state
+*without* prompting, so a driver who already said yes gets their real position
+and nobody else is asked. WebKit does not implement it, answers `'unknown'`,
+and iOS simply keeps the restored view — which steps 2 and 3 already make a
+good one.
+
+**Two things that had to be true and are easy to get wrong.** The camera is
+read *synchronously* when MapLibre is constructed, because the constructor
+takes centre and zoom — so it is preloaded during the hydration that already
+gates first paint, and the map opens correct instead of jumping. And it is
+written to the IndexedDB `meta` store, debounced, rather than into the routes
+blob: `moveend` fires on every pan, and re-serialising every route to record a
+drag would make panning cost more than solving.
+
+`uiStore`'s "never persist ... a stale map camera" is amended, not ignored. The
+staleness was the real objection and the freshness window is the answer to it.
+
+**Verified:** 9 new unit tests (793 total); in a real browser against a bench
+build, a fresh profile opens at Copenhagen/zoom 11 and a pan to Aarhus at 13.5
+survives a force-quit and relaunch exactly. m4 41/41, m5 58/58, m14 31/31.

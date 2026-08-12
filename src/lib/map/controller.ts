@@ -14,7 +14,9 @@ import {
   centerOf,
   isDegenerate,
   nextRecenterPhase,
+  HOME,
   type BoundsTuple,
+  type Camera,
   type RecenterPhase,
 } from './camera.ts'
 import {
@@ -71,6 +73,15 @@ export interface MapControllerOptions {
   onMapClick: (point: LatLng) => void
   /** The basemap failed to load and the fallback was swapped in. */
   onStyleFallback?: (basemap: BasemapId) => void
+  /**
+   * Where to open.
+   *
+   * Passed in rather than resolved here because the decision needs a disk read
+   * and a clock, and `lib/map/lastCamera.ts` owns both. Optional so a test can
+   * construct a controller without booting persistence; it falls back to the
+   * home region, never to a world view.
+   */
+  initialCamera?: Camera
 }
 
 export interface RecenterContext {
@@ -103,11 +114,16 @@ export class MapController {
     this.#basemap = options.basemap
     this.#onStyleFallback = options.onStyleFallback
 
+    // Never a world view. `zoom: 2` used to be the opening frame, which meant
+    // a driver creating a new route was shown an ocean — the centre was
+    // already Copenhagen, so the only thing the zoom achieved was hiding it.
+    const opening = options.initialCamera ?? HOME
+
     this.map = new maplibregl.Map({
       container: options.container,
       style: BASEMAPS[options.basemap].url,
-      center: [12.5683, 55.6761],
-      zoom: 2,
+      center: [opening.center.lng, opening.center.lat],
+      zoom: opening.zoom,
       attributionControl: false,
       // The whole point of moving off Leaflet is hundreds of markers staying
       // smooth; a fade on every placement change makes that work visible.
@@ -452,6 +468,18 @@ export class MapController {
   getCenter(): LatLng {
     const { lat, lng } = this.map.getCenter()
     return { lat, lng }
+  }
+
+  /**
+   * Centre AND zoom, together.
+   *
+   * `getCenter` alone is not enough to remember a view — restoring a centre at
+   * the wrong zoom is its own kind of lost — and a caller reaching through
+   * `.map` to collect the other half would be the first crack in the rule that
+   * MapLibre is this class's to own.
+   */
+  getCamera(): Camera {
+    return { center: this.getCenter(), zoom: this.map.getZoom() }
   }
 
   /**

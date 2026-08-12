@@ -4,7 +4,17 @@ import type { SheetSnap } from '../lib/sheetSnap'
 
 /**
  * Transient UI state. Never persisted — reopening the app should not restore a
- * half-dragged sheet or a stale map camera.
+ * half-dragged sheet.
+ *
+ * ── The map camera used to be on that list, and no longer is ──────────────
+ *
+ * The objection was "a STALE map camera", and it was the right objection to
+ * the wrong target: restoring a year-old view is bad, restoring this morning's
+ * is exactly what a driver expects. So the camera is remembered, with a
+ * freshness window, and it lives in `lib/map/lastCamera.ts` rather than here —
+ * in the IndexedDB `meta` store, keyed on its own, because `moveend` fires on
+ * every pan and routing that through a persisted store would re-serialise
+ * every route in the app to record a drag.
  *
  * Kept separate from routesStore so that hovering a row or dragging the sheet
  * cannot possibly invalidate a route selector, and vice versa.
